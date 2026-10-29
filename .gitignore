@@ -15,3 +15,6 @@ frontend/dist/
 
 uploads/
 *.log
+
+# Configurações pessoais do Claude Code
+.claude/settings.local.json
