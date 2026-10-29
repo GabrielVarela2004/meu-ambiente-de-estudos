@@ -1,0 +1,151 @@
+/* ==========================================================================
+   ESTUDOS IA PRO PLATFORM — TOKENS DE DESIGN (FONTE ÚNICA DE CORES E MEDIDAS)
+   Altere cores, espaçamentos e tipografia somente aqui.
+   As variáveis "legadas" no fim do arquivo são aliases mantidos para os
+   estilos inline já existentes nas páginas (não remova sem migrar o uso).
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Superfícies ---- */
+  --color-bg: #0B0F14;            /* fundo principal (azul-marinho muito escuro) */
+  --color-bg-subtle: #111821;     /* fundo secundário (sidebar, cabeçalhos de tabela) */
+  --color-surface: #161F2B;       /* cards e painéis */
+  --color-surface-hover: #1A2431;
+  --color-surface-raised: #1C2735;/* modais, menus, popovers */
+  --color-surface-sunken: #0F151D;/* campos de formulário */
+  --color-overlay: rgba(4, 7, 11, 0.72);
+
+  /* ---- Bordas ---- */
+  --color-border: #2A3645;
+  --color-border-subtle: #1F2935;
+  --color-border-strong: #3A4A5E;
+
+  /* ---- Texto ---- */
+  --color-text: #F1F5F9;
+  --color-text-secondary: #A7B2C2;
+  --color-text-muted: #8291A5;    /* ≥ 4.5:1 sobre --color-surface */
+  --color-text-on-accent: #06281C;
+
+  /* ---- Destaque (verde-esmeralda) ---- */
+  --color-accent: #34D399;
+  --color-accent-hover: #10B981;
+  --color-accent-soft: #12372F;   /* fundo de item selecionado / badge positivo */
+  --color-accent-soft-text: #5EE0AE;
+  --color-accent-border: #1F5A47;
+  --color-focus-ring: rgba(52, 211, 153, 0.45);
+
+  /* ---- Semânticas ---- */
+  --color-success: #34D399;
+  --color-success-bg: #12372F;
+  --color-success-border: #1F5A47;
+  --color-warning: #FBBF24;
+  --color-warning-bg: #33260C;
+  --color-warning-border: #5C4413;
+  --color-danger: #F87171;
+  --color-danger-hover: #EF4444;
+  --color-danger-bg: #2D1518;
+  --color-danger-border: #5A2329;
+  --color-info: #60A5FA;
+  --color-info-bg: #12233A;
+  --color-info-border: #234670;
+
+  /* ---- Tipografia ---- */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.8125rem;  /* 13px */
+  --text-base: 0.875rem; /* 14px */
+  --text-md: 0.9375rem;  /* 15px */
+  --text-lg: 1.0625rem;  /* 17px */
+  --text-xl: 1.25rem;    /* 20px */
+  --text-2xl: 1.5rem;    /* 24px */
+  --text-3xl: 1.75rem;   /* 28px */
+  --leading-tight: 1.25;
+  --leading-normal: 1.55;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- Espaçamento (escala de 4px) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---- Raios ---- */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* ---- Controles (botões e campos) ---- */
+  --control-height: 40px;
+  --control-height-sm: 32px;
+  --control-height-xs: 26px;
+
+  /* ---- Sombras ---- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+
+  /* ---- Movimento ---- */
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- Layout ---- */
+  --sidebar-width: 270px;
+  --sidebar-width-collapsed: 72px;
+  --mobile-topbar-height: 56px;
+  --content-max-width: 1280px;   /* dashboards, listas e gráficos */
+  --content-narrow-width: 900px; /* formulários e leitura */
+  --chat-drawer-width: 440px;
+
+  /* ---- Camadas ---- */
+  --z-sidebar: 50;
+  --z-dropdown: 60;
+  --z-mobile-overlay: 70;
+  --z-topbar: 80;
+  --z-chat-trigger: 900;
+  --z-drawer: 1000;
+  --z-modal: 1100;
+
+  /* ======================================================================
+     ALIASES LEGADOS — usados por estilos inline existentes nas páginas.
+     ====================================================================== */
+  --bg-app: var(--color-bg);
+  --bg-main: var(--color-bg);
+  --bg-sidebar: var(--color-bg-subtle);
+  --bg-card: var(--color-surface);
+  --bg-card-hover: var(--color-surface-hover);
+  --bg-input: var(--color-surface-sunken);
+  --border-color: var(--color-border);
+  --border-subtle: var(--color-border-subtle);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --icon-inactive: var(--color-text-secondary);
+  --primary-green: var(--color-accent);
+  --primary-green-hover: var(--color-accent-hover);
+  --item-selected-bg: var(--color-accent-soft);
+  --item-selected-text: var(--color-accent-soft-text);
+  --hover-bg: var(--color-surface-hover);
+  --badge-novo-bg: var(--color-warning-bg);
+  --badge-novo-text: var(--color-warning);
+  --danger-bg: var(--color-danger-bg);
+  --danger-text: var(--color-danger);
+  --danger-border: var(--color-danger-border);
+  --warning-bg: var(--color-warning-bg);
+  --warning-text: var(--color-warning);
+  --warning-border: var(--color-warning-border);
+}

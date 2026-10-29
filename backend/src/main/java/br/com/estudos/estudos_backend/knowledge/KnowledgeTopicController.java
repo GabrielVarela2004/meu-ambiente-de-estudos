@@ -39,6 +39,16 @@ public class KnowledgeTopicController {
 				.body(TopicResponse.from(new KnowledgeTopicService.TopicView(topic, List.of(), noEvidence, null)));
 	}
 
+	@PostMapping("/extract")
+	public List<TopicResponse> extractFromSources(@PathVariable UUID studyBlockId) {
+		return service.extractFromSources(studyBlockId, true).stream().map(TopicResponse::from).toList();
+	}
+
+	@PostMapping("/{topicId}/validate")
+	public TopicResponse validateTopic(@PathVariable UUID studyBlockId, @PathVariable UUID topicId) {
+		return TopicResponse.from(service.validateTopic(studyBlockId, topicId));
+	}
+
 	@GetMapping
 	public List<TopicResponse> list(@PathVariable UUID studyBlockId,
 			@RequestParam(defaultValue = "false") boolean includeArchived) {
@@ -97,6 +107,12 @@ public class KnowledgeTopicController {
 			UUID parentTopicId,
 			UUID prerequisiteTopicId,
 			String prerequisiteWarning,
+			UUID sourceMaterialId,
+			String sourceMaterialTitle,
+			String supportingExcerpt,
+			KnowledgeTopicOrigin origin,
+			boolean userValidated,
+			OffsetDateTime extractedAt,
 			String title,
 			String description,
 			KnowledgeTopicStatus status,
@@ -117,6 +133,12 @@ public class KnowledgeTopicController {
 					topic.getParentTopicId(),
 					topic.getPrerequisiteTopicId(),
 					view.prerequisiteWarning(),
+					topic.getSourceMaterialId(),
+					view.sourceMaterialTitle(),
+					topic.getSupportingExcerpt(),
+					topic.getOrigin() == null ? KnowledgeTopicOrigin.MANUAL : topic.getOrigin(),
+					topic.isUserValidated(),
+					topic.getExtractedAt(),
 					topic.getTitle(),
 					topic.getDescription(),
 					topic.getStatus(),

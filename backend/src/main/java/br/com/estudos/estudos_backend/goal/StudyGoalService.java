@@ -3,21 +3,33 @@ package br.com.estudos.estudos_backend.goal;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.*;
 
 @Service
 public class StudyGoalService {
 	private final StudyGoalRepository goalRepository;
 	private final StudyBlockRepository blockRepository;
+	private final CurrentUserResolver currentUserResolver;
 
 	public StudyGoalService(StudyGoalRepository goalRepository, StudyBlockRepository blockRepository) {
+		this(goalRepository, blockRepository, new CurrentUserResolver());
+	}
+
+	@Autowired
+	public StudyGoalService(
+			StudyGoalRepository goalRepository,
+			StudyBlockRepository blockRepository,
+			CurrentUserResolver currentUserResolver) {
 		this.goalRepository = goalRepository;
 		this.blockRepository = blockRepository;
+		this.currentUserResolver = currentUserResolver;
 	}
 
 	@Transactional
@@ -62,7 +74,9 @@ public class StudyGoalService {
 	}
 
 	private StudyBlock activeBlock(UUID id) {
-		return blockRepository.findById(id).filter(block -> block.getStatus() == StudyBlockStatus.ACTIVE)
+		String ownerId = currentUserResolver.currentUserId();
+		return blockRepository.findByIdAndOwnerId(id, ownerId)
+				.filter(block -> block.getStatus() == StudyBlockStatus.ACTIVE)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found"));
 	}
 }

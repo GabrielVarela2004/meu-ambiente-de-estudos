@@ -24,12 +24,15 @@ public class ChatController {
 
 	@PostMapping("/api/chat")
 	public OpenAiChatService.ChatResponse ask(@Valid @RequestBody ChatRequest request) {
-		return service.ask(request.message(), request.studyBlockId());
+		return service.ask(request.message(), request.studyBlockId(), request.studyBlockIds(), request.sourceIds());
 	}
 
 	@GetMapping("/api/chat/status")
 	public ProviderStatusResponse status() {
-		return new ProviderStatusResponse(provider.providerName(), provider.isConfigured());
+		return new ProviderStatusResponse(
+				provider.providerName(),
+				provider.isConfigured(),
+				provider.configuredModel());
 	}
 
 	@GetMapping("/api/study-blocks/{studyBlockId}/chat/messages")
@@ -39,9 +42,30 @@ public class ChatController {
 				.toList();
 	}
 
-	public record ChatRequest(@NotBlank @Size(max = 10000) String message, UUID studyBlockId) {}
+	@GetMapping("/api/chat/universal/messages")
+	public List<ChatHistoryItemResponse> listUniversalHistory() {
+		return service.listUniversalHistory().stream()
+				.map(ChatHistoryItemResponse::from)
+				.toList();
+	}
 
-	public record ProviderStatusResponse(String providerName, boolean configured) {}
+	@GetMapping("/api/study-blocks/{studyBlockId}/chat/suggested-questions")
+	public List<OpenAiChatService.SuggestedQuestion> suggestQuestions(@PathVariable UUID studyBlockId) {
+		return service.suggestQuestions(studyBlockId);
+	}
+
+	public record ChatRequest(
+			@NotBlank @Size(max = 10000) String message,
+			UUID studyBlockId,
+			List<UUID> studyBlockIds,
+			List<UUID> sourceIds) {
+	}
+
+	public record ProviderStatusResponse(String providerName, boolean configured, String model) {
+		public ProviderStatusResponse(String providerName, boolean configured) {
+			this(providerName, configured, "gpt-4o-mini");
+		}
+	}
 
 	public record ChatHistoryItemResponse(
 			UUID id,

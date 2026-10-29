@@ -3,6 +3,7 @@ package br.com.estudos.estudos_backend.studyblock;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,6 +19,9 @@ public class StudyBlock {
 
 	@Id
 	private UUID id;
+
+	@Column(name = "owner_id", nullable = false, length = 120)
+	private String ownerId;
 
 	@Column(nullable = false, length = 160)
 	private String title;
@@ -42,6 +46,11 @@ public class StudyBlock {
 	}
 
 	public StudyBlock(String title, String description, String learningObjective) {
+		this(CurrentUserResolver.DEFAULT_USER_ID, title, description, learningObjective);
+	}
+
+	public StudyBlock(String ownerId, String title, String description, String learningObjective) {
+		this.ownerId = (ownerId == null || ownerId.isBlank()) ? CurrentUserResolver.DEFAULT_USER_ID : ownerId;
 		this.title = title;
 		this.description = description;
 		this.learningObjective = learningObjective;
@@ -52,6 +61,9 @@ public class StudyBlock {
 	void onCreate() {
 		if (id == null) {
 			id = UUID.randomUUID();
+		}
+		if (ownerId == null || ownerId.isBlank()) {
+			ownerId = CurrentUserResolver.DEFAULT_USER_ID;
 		}
 		OffsetDateTime now = OffsetDateTime.now();
 		createdAt = now;
@@ -69,12 +81,20 @@ public class StudyBlock {
 		this.learningObjective = learningObjective;
 	}
 
+	public void touch() {
+		this.updatedAt = OffsetDateTime.now();
+	}
+
 	public void archive() {
 		status = StudyBlockStatus.ARCHIVED;
 	}
 
 	public UUID getId() {
 		return id;
+	}
+
+	public String getOwnerId() {
+		return ownerId;
 	}
 
 	public String getTitle() {

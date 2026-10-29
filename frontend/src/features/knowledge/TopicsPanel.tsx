@@ -3,12 +3,19 @@ import type { FormEvent } from 'react'
 import { request } from '../../api/http'
 
 export type LearningState = 'NOT_STUDIED' | 'INSUFFICIENT_DATA' | 'LEARNING' | 'NEEDS_REVIEW' | 'CONSISTENT'
+export type KnowledgeTopicOrigin = 'MANUAL' | 'AI_EXTRACTED'
 
-type KnowledgeTopic = {
+export type KnowledgeTopic = {
   id: string
   parentTopicId: string | null
   prerequisiteTopicId: string | null
   prerequisiteWarning: string | null
+  sourceMaterialId: string | null
+  sourceMaterialTitle: string | null
+  supportingExcerpt: string | null
+  origin: KnowledgeTopicOrigin
+  userValidated: boolean
+  extractedAt: string | null
   title: string
   description: string | null
   status: 'ACTIVE' | 'ARCHIVED'
@@ -24,8 +31,9 @@ type QuestionSummary = { id: string; prompt: string }
 type TopicsPanelProps = {
   blockId: string
   questions: QuestionSummary[]
-  // Muda sempre que uma resposta é registrada, para recalcular os estados com dados atualizados.
+  // Muda sempre que uma resposta é registrada ou quando fontes mudam, para recalcular os estados com dados atualizados.
   evidenceVersion: number
+  onTopicsChanged?: (topics: KnowledgeTopic[]) => void
 }
 
 const stateLabels: Record<LearningState, string> = {
@@ -36,9 +44,10 @@ const stateLabels: Record<LearningState, string> = {
   CONSISTENT: 'Consistente (domínio estimado)',
 }
 
-export function TopicsPanel({ blockId, questions, evidenceVersion }: TopicsPanelProps) {
+export function TopicsPanel({ blockId, questions, evidenceVersion, onTopicsChanged }: TopicsPanelProps) {
   const [topics, setTopics] = useState<KnowledgeTopic[]>([])
   const [loading, setLoading] = useState(false)
+  const [extracting, setExtracting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -49,18 +58,51 @@ export function TopicsPanel({ blockId, questions, evidenceVersion }: TopicsPanel
   const loadTopics = useCallback(async () => {
     setLoading(true)
     try {
-      setTopics(await request<KnowledgeTopic[]>(`/api/study-blocks/${blockId}/topics`))
+      const loaded = await request<KnowledgeTopic[]>(`/api/study-blocks/${blockId}/topics`)
+      setTopics(loaded)
+      onTopicsChanged?.(loaded)
       setError(null)
     } catch {
       setError('Não foi possível carregar os tópicos deste bloco.')
     } finally {
       setLoading(false)
     }
-  }, [blockId])
+  }, [blockId, onTopicsChanged])
 
   useEffect(() => {
     void loadTopics()
   }, [loadTopics, evidenceVersion])
+
+  const extractTopicsFromSources = async () => {
+    setExtracting(true)
+    setError(null)
+    try {
+      const extracted = await request<KnowledgeTopic[]>(`/api/study-blocks/${blockId}/topics/extract`, {
+        method: 'POST',
+      })
+      setTopics(extracted)
+      onTopicsChanged?.(extracted)
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Não foi possível extrair tópicos das fontes deste bloco. Adicione fontes concluídas primeiro.',
+      )
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  const validateTopic = async (topicId: string) => {
+    try {
+      await request<KnowledgeTopic>(`/api/study-blocks/${blockId}/topics/${topicId}/validate`, {
+        method: 'POST',
+      })
+      await loadTopics()
+    } catch {
+      setError('Não foi possível validar o tópico.')
+    }
+  }
 
   const createTopic = async (event: FormEvent) => {
     event.preventDefault()
@@ -127,12 +169,36 @@ export function TopicsPanel({ blockId, questions, evidenceVersion }: TopicsPanel
   const renderTopic = (topic: KnowledgeTopic, isSubtopic: boolean) => (
     <article className={`card topic-card ${isSubtopic ? 'subtopic' : ''}`} key={topic.id}>
       <div className="block-card-header">
-        <h3>{isSubtopic ? '↳ ' : ''}{topic.title}</h3>
+        <div>
+          <h3>{isSubtopic ? '↳ ' : ''}{topic.title}</h3>
+          <div className="topic-badges-row">
+            <span className="phase">
+              {topic.origin === 'AI_EXTRACTED'
+                ? topic.userValidated
+                  ? 'IA · Validado pelo usuário'
+                  : 'Identificado pela IA (Pendente validação)'
+                : 'Criado manualmente'}
+            </span>
+            {topic.sourceMaterialTitle && (
+              <span className="phase">Fonte: {topic.sourceMaterialTitle}</span>
+            )}
+            {topic.extractedAt && (
+              <span className="review-detail">
+                Análise: {new Date(topic.extractedAt).toLocaleString('pt-BR')}
+              </span>
+            )}
+          </div>
+        </div>
         <span className={`state-badge state-${topic.learningState.toLowerCase()}`}>
           {stateLabels[topic.learningState]}
         </span>
       </div>
       {topic.description && <p>{topic.description}</p>}
+      {topic.supportingExcerpt && (
+        <blockquote className="topic-supporting-excerpt">
+          <strong>Trecho de evidência na fonte:</strong> “{topic.supportingExcerpt}”
+        </blockquote>
+      )}
       <p className="review-detail"><strong>Por quê:</strong> {topic.stateReason}</p>
       {topic.prerequisiteWarning && (
         <p className="answer-wrong">
@@ -176,17 +242,29 @@ export function TopicsPanel({ blockId, questions, evidenceVersion }: TopicsPanel
         )}
       </details>
       <div className="card-actions">
-        <button className="danger" onClick={() => void archiveTopic(topic)}>Arquivar tópico</button>
+        {topic.origin === 'AI_EXTRACTED' && !topic.userValidated && (
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => void validateTopic(topic.id)}>
+            Validar tópico
+          </button>
+        )}
+        <button type="button" className="btn btn-danger btn-sm" onClick={() => void archiveTopic(topic)}>Arquivar tópico</button>
       </div>
     </article>
   )
 
   return (
     <div className="topics-section">
-      <h2>Tópicos e estado de aprendizagem</h2>
-      <p className="subtitle">
-        O estado de cada tópico é estimado apenas pelas respostas às questões vinculadas a ele.
-      </p>
+      <div className="section-heading">
+        <div>
+          <h2>Tópicos e mapeamento de assuntos</h2>
+          <p className="subtitle">
+            Os assuntos são extraídos automaticamente das fontes reais do bloco e também podem ser validados ou criados manualmente.
+          </p>
+        </div>
+        <button type="button" className="btn btn-primary" onClick={() => void extractTopicsFromSources()} disabled={extracting}>
+          {extracting ? 'Analisando fontes...' : 'Atualizar mapeamento das fontes'}
+        </button>
+      </div>
       <details className="criteria">
         <summary>Como o estado é calculado</summary>
         <ul>
@@ -200,7 +278,7 @@ export function TopicsPanel({ blockId, questions, evidenceVersion }: TopicsPanel
       </details>
       <form className="card topic-form" onSubmit={createTopic}>
         <input required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)}
-          placeholder="Título do tópico (ex.: Listas)" />
+          placeholder="Título do tópico manual (ex.: Listas)" />
         <textarea maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)}
           placeholder="Descrição (opcional)" />
         <label>Tópico pai (deixe vazio para criar um tópico principal)
@@ -215,11 +293,11 @@ export function TopicsPanel({ blockId, questions, evidenceVersion }: TopicsPanel
             {topics.map((topic) => <option value={topic.id} key={topic.id}>{topic.title}</option>)}
           </select>
         </label>
-        <button type="submit" disabled={saving}>{saving ? 'Criando...' : 'Criar tópico'}</button>
+        <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Criando...' : 'Criar tópico'}</button>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
       {loading && topics.length === 0 ? <p className="empty">Carregando tópicos...</p> : topics.length === 0 ? (
-        <p className="empty">Nenhum tópico cadastrado neste bloco.</p>
+        <p className="empty">Nenhum tópico mapeado neste bloco. Adicione fontes ou clique em "Atualizar mapeamento das fontes".</p>
       ) : (
         <div className="topic-list">
           {rootTopics.map((topic) => (

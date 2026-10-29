@@ -36,6 +36,12 @@ public class StudyQuestion {
 	@JoinColumn(name = "study_material_id")
 	private StudyMaterial studyMaterial;
 
+	@Column(name = "topic_id")
+	private UUID topicId;
+
+	@Column(name = "source_excerpt", length = 2000)
+	private String sourceExcerpt;
+
 	@Column(nullable = false, length = 2000)
 	private String prompt;
 
@@ -78,14 +84,27 @@ public class StudyQuestion {
 	protected StudyQuestion() {}
 
 	public StudyQuestion(StudyBlock block, StudyMaterial material, String prompt, String explanation) {
-		this(block, material, prompt, explanation, StudyQuestionDifficulty.INTERMEDIATE,
+		this(block, material, null, null, prompt, explanation, StudyQuestionDifficulty.INTERMEDIATE,
 				StudyQuestionFormat.MULTIPLE_CHOICE, null);
 	}
 
 	public StudyQuestion(StudyBlock block, StudyMaterial material, String prompt, String explanation,
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String expectedAnswer) {
+		this(block, material, null, null, prompt, explanation, difficulty, format, expectedAnswer);
+	}
+
+	public StudyQuestion(StudyBlock block, StudyMaterial material, UUID topicId, String prompt, String explanation,
+			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String expectedAnswer) {
+		this(block, material, topicId, null, prompt, explanation, difficulty, format, expectedAnswer);
+	}
+
+	public StudyQuestion(StudyBlock block, StudyMaterial material, UUID topicId, String sourceExcerpt,
+			String prompt, String explanation, StudyQuestionDifficulty difficulty,
+			StudyQuestionFormat format, String expectedAnswer) {
 		this.studyBlock = block;
 		this.studyMaterial = material;
+		this.topicId = topicId;
+		this.sourceExcerpt = sourceExcerpt;
 		this.prompt = prompt;
 		this.explanation = explanation;
 		this.difficulty = difficulty == null ? StudyQuestionDifficulty.INTERMEDIATE : difficulty;
@@ -96,6 +115,10 @@ public class StudyQuestion {
 
 	public void addOption(String text, int order, boolean correct) {
 		options.add(new StudyQuestionOption(this, text, order, correct));
+	}
+
+	public void setTopicId(UUID topicId) {
+		this.topicId = topicId;
 	}
 
 	public void archive() { status = StudyQuestionStatus.ARCHIVED; }
@@ -119,7 +142,42 @@ public class StudyQuestion {
 	public void scheduleNextReview(boolean correct) {
 		if (correct) {
 			correctStreak++;
-			reviewIntervalDays = Math.min(365, correctStreak == 1 ? 3 : reviewIntervalDays * 2);
+			StudyQuestionDifficulty diff = this.difficulty == null ? StudyQuestionDifficulty.INTERMEDIATE : this.difficulty;
+			switch (diff) {
+				case EASY -> {
+					if (correctStreak == 1) {
+						reviewIntervalDays = 4;
+					} else if (correctStreak == 2) {
+						reviewIntervalDays = 9;
+					} else if (correctStreak == 3) {
+						reviewIntervalDays = 20;
+					} else {
+						reviewIntervalDays = Math.min(365, (int) Math.round(reviewIntervalDays * 2.5));
+					}
+				}
+				case HARD -> {
+					if (correctStreak == 1) {
+						reviewIntervalDays = 1;
+					} else if (correctStreak == 2) {
+						reviewIntervalDays = 2;
+					} else if (correctStreak == 3) {
+						reviewIntervalDays = 4;
+					} else {
+						reviewIntervalDays = Math.min(365, (int) Math.round(reviewIntervalDays * 1.5));
+					}
+				}
+				case INTERMEDIATE -> {
+					if (correctStreak == 1) {
+						reviewIntervalDays = 3;
+					} else if (correctStreak == 2) {
+						reviewIntervalDays = 6;
+					} else if (correctStreak == 3) {
+						reviewIntervalDays = 12;
+					} else {
+						reviewIntervalDays = Math.min(365, reviewIntervalDays * 2);
+					}
+				}
+			}
 		} else {
 			correctStreak = 0;
 			reviewIntervalDays = 1;
@@ -132,9 +190,17 @@ public class StudyQuestion {
 		this.nextReviewAt = OffsetDateTime.now().plusDays(days);
 	}
 
+	public String getRetentionLevel() {
+		if (correctStreak >= 4) return "MEMORIZED";
+		if (correctStreak >= 1) return "LEARNING";
+		return "NEEDS_REINFORCEMENT";
+	}
+
 	public UUID getId() { return id; }
 	public StudyBlock getStudyBlock() { return studyBlock; }
 	public StudyMaterial getStudyMaterial() { return studyMaterial; }
+	public UUID getTopicId() { return topicId; }
+	public String getSourceExcerpt() { return sourceExcerpt; }
 	public String getPrompt() { return prompt; }
 	public String getExplanation() { return explanation; }
 	public StudyQuestionDifficulty getDifficulty() { return difficulty; }

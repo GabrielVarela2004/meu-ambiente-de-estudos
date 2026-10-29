@@ -2,18 +2,26 @@ package br.com.estudos.estudos_backend.question;
 
 import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
+import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
+import br.com.estudos.estudos_backend.learning.ActivityOriginType;
+import br.com.estudos.estudos_backend.learning.AssistanceLevel;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialStatus;
+import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockService;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockStatus;
@@ -24,25 +32,64 @@ public class StudyQuestionService {
 	private final StudyBlockService blockService;
 	private final StudyMaterialRepository materialRepository;
 	private final StudyQuestionAttemptRepository attemptRepository;
+	private final KnowledgeTopicRepository knowledgeTopicRepository;
+	private final CurrentUserResolver currentUserResolver;
 
 	public StudyQuestionService(StudyQuestionRepository repository, StudyBlockService blockService,
 			StudyMaterialRepository materialRepository, StudyQuestionAttemptRepository attemptRepository) {
+		this(repository, blockService, materialRepository, attemptRepository, null, new CurrentUserResolver());
+	}
+
+	public StudyQuestionService(
+			StudyQuestionRepository repository,
+			StudyBlockService blockService,
+			StudyMaterialRepository materialRepository,
+			StudyQuestionAttemptRepository attemptRepository,
+			CurrentUserResolver currentUserResolver) {
+		this(repository, blockService, materialRepository, attemptRepository, null, currentUserResolver);
+	}
+
+	@Autowired
+	public StudyQuestionService(
+			StudyQuestionRepository repository,
+			StudyBlockService blockService,
+			StudyMaterialRepository materialRepository,
+			StudyQuestionAttemptRepository attemptRepository,
+			KnowledgeTopicRepository knowledgeTopicRepository,
+			CurrentUserResolver currentUserResolver) {
 		this.repository = repository;
 		this.blockService = blockService;
 		this.materialRepository = materialRepository;
 		this.attemptRepository = attemptRepository;
+		this.knowledgeTopicRepository = knowledgeTopicRepository;
+		this.currentUserResolver = currentUserResolver == null ? new CurrentUserResolver() : currentUserResolver;
 	}
 
 	@Transactional
 	public StudyQuestion create(UUID blockId, UUID materialId, String prompt, String explanation,
 			List<StudyQuestionController.OptionRequest> options) {
-		return create(blockId, materialId, prompt, explanation,
+		return create(blockId, materialId, null, null, prompt, explanation,
 				StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE, null, options);
 	}
 
 	@Transactional
 	public StudyQuestion create(UUID blockId, UUID materialId, String prompt, String explanation,
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String expectedAnswer,
+			List<StudyQuestionController.OptionRequest> options) {
+		return create(blockId, materialId, null, null, prompt, explanation, difficulty, format, expectedAnswer, options);
+	}
+
+	@Transactional
+	public StudyQuestion create(UUID blockId, UUID materialId, UUID topicId, String prompt, String explanation,
+			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String expectedAnswer,
+			List<StudyQuestionController.OptionRequest> options) {
+		return create(blockId, materialId, topicId, null, prompt, explanation, difficulty, format, expectedAnswer, options);
+	}
+
+	@Transactional
+	public StudyQuestion create(UUID blockId, UUID materialId, UUID topicId, String sourceExcerpt,
+			String prompt, String explanation, StudyQuestionDifficulty difficulty,
+			StudyQuestionFormat format, String expectedAnswer,
 			List<StudyQuestionController.OptionRequest> options) {
 		StudyBlock block = blockService.get(blockId);
 		if (block.getStatus() == StudyBlockStatus.ARCHIVED) {
@@ -59,10 +106,11 @@ public class StudyQuestionService {
 		StudyQuestionDifficulty resolvedDifficulty = difficulty == null ? StudyQuestionDifficulty.INTERMEDIATE : difficulty;
 		StudyQuestionFormat resolvedFormat = format == null ? StudyQuestionFormat.MULTIPLE_CHOICE : format;
 		String normalizedExpected = expectedAnswer == null || expectedAnswer.isBlank() ? null : expectedAnswer.trim();
+		String normalizedExcerpt = sourceExcerpt == null || sourceExcerpt.isBlank() ? null : sourceExcerpt.trim();
 
 		validateFormatAndInputs(resolvedFormat, normalizedExpected, options);
 
-		StudyQuestion question = new StudyQuestion(block, material, prompt.trim(), explanation,
+		StudyQuestion question = new StudyQuestion(block, material, topicId, normalizedExcerpt, prompt.trim(), explanation,
 				resolvedDifficulty, resolvedFormat, normalizedExpected);
 		if (resolvedFormat != StudyQuestionFormat.DISCURSIVE && options != null) {
 			for (int i = 0; i < options.size(); i++) {
@@ -71,6 +119,19 @@ public class StudyQuestionService {
 			}
 		}
 		return repository.save(question);
+	}
+
+	@Transactional(readOnly = true)
+	public Map<UUID, String> getTopicTitlesForBlock(UUID blockId) {
+		if (knowledgeTopicRepository == null) {
+			return Map.of();
+		}
+		List<KnowledgeTopic> topics = knowledgeTopicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(blockId);
+		Map<UUID, String> result = new LinkedHashMap<>();
+		for (KnowledgeTopic topic : topics) {
+			result.put(topic.getId(), topic.getTitle());
+		}
+		return result;
 	}
 
 	@Transactional(readOnly = true)
@@ -90,12 +151,43 @@ public class StudyQuestionService {
 
 	@Transactional
 	public StudyQuestionAnswer answer(UUID blockId, UUID id, UUID optionId) {
-		return answer(blockId, id, optionId, null);
+		return answer(blockId, id, optionId, null, null, null, null, null);
 	}
 
 	@Transactional
 	public StudyQuestionAnswer answer(UUID blockId, UUID id, UUID optionId, String discursiveAnswer) {
+		return answer(blockId, id, optionId, discursiveAnswer, null, null, null, null);
+	}
+
+	@Transactional
+	public StudyQuestionAnswer answer(
+			UUID blockId,
+			UUID id,
+			UUID optionId,
+			String discursiveAnswer,
+			UUID studySessionId,
+			ActivityOriginType originType,
+			Integer timeSpentSeconds,
+			AssistanceLevel helpLevel) {
 		StudyQuestion question = getOwned(blockId, id);
+		String ownerId = currentUserResolver.currentUserId();
+		int attemptNumber = (int) attemptRepository.countByOwnerIdAndQuestionId(ownerId, id) + 1;
+		UUID sourceMaterialId = question.getStudyMaterial() == null ? null : question.getStudyMaterial().getId();
+		ActivityOriginType resolvedOrigin = originType == null ? ActivityOriginType.BLOCK : originType;
+		AssistanceLevel resolvedHelp = helpLevel == null ? AssistanceLevel.NONE : helpLevel;
+
+		String blockTitle = question.getStudyBlock().getTitle();
+		UUID topicId = question.getTopicId();
+		String topicTitle = null;
+		if (topicId != null && knowledgeTopicRepository != null) {
+			topicTitle = knowledgeTopicRepository.findById(topicId)
+					.map(KnowledgeTopic::getTitle)
+					.orElse(null);
+		}
+		String sourceTitle = question.getStudyMaterial() != null ? question.getStudyMaterial().getTitle() : null;
+		String sourceExcerpt = question.getSourceExcerpt();
+		String difficultyName = question.getDifficulty().name();
+		String formatName = question.getFormat().name();
 
 		if (question.getFormat() == StudyQuestionFormat.DISCURSIVE) {
 			if (discursiveAnswer == null || discursiveAnswer.isBlank()) {
@@ -106,13 +198,43 @@ public class StudyQuestionService {
 			boolean correct = evaluateDiscursiveCriteria(cleanAnswer, question.getExpectedAnswer());
 			question.scheduleNextReview(correct);
 			repository.save(question);
-			attemptRepository.save(new StudyQuestionAttempt(blockId, id, null, cleanAnswer, correct));
 
 			String baseExplanation = question.getExplanation() == null || question.getExplanation().isBlank()
 					? ""
 					: question.getExplanation() + " ";
-			String criteriaFeedback = baseExplanation + "[Critérios/Gabarito esperado: " + question.getExpectedAnswer() + "]";
-			return new StudyQuestionAnswer(correct, criteriaFeedback.trim());
+			String criteriaFeedback = (baseExplanation + "[Critérios/Gabarito esperado: " + question.getExpectedAnswer() + "]").trim();
+
+			StudyQuestionAttempt attempt = new StudyQuestionAttempt(
+					ownerId,
+					blockId,
+					id,
+					topicId,
+					studySessionId,
+					sourceMaterialId,
+					null,
+					cleanAnswer,
+					correct,
+					resolvedOrigin,
+					correct ? QuestionEvaluationStatus.CORRECT : QuestionEvaluationStatus.INCORRECT,
+					correct ? 100 : 0,
+					timeSpentSeconds,
+					attemptNumber,
+					resolvedHelp,
+					0,
+					criteriaFeedback);
+			attempt.populateSnapshots(
+					question.getPrompt(),
+					cleanAnswer,
+					question.getExpectedAnswer(),
+					question.getExplanation(),
+					blockTitle,
+					topicTitle,
+					difficultyName,
+					formatName,
+					sourceTitle,
+					sourceExcerpt);
+			attemptRepository.save(attempt);
+			return new StudyQuestionAnswer(correct, criteriaFeedback);
 		}
 
 		if (optionId == null) {
@@ -125,7 +247,43 @@ public class StudyQuestionService {
 		boolean correct = option.isCorrect();
 		question.scheduleNextReview(correct);
 		repository.save(question);
-		attemptRepository.save(new StudyQuestionAttempt(blockId, id, optionId, null, correct));
+
+		String expectedOptionText = question.getOptions().stream()
+				.filter(StudyQuestionOption::isCorrect)
+				.map(StudyQuestionOption::getText)
+				.findFirst()
+				.orElse(null);
+
+		StudyQuestionAttempt attempt = new StudyQuestionAttempt(
+				ownerId,
+				blockId,
+				id,
+				topicId,
+				studySessionId,
+				sourceMaterialId,
+				optionId,
+				null,
+				correct,
+				resolvedOrigin,
+				correct ? QuestionEvaluationStatus.CORRECT : QuestionEvaluationStatus.INCORRECT,
+				correct ? 100 : 0,
+				timeSpentSeconds,
+				attemptNumber,
+				resolvedHelp,
+				0,
+				question.getExplanation());
+		attempt.populateSnapshots(
+				question.getPrompt(),
+				option.getText(),
+				expectedOptionText,
+				question.getExplanation(),
+				blockTitle,
+				topicTitle,
+				difficultyName,
+				formatName,
+				sourceTitle,
+				sourceExcerpt);
+		attemptRepository.save(attempt);
 		return new StudyQuestionAnswer(correct, question.getExplanation());
 	}
 
@@ -138,8 +296,48 @@ public class StudyQuestionService {
 
 	@Transactional(readOnly = true)
 	public List<StudyQuestion> dueForGlobalReview() {
-		return repository.findGlobalDueForReview(
-				StudyQuestionStatus.ACTIVE, StudyBlockStatus.ACTIVE, OffsetDateTime.now());
+		String ownerId = currentUserResolver.currentUserId();
+		return repository.findGlobalDueForReviewByOwner(
+				ownerId, StudyQuestionStatus.ACTIVE, StudyBlockStatus.ACTIVE, OffsetDateTime.now());
+	}
+
+	@Transactional(readOnly = true)
+	public List<StudyQuestion> batteryForGlobalReview(Integer limit, StudyQuestionDifficulty difficulty, UUID studyBlockId) {
+		String ownerId = currentUserResolver.currentUserId();
+		int safeLimit = limit == null ? 10 : Math.max(1, Math.min(limit, 100));
+		List<StudyQuestion> questions = repository.findGlobalDueForReviewByOwner(
+				ownerId, StudyQuestionStatus.ACTIVE, StudyBlockStatus.ACTIVE, OffsetDateTime.now());
+		return questions.stream()
+				.filter(q -> difficulty == null || q.getDifficulty() == difficulty)
+				.filter(q -> studyBlockId == null || q.getStudyBlock().getId().equals(studyBlockId))
+				.limit(safeLimit)
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
+	public GlobalReviewSummary getGlobalReviewSummary() {
+		String ownerId = currentUserResolver.currentUserId();
+		List<StudyQuestion> due = dueForGlobalReview();
+		List<StudyQuestion> active = repository.findAllByOwnerIdAndStatus(ownerId, StudyQuestionStatus.ACTIVE);
+
+		long memorized = active.stream().filter(q -> "MEMORIZED".equals(q.getRetentionLevel())).count();
+		long learning = active.stream().filter(q -> "LEARNING".equals(q.getRetentionLevel())).count();
+		long needsReinforcement = active.stream().filter(q -> "NEEDS_REINFORCEMENT".equals(q.getRetentionLevel())).count();
+
+		java.util.Map<String, Long> dueByDifficulty = new java.util.LinkedHashMap<>();
+		dueByDifficulty.put("EASY", due.stream().filter(q -> q.getDifficulty() == StudyQuestionDifficulty.EASY).count());
+		dueByDifficulty.put("INTERMEDIATE", due.stream().filter(q -> q.getDifficulty() == StudyQuestionDifficulty.INTERMEDIATE).count());
+		dueByDifficulty.put("HARD", due.stream().filter(q -> q.getDifficulty() == StudyQuestionDifficulty.HARD).count());
+
+		return new GlobalReviewSummary(
+				due.size(),
+				memorized,
+				learning,
+				learning,
+				needsReinforcement,
+				needsReinforcement,
+				active.size(),
+				dueByDifficulty);
 	}
 
 	@Transactional
@@ -147,7 +345,9 @@ public class StudyQuestionService {
 		if (days < 1 || days > 365) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 1 and 365");
 		}
+		String ownerId = currentUserResolver.currentUserId();
 		StudyQuestion question = repository.findById(questionId)
+				.filter(item -> item.getStudyBlock().getOwnerId().equals(ownerId))
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study question not found"));
 		if (question.getStatus() == StudyQuestionStatus.ARCHIVED) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study questions cannot be rescheduled");
@@ -159,7 +359,10 @@ public class StudyQuestionService {
 	@Transactional(readOnly = true)
 	public StudyQuestionStats stats(UUID blockId) {
 		blockService.get(blockId);
-		List<StudyQuestionAttempt> attempts = attemptRepository.findAllByStudyBlockIdOrderByAnsweredAtDesc(blockId);
+		List<StudyQuestionAttempt> attempts = attemptRepository.findAllByStudyBlockIdOrderByAnsweredAtDesc(blockId)
+				.stream()
+				.filter(attempt -> attempt.getEvaluationStatus() != QuestionEvaluationStatus.UNGRADABLE)
+				.toList();
 		long correct = attempts.stream().filter(StudyQuestionAttempt::isCorrect).count();
 		return new StudyQuestionStats(attempts.size(), correct,
 				attempts.isEmpty() ? 0 : Math.round(correct * 100.0 / attempts.size()));
@@ -170,13 +373,17 @@ public class StudyQuestionService {
 		blockService.get(blockId);
 		OffsetDateTime since = OffsetDateTime.now().minusDays(days);
 		List<StudyQuestionAttempt> attempts = attemptRepository
-				.findAllByStudyBlockIdAndAnsweredAtGreaterThanEqualOrderByAnsweredAtDesc(blockId, since);
+				.findAllByStudyBlockIdAndAnsweredAtGreaterThanEqualOrderByAnsweredAtDesc(blockId, since)
+				.stream()
+				.filter(attempt -> attempt.getEvaluationStatus() != QuestionEvaluationStatus.UNGRADABLE)
+				.toList();
 		long correct = attempts.stream().filter(StudyQuestionAttempt::isCorrect).count();
 		return new StudyQuestionStats(attempts.size(), correct,
 				attempts.isEmpty() ? 0 : Math.round(correct * 100.0 / attempts.size()));
 	}
 
 	private StudyQuestion getOwned(UUID blockId, UUID id) {
+		blockService.get(blockId);
 		StudyQuestion question = repository.findById(id)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study question not found"));
@@ -237,4 +444,13 @@ public class StudyQuestionService {
 
 	public record StudyQuestionAnswer(boolean correct, String explanation) {}
 	public record StudyQuestionStats(long attempts, long correct, long accuracyPercent) {}
+	public record GlobalReviewSummary(
+			long totalDue,
+			long memorizedCount,
+			long learningCount,
+			long totalLearning,
+			long needsReinforcementCount,
+			long totalNeedsReinforcement,
+			long totalActiveQuestions,
+			java.util.Map<String, Long> dueByDifficulty) {}
 }

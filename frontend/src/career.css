@@ -1,0 +1,308 @@
+/* ==========================================================================
+   MÓDULO CARREIRA (CAREER MODULE) — TEMA NOTURNO
+   ========================================================================== */
+
+.badge-emerald {
+  background: #12372F;
+  color: #45D6A0;
+  border: 1px solid rgba(34, 197, 139, 0.25);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-subtle {
+  background: #101722;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.jobs-list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.job-item-card {
+  padding: 22px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.job-item-card:hover {
+  border-color: #3b4e65;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.job-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.job-title-text {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 6px 0 4px;
+}
+
+.job-location-text {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.job-match-badge-box {
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.match-score-pill {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.match-score-number {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--primary-green);
+}
+
+.match-score-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.match-bar-track {
+  width: 100%;
+  height: 6px;
+  background: #101722;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.match-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.job-compatibility-summary {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tech-tags-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tech-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  background: #101722;
+  color: var(--text-secondary);
+}
+
+.tech-chip.chip-matched {
+  background: #12372F;
+  border-color: rgba(34, 197, 139, 0.4);
+  color: #45D6A0;
+}
+
+.tech-chip.chip-partial {
+  background: #2a2412;
+  border-color: rgba(255, 209, 102, 0.35);
+  color: #FFD166;
+}
+
+.tech-chip.chip-missing {
+  background: #261619;
+  border-color: rgba(255, 117, 117, 0.3);
+  color: #ff9494;
+}
+
+.job-card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.job-details-drawer {
+  padding: 16px;
+  background: #101722;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.recommended-skills-box {
+  background: #12372F;
+  border: 1px solid rgba(34, 197, 139, 0.3);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.raw-description-html {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.raw-description-html p {
+  margin-bottom: 8px;
+}
+
+.raw-description-html ul {
+  padding-left: 20px;
+  margin-bottom: 8px;
+}
+
+.raw-description-html li {
+  margin-bottom: 4px;
+}
+
+/* Skills Cards Grid */
+.skills-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.skill-status-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skill-status-card.demonstrated {
+  border-left: 4px solid var(--primary-green);
+}
+
+.skill-status-card.developing {
+  border-left: 4px solid #FFD166;
+}
+
+.skill-status-card.studied {
+  border-left: 4px solid #60A5FA;
+}
+
+/* Sources Providers Grid */
+.sources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.source-provider-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+/* Data Table */
+.data-table-container {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.data-table th {
+  background: #101722;
+  color: var(--text-secondary);
+  font-weight: 600;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+}
+
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.data-table tr:hover td {
+  background: var(--hover-bg);
+}
+
+/* Toggles & Checkbox tags */
+.checkbox-tag-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #101722;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.checkbox-tag-label:has(input:checked) {
+  background: #12372F;
+  border-color: var(--primary-green);
+  color: #45D6A0;
+}
+
+.checkbox-tag-label input {
+  accent-color: var(--primary-green);
+}

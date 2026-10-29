@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -45,6 +46,13 @@ public class StudyMaterialController {
 				.body(StudyMaterialResponse.from(service.importTextFile(studyBlockId, file)));
 	}
 
+	@PostMapping("/youtube")
+	public ResponseEntity<StudyMaterialResponse> importYoutube(
+			@PathVariable UUID studyBlockId, @Valid @RequestBody YoutubeMaterialRequest request) {
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(StudyMaterialResponse.from(service.importYoutubeVideo(studyBlockId, request.url())));
+	}
+
 	@GetMapping
 	public List<StudyMaterialResponse> list(
 			@PathVariable UUID studyBlockId, @RequestParam(defaultValue = "false") boolean includeArchived) {
@@ -59,6 +67,12 @@ public class StudyMaterialController {
 				studyBlockId, id, request.title(), request.content()));
 	}
 
+	@PatchMapping("/{id}/toggle-chat")
+	public StudyMaterialResponse toggleChat(
+			@PathVariable UUID studyBlockId, @PathVariable UUID id) {
+		return StudyMaterialResponse.from(service.toggleChatInclusion(studyBlockId, id));
+	}
+
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Void> archive(@PathVariable UUID studyBlockId, @PathVariable UUID id) {
 		service.archive(studyBlockId, id);
@@ -70,21 +84,48 @@ public class StudyMaterialController {
 			@NotBlank @Size(max = 100000) String content) {
 	}
 
+	public record YoutubeMaterialRequest(
+			@NotBlank @Size(max = 1000) String url) {
+	}
+
 	public record StudyMaterialResponse(
 			UUID id,
 			UUID studyBlockId,
 			String title,
 			String content,
+			StudyMaterialSourceType sourceType,
+			String sourceUrl,
+			String externalVideoId,
+			String language,
+			StudyMaterialProcessingStatus processingStatus,
+			String errorMessage,
+			String metadataJson,
+			boolean enabledForChat,
+			int wordCount,
+			int charCount,
 			StudyMaterialStatus status,
 			OffsetDateTime createdAt,
 			OffsetDateTime updatedAt) {
 
-		static StudyMaterialResponse from(StudyMaterial material) {
+		public static StudyMaterialResponse from(StudyMaterial material) {
+			String content = material.getContent() == null ? "" : material.getContent();
+			int charCount = content.length();
+			int wordCount = content.isBlank() ? 0 : content.trim().split("\\s+").length;
 			return new StudyMaterialResponse(
 					material.getId(),
 					material.getStudyBlock().getId(),
 					material.getTitle(),
 					material.getContent(),
+					material.getSourceType(),
+					material.getSourceUrl(),
+					material.getExternalVideoId(),
+					material.getLanguage(),
+					material.getProcessingStatus(),
+					material.getErrorMessage(),
+					material.getMetadataJson(),
+					material.isEnabledForChat(),
+					wordCount,
+					charCount,
 					material.getStatus(),
 					material.getCreatedAt(),
 					material.getUpdatedAt());

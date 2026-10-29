@@ -56,7 +56,8 @@ public class MaterialFileStorage {
 		try {
 			Files.createDirectories(storageDirectory);
 			byte[] bytes = file.getBytes();
-			String extracted = extractText(bytes, ext).trim();
+			String rawExtracted = extractText(bytes, ext);
+			String extracted = sanitizeExtractedText(rawExtracted);
 			if (extracted.isBlank()) {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 						"The uploaded file does not contain extractable text");
@@ -72,6 +73,26 @@ public class MaterialFileStorage {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
 					"Could not store or process the study file");
 		}
+	}
+
+	/**
+	 * Higieniza o texto extraído para eliminar caracteres de controle, normalizar quebras
+	 * de linha e evitar desperdício de tokens na OpenAI preservando parágrafos legíveis.
+	 */
+	public String sanitizeExtractedText(String text) {
+		if (text == null) {
+			return "";
+		}
+		String cleaned = text.replace("\u0000", "")
+				.replace("\u000B", "")
+				.replace("\f", "\n")
+				.replace("\r\n", "\n")
+				.replace("\r", "\n");
+
+		cleaned = cleaned.replaceAll("[ \\t\\x0B]+", " ");
+		cleaned = cleaned.replaceAll(" *\\n *", "\n");
+		cleaned = cleaned.replaceAll("\\n{3,}", "\n\n");
+		return cleaned.trim();
 	}
 
 	private String extractText(byte[] bytes, String ext) {

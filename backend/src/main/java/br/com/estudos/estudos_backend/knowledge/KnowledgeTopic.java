@@ -18,7 +18,8 @@ import jakarta.persistence.Table;
 
 /**
  * Tópico ou subtópico de um bloco de estudo. Um subtópico é um tópico com {@code parentTopicId} preenchido.
- * Nesta etapa a hierarquia é limitada a dois níveis (tópico → subtópico) e suporta relação de pré-requisito.
+ * A hierarquia é limitada a dois níveis (tópico → subtópico) e suporta relação de pré-requisito
+ * e metadados de extração automática a partir das fontes reais do bloco.
  */
 @Entity
 @Table(name = "knowledge_topics")
@@ -36,6 +37,22 @@ public class KnowledgeTopic {
 
 	@Column(name = "prerequisite_topic_id")
 	private UUID prerequisiteTopicId;
+
+	@Column(name = "source_material_id")
+	private UUID sourceMaterialId;
+
+	@Column(name = "supporting_excerpt", length = 2000)
+	private String supportingExcerpt;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false, length = 25)
+	private KnowledgeTopicOrigin origin;
+
+	@Column(name = "user_validated", nullable = false)
+	private boolean userValidated;
+
+	@Column(name = "extracted_at")
+	private OffsetDateTime extractedAt;
 
 	@Column(nullable = false, length = 160)
 	private String title;
@@ -60,17 +77,30 @@ public class KnowledgeTopic {
 	}
 
 	public KnowledgeTopic(StudyBlock studyBlock, UUID parentTopicId, UUID prerequisiteTopicId, String title, String description) {
+		this(studyBlock, parentTopicId, prerequisiteTopicId, title, description,
+				null, null, KnowledgeTopicOrigin.MANUAL, true, null);
+	}
+
+	public KnowledgeTopic(StudyBlock studyBlock, UUID parentTopicId, UUID prerequisiteTopicId,
+			String title, String description, UUID sourceMaterialId, String supportingExcerpt,
+			KnowledgeTopicOrigin origin, boolean userValidated, OffsetDateTime extractedAt) {
 		this.studyBlock = studyBlock;
 		this.parentTopicId = parentTopicId;
 		this.prerequisiteTopicId = prerequisiteTopicId;
 		this.title = title;
 		this.description = description;
+		this.sourceMaterialId = sourceMaterialId;
+		this.supportingExcerpt = supportingExcerpt;
+		this.origin = origin == null ? KnowledgeTopicOrigin.MANUAL : origin;
+		this.userValidated = userValidated;
+		this.extractedAt = extractedAt;
 		this.status = KnowledgeTopicStatus.ACTIVE;
 	}
 
 	@PrePersist
 	void onCreate() {
 		if (id == null) id = UUID.randomUUID();
+		if (origin == null) origin = KnowledgeTopicOrigin.MANUAL;
 		OffsetDateTime now = OffsetDateTime.now();
 		createdAt = now;
 		updatedAt = now;
@@ -82,6 +112,28 @@ public class KnowledgeTopic {
 	public void update(String title, String description) {
 		this.title = title;
 		this.description = description;
+		this.userValidated = true;
+	}
+
+	public void updateExtractedEvidence(String description, UUID sourceMaterialId,
+			String supportingExcerpt, OffsetDateTime extractedAt) {
+		if (description != null && !description.isBlank() && (this.description == null || this.description.isBlank())) {
+			this.description = description;
+		}
+		if (sourceMaterialId != null) {
+			this.sourceMaterialId = sourceMaterialId;
+		}
+		if (supportingExcerpt != null && !supportingExcerpt.isBlank()) {
+			this.supportingExcerpt = supportingExcerpt;
+		}
+		this.extractedAt = extractedAt;
+		if (this.status == KnowledgeTopicStatus.ARCHIVED) {
+			this.status = KnowledgeTopicStatus.ACTIVE;
+		}
+	}
+
+	public void markUserValidated() {
+		this.userValidated = true;
 	}
 
 	public void setPrerequisiteTopicId(UUID prerequisiteTopicId) {
@@ -96,6 +148,11 @@ public class KnowledgeTopic {
 	public StudyBlock getStudyBlock() { return studyBlock; }
 	public UUID getParentTopicId() { return parentTopicId; }
 	public UUID getPrerequisiteTopicId() { return prerequisiteTopicId; }
+	public UUID getSourceMaterialId() { return sourceMaterialId; }
+	public String getSupportingExcerpt() { return supportingExcerpt; }
+	public KnowledgeTopicOrigin getOrigin() { return origin; }
+	public boolean isUserValidated() { return userValidated; }
+	public OffsetDateTime getExtractedAt() { return extractedAt; }
 	public String getTitle() { return title; }
 	public String getDescription() { return description; }
 	public KnowledgeTopicStatus getStatus() { return status; }

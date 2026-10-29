@@ -33,22 +33,22 @@ public class StudyBlockController {
 	@PostMapping
 	public ResponseEntity<StudyBlockResponse> create(@Valid @RequestBody StudyBlockRequest request) {
 		StudyBlock block = service.create(request.title(), request.description(), request.learningObjective());
-		return ResponseEntity.status(HttpStatus.CREATED).body(StudyBlockResponse.from(block));
+		return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(block));
 	}
 
 	@GetMapping
 	public List<StudyBlockResponse> list(@RequestParam(defaultValue = "false") boolean includeArchived) {
-		return service.list(includeArchived).stream().map(StudyBlockResponse::from).toList();
+		return service.list(includeArchived).stream().map(this::toResponse).toList();
 	}
 
 	@GetMapping("/{id}")
 	public StudyBlockResponse get(@PathVariable UUID id) {
-		return StudyBlockResponse.from(service.get(id));
+		return toResponse(service.get(id));
 	}
 
 	@PutMapping("/{id}")
 	public StudyBlockResponse update(@PathVariable UUID id, @Valid @RequestBody StudyBlockRequest request) {
-		return StudyBlockResponse.from(
+		return toResponse(
 				service.update(id, request.title(), request.description(), request.learningObjective()));
 	}
 
@@ -56,6 +56,10 @@ public class StudyBlockController {
 	public ResponseEntity<Void> archive(@PathVariable UUID id) {
 		service.archive(id);
 		return ResponseEntity.noContent().build();
+	}
+
+	private StudyBlockResponse toResponse(StudyBlock block) {
+		return StudyBlockResponse.from(block, service.countActiveSources(block.getId()));
 	}
 
 	public record StudyBlockRequest(
@@ -70,16 +74,18 @@ public class StudyBlockController {
 			String description,
 			String learningObjective,
 			StudyBlockStatus status,
+			long sourceCount,
 			OffsetDateTime createdAt,
 			OffsetDateTime updatedAt) {
 
-		static StudyBlockResponse from(StudyBlock block) {
+		static StudyBlockResponse from(StudyBlock block, long sourceCount) {
 			return new StudyBlockResponse(
 					block.getId(),
 					block.getTitle(),
 					block.getDescription(),
 					block.getLearningObjective(),
 					block.getStatus(),
+					sourceCount,
 					block.getCreatedAt(),
 					block.getUpdatedAt());
 		}

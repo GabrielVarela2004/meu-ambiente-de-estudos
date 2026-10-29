@@ -8,5 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface KnowledgeTopicRepository extends JpaRepository<KnowledgeTopic, UUID> {
 	List<KnowledgeTopic> findAllByStudyBlockIdOrderByCreatedAtAsc(UUID blockId);
 	List<KnowledgeTopic> findAllByStudyBlockIdAndStatusOrderByCreatedAtAsc(UUID blockId, KnowledgeTopicStatus status);
+	List<KnowledgeTopic> findAllByParentTopicIdAndStatus(UUID parentTopicId, KnowledgeTopicStatus status);
 	boolean existsByParentTopicIdAndStatus(UUID parentTopicId, KnowledgeTopicStatus status);
 }

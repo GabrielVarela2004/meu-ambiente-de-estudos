@@ -3,6 +3,10 @@ package br.com.estudos.estudos_backend.studyblock;
 import java.util.List;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
+import br.com.estudos.estudos_backend.material.StudyMaterialStatus;
+import br.com.estudos.estudos_backend.security.CurrentUserResolver;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,28 +16,54 @@ import org.springframework.web.server.ResponseStatusException;
 public class StudyBlockService {
 
 	private final StudyBlockRepository repository;
+	private final StudyMaterialRepository materialRepository;
+	private final CurrentUserResolver currentUserResolver;
 
-	public StudyBlockService(StudyBlockRepository repository) {
+	public StudyBlockService(StudyBlockRepository repository, StudyMaterialRepository materialRepository) {
+		this(repository, materialRepository, new CurrentUserResolver());
+	}
+
+	@Autowired
+	public StudyBlockService(
+			StudyBlockRepository repository,
+			StudyMaterialRepository materialRepository,
+			CurrentUserResolver currentUserResolver) {
 		this.repository = repository;
+		this.materialRepository = materialRepository;
+		this.currentUserResolver = currentUserResolver;
 	}
 
 	@Transactional
 	public StudyBlock create(String title, String description, String learningObjective) {
-		return repository.save(new StudyBlock(title, description, learningObjective));
+		String ownerId = currentUserResolver.currentUserId();
+		return repository.save(new StudyBlock(ownerId, title, description, learningObjective));
 	}
 
 	@Transactional(readOnly = true)
 	public List<StudyBlock> list(boolean includeArchived) {
+		String ownerId = currentUserResolver.currentUserId();
 		if (includeArchived) {
-			return repository.findAllByOrderByUpdatedAtDesc();
+			return repository.findAllByOwnerIdOrderByUpdatedAtDesc(ownerId);
 		}
-		return repository.findAllByStatusOrderByUpdatedAtDesc(StudyBlockStatus.ACTIVE);
+		return repository.findAllByOwnerIdAndStatusOrderByUpdatedAtDesc(ownerId, StudyBlockStatus.ACTIVE);
 	}
 
 	@Transactional(readOnly = true)
 	public StudyBlock get(UUID id) {
-		return repository.findById(id)
+		String ownerId = currentUserResolver.currentUserId();
+		return repository.findByIdAndOwnerId(id, ownerId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found"));
+	}
+
+	@Transactional(readOnly = true)
+	public long countActiveSources(UUID studyBlockId) {
+		return materialRepository.countByStudyBlockIdAndStatus(studyBlockId, StudyMaterialStatus.ACTIVE);
+	}
+
+	@Transactional
+	public void touch(StudyBlock block) {
+		block.touch();
+		repository.save(block);
 	}
 
 	@Transactional

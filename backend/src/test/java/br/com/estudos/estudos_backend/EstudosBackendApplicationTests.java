@@ -97,16 +97,16 @@ class EstudosBackendApplicationTests {
 	@BeforeEach
 	void cleanDatabase() {
 		chatConversationRepository.deleteAllInBatch();
+		exerciseAttemptRepository.deleteAllInBatch();
+		exerciseRepository.deleteAllInBatch();
 		topicQuestionRepository.deleteAllInBatch();
+		attemptRepository.deleteAllInBatch();
+		questionRepository.deleteAllInBatch();
 		topicRepository.deleteAllInBatch();
-		goalRepository.deleteAll();
-		exerciseAttemptRepository.deleteAll();
-		exerciseRepository.deleteAll();
-		sessionRepository.deleteAll();
-		attemptRepository.deleteAll();
-		questionRepository.deleteAll();
-		materialRepository.deleteAll();
-		repository.deleteAll();
+		goalRepository.deleteAllInBatch();
+		sessionRepository.deleteAllInBatch();
+		materialRepository.deleteAllInBatch();
+		repository.deleteAllInBatch();
 	}
 
 	@Test

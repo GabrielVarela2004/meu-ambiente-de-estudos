@@ -1,73 +1,268 @@
 # Plataforma de Estudos com Inteligência Artificial
 
-## Objetivo
+Plataforma pessoal para organização e aprofundamento de estudos baseada em materiais próprios (estilo *NotebookLM*). O sistema organiza os estudos em blocos independentes, importa documentos em múltiplos formatos e transcrições de vídeos do YouTube, fundamenta o chat com IA e a geração de questões exclusivamente no conteúdo ativo do estudante, rastreia retenção por repetição espaçada e mapa de tópicos.
 
-Plataforma pessoal para organizar estudos em blocos independentes, importar materiais (`.txt`, `.md`, `.pdf`, `.docx`), conversar com provedores de inteligência artificial, praticar com questões e exercícios, acompanhar desempenho, revisar dificuldades, mapear tópicos e pré-requisitos e planejar sessões de estudo.
+O projeto foi construído sobre uma **Arquitetura Modular Inspirada em Hexagonal/Ports & Adapters**, com persistência em **PostgreSQL 17**, versionamento de schema via **Flyway** (migrações V1 a V21), backend em **Java 21 / Spring Boot 4** e frontend reativo em **React 19 / TypeScript**.
 
-O projeto segue desenvolvimento incremental com persistência real em PostgreSQL e validação automatizada a cada etapa.
+---
 
-## Estado do projeto
+## 0. Estado Atual do Projeto (auditoria de 29/10/2026)
 
-### Implementado (100% dos módulos planejados)
+> O relatório completo está em [`docs/AUDITORIA.md`](docs/AUDITORIA.md). Leia-o antes de evoluir o projeto.
 
-- Backend Java 21 / Spring Boot com PostgreSQL 17, Flyway (migrações V1 a V14) e API REST validada (com banco isolado `estudos_test` para testes).
-- Frontend React 19 / TypeScript / Vite integrado à API via proxy.
-- **Blocos de estudo**: Criação, edição, listagem de ativos/arquivados e arquivamento controlado.
-- **Materiais de estudo e documentos**: Cadastro em texto, edição, arquivamento e importação de arquivos `.txt`, `.md` (até 1 MB, com remoção de UTF-8 BOM), `.pdf` e `.docx` (até 5 MB, com extração de texto segura e armazenamento local privado).
-- **Questões, níveis de dificuldade e geração por IA**:
-  - Formatos **Múltipla escolha** (`MULTIPLE_CHOICE`, 2 a 6 alternativas), **Verdadeiro ou falso** (`TRUE_FALSE`, 2 alternativas) e **Discursiva** (`DISCURSIVE`, com critérios/gabarito esperado).
-  - Níveis de dificuldade **Fácil** (`EASY`), **Intermediária** (`INTERMEDIATE`) e **Difícil** (`HARD`).
-  - Geração assistida de questões por IA (`POST /api/study-blocks/{id}/questions/generate`) a partir dos materiais ativos do bloco.
-  - Correção determinística para questões objetivas e avaliação por critérios explícitos para questões discursivas.
-- **Mapa do Conhecimento (Tópicos, Pré-requisitos e Estados de Aprendizagem)**:
-  - Criação de tópicos e subtópicos (2 níveis), definição de pré-requisitos entre tópicos com bloqueio de dependência circular, alerta quando o pré-requisito ainda não está consolidado, associação com questões e cálculo automático do estado de aprendizagem (`NOT_STUDIED`, `INSUFFICIENT_DATA`, `LEARNING`, `NEEDS_REVIEW`, `CONSISTENT`) baseado em evidências reais.
-- **Desempenho e estatísticas**: Histórico persistido de tentativas, aproveitamento acumulado e filtro por períodos (7, 30 e 90 dias), diferenciando explicitamente ausência de dados (`0 tentativas`) de desempenho baixo.
-- **Revisão espaçada e área global "Revisar minhas dificuldades"**:
-  - Algoritmo progressivo baseado em sequência de acertos (`correctStreak`) até 365 dias; erros reiniciam o intervalo em 1 dia.
-  - Painel global **Revisar minhas dificuldades** (`/api/reviews/due`) que lista questões pendentes de todos os blocos ativos ordenadas por prioridade, exibe a justificativa da recomendação, permite responder diretamente (objetiva ou discursiva) e oferece reagendamento manual (adiar 1 ou 3 dias).
-- **Sessões de estudo**: Planejamento por duração e notas, início, conclusão e cancelamento persistidos.
-- **Exercícios práticos**: Enunciado, dicas, registro de tentativas textuais e autoavaliação de 1 a 5.
-- **Metas de estudo**: Unidades-alvo, registro de progresso e conclusão automática.
-- **Chat modular com IA e histórico persistido**:
-  - Porta `AiTutorProvider` desacoplada com adaptador `OpenAiTutorProvider` protegido por variável de ambiente no backend.
-  - Persistência do histórico de conversas por bloco (`chat_messages`) com indicação explícita dos materiais de referência consultados.
+**Funciona de ponta a ponta:** blocos de estudo; fontes por texto e YouTube; chat do bloco e universal com
+histórico e citações; geração de exercícios; responder questões teóricas; painel de Desempenho Global; mapeamento
+de tópicos; preferências e busca manual de vagas.
 
-## Tecnologias utilizadas
+**Problemas conhecidos (principais):**
+- O frontend chama **rotas ou formatos diferentes** dos expostos pelo backend em 11 ações: restaurar bloco, gerar
+  simulado, ativar fonte no chat, upload de arquivo, responder e adiar na tela de revisão, enviar resposta de
+  exercício prático, "buscar agora", status de vaga, avaliar competências e ativar fonte de vagas. Detalhes na tabela 4.2 da auditoria.
+- O agendamento automático de vagas não roda (falta `@EnableScheduling`).
+- Não há autenticação; o frontend não envia `X-Study-User-Id` (todo uso cai em `default-user`).
+- Upload limitado a **1 MB** (padrão do Spring; nenhum limite configurado).
+- **Fórum** é apenas visual (dados fixos). **Metas** e **sessões** têm backend, mas não têm tela.
+- Padronização visual: a base global (Etapa 1) está pronta; o layout interno de cada página ainda não foi padronizado.
 
-- **Backend**: Java 21 LTS, Spring Boot 4, Spring Data JPA, Validation, Flyway, Apache PDFBox.
-- **Frontend**: React 19, TypeScript, Vite.
+### Estrutura do repositório
+
+```
+backend/    Spring Boot (pacotes por domínio: studyblock, material, chat, question, exercise,
+            knowledge, learning, goal, studysession, security, career)
+frontend/   React + Vite
+  src/App.tsx              estado global e troca de páginas (sem React Router)
+  src/components/Sidebar   navegação
+  src/components/ui/       Button, IconButton, FormField, PageHeader, Spinner
+  src/styles/tokens.css    cores, espaçamentos, tipografia e camadas (fonte única)
+  src/styles/components.css design system: botões, campos, cards, abas, badges, alertas, modais, tabelas
+  src/App.css              layout (shell, sidebar, drawer do Tutor IA)
+docs/       auditoria e documentação técnica
+```
+
+### Design system (frontend)
+- Todas as cores ficam em `src/styles/tokens.css`. **Não use cores hexadecimais diretamente nas telas.**
+- Botões: `btn btn-primary | btn-secondary | btn-ghost | btn-danger | btn-ghost-danger`, tamanhos `btn-sm` e `btn-xs`.
+  Não existe estilo global para `<button>`: todo botão precisa de uma classe.
+- Campos: `form-input`, `form-select`, `form-textarea`, agrupados em `form-field-group`.
+- Tutor IA: botão flutuante abre um drawer lateral (440px; tela cheia no celular), que fecha com Esc ou clique fora.
+- Em telas de até 768px a Sidebar vira menu deslizante, aberto pelo botão da barra superior.
+
+---
+
+## 1. Arquitetura da Integração com IA (OpenAI)
+
+A integração com a OpenAI segue rigorosamente os princípios de baixo acoplamento e segurança:
+
+```
+[ Frontend (React/TypeScript) ]
+          │  (Apenas endpoints da aplicação - nenhuma chave secreta no cliente)
+          ▼
+[ REST Controllers (/api/chat, /api/questions, etc.) ]
+          │
+[ Application Services (OpenAiChatService, AiQuestionGeneratorService) ]
+          │
+          ▼
+[ Porta do Domínio: AiTutorProvider ]  ◄── Abstração agnóstica de provedor
+          │
+          ▼
+[ Adaptador: OpenAiTutorProvider ]
+    ├── HttpClient nativo Java (timeouts configuráveis)
+    ├── Sliding Window Rate Limiter local (thread-safe, anti-estouro de cota)
+    ├── Sanitização e delimitação de dados (anti-Prompt Injection)
+    ├── JSON Object Mode estruturado
+    └── Mapeamento resiliente de códigos de erro HTTP
+```
+
+### Características de Segurança e Resiliência
+- **Chave Oculta**: `OPENAI_API_KEY` reside exclusivamente no backend; nunca é enviada ao navegador, nunca é impressa em logs e nunca é exposta em payloads de erro.
+- **Desacoplamento Transacional**: as chamadas de rede à OpenAI são executadas **fora** de transações `@Transactional`, impedindo o bloqueio de conexões do pool JDBC do PostgreSQL durante a latência da API.
+- **Isolamento de Contexto**: o tutor e os geradores utilizam exclusivamente as fontes ativas pertencentes ao bloco de estudo autorizado.
+- **Proteção contra Injeção de Instruções**: delimitadores `[INÍCIO DOS MATERIAIS — DADOS NÃO CONFIÁVEIS]` e sanitização impedem que comandos embutidos em materiais manipulem o comportamento do sistema.
+- **Substituição Fácil de Provedores**: para adicionar novos provedores (Anthropic Claude, Google Gemini ou modelos locais como Ollama), basta criar um componente implementando a interface [`AiTutorProvider`](file:///backend/src/main/java/br/com/estudos/estudos_backend/chat/AiTutorProvider.java).
+
+---
+
+## 2. Tecnologias Utilizadas
+
+- **Backend**: Java 21 LTS, Spring Boot 4, Spring Web, Spring Data JPA, Bean Validation, Apache PDFBox 3.0.3, Flyway Migration.
+- **Frontend**: React 19, TypeScript, Vite, oxlint, CSS com tokens de design (sem React Router e sem Tailwind).
 - **Banco de Dados**: PostgreSQL 17 (via Docker Compose, bancos `estudos` e `estudos_test`).
-- **Testes**: JUnit 5, Mockito, Spring MockMvc, Oxlint.
+- **Testes Automatizados**: JUnit 5, Mockito, Spring MockMvc (90 testes automatizados, 100% offline, sem custos de API). Os testes cobrem o backend; não há testes de contrato com o frontend.
 
-## Pré-requisitos
+---
 
-- JDK 21.
-- Node.js LTS.
-- Docker Desktop (para o container PostgreSQL).
-- Git.
+## 3. Pré-requisitos
 
-## Configuração e execução
+1. **Java Development Kit (JDK) 21** ou superior instalado (`java -version`).
+2. **Node.js LTS** (versão 20 ou 22) e `npm` (`node -v`).
+3. **Docker Desktop** ativo para execução do container PostgreSQL.
+4. **Chave de API da OpenAI** (opcional para testes e desenvolvimento; necessária apenas para respostas ao vivo).
 
-### 1. Banco de dados (PostgreSQL)
+---
+
+## 4. Configuração Passo a Passo
+
+### 4.1. Subir o Banco de Dados (PostgreSQL)
+
+Na raiz do projeto, inicie o container PostgreSQL:
 
 ```powershell
 docker compose up -d postgres
 ```
 
-### 2. Executar testes do backend
+O container inicializará na porta `5432` com usuário `estudos` e senha `estudos-dev-only`.
+
+### 4.2. Configurar Variáveis de Ambiente
+
+Copie o arquivo de exemplo na raiz do projeto:
+
+```powershell
+copy .env.example .env
+```
+
+Abra o arquivo `.env` e configure suas preferências:
+
+```env
+# Ativação e Chave da API
+OPENAI_ENABLED=true
+OPENAI_API_KEY=sk-proj-sua-chave-aqui
+
+# Modelo padrão recomendado (baixo custo, alta velocidade e JSON mode)
+OPENAI_MODEL=gpt-4o-mini
+
+# Limites e Timeouts
+OPENAI_CONNECT_TIMEOUT_SECONDS=10
+OPENAI_REQUEST_TIMEOUT_SECONDS=45
+OPENAI_MAX_OUTPUT_TOKENS=1200
+OPENAI_MAX_INPUT_CHARS=40000
+OPENAI_MAX_REQUESTS_PER_MINUTE=20
+```
+
+> **Nota de Degradação Segura:** Se a `OPENAI_API_KEY` permanecer em branco, a plataforma iniciará normalmente em modo offline. As funcionalidades de IA retornarão HTTP 503 com mensagem informativa amigável na interface, e a geração de simulados utilizará a extração heurística baseada nos materiais locais.
+
+---
+
+## 5. Execução do Projeto
+
+### 5.1. Iniciar o Backend
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run
+```
+
+O backend executará as migrações Flyway automaticamente e subirá na porta `http://localhost:8080`.
+
+### 5.2. Iniciar o Frontend
+
+Em outro terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+A interface abrirá em `http://localhost:5173`, com proxy reverso configurado para repassar chamadas `/api` ao backend.
+
+---
+
+## 6. Testes Automatizados
+
+A suíte de testes foi projetada para ser **100% offline e segura**, simulando o comportamento da OpenAI por meio de mocks sem realizar chamadas pagas à internet.
+
+### Executar todos os testes do backend (90 testes):
+
+> Os testes usam o banco `estudos_test` e **apagam as tabelas** dele. Crie-o uma única vez com:
+> `docker exec programa-estudos-ia-postgres psql -U estudos -d postgres -c "CREATE DATABASE estudos_test OWNER estudos;"`
 
 ```powershell
 cd backend
 .\mvnw.cmd test
 ```
 
-### 3. Validar e compilar o frontend
+### Principais suítes de teste:
+- `Etapa7CompletePlatformE2EIntegrationTest`: Teste E2E cobrindo ciclo de vida completo (Bloco -> Material -> Tópicos -> Questão HARD e Discursiva -> Snapshots Imutáveis -> Desempenho Global -> Repetição Espaçada -> Isolamento Multi-Inquilino).
+- `Etapa6SpacedRepetitionIntegrationTest`: Validação do algoritmo adaptativo baseado em dificuldade e priorização na bateria de revisão.
+- `Etapa5GlobalPerformanceIntegrationTest`: Cálculo de KPIs agregados, métricas por bloco/tópico e histórico temporal.
+- `UniversalMultiBlockChatIntegrationTest`: Síntese cruzada entre múltiplos blocos autorizados.
+- `OpenAiSecurityAndErrorsTest`: 10 testes cobrindo rate limit, mapeamento de códigos HTTP (200, 401, 429, 500, 502, 504), sanitização e proteção de credenciais.
+- `MaterialFileStorageTest`: 10 testes cobrindo extração de PDF (PDFBox), DOCX (XML anti-XXE e zip-bomb), Markdown, TXT e higienização de tokens.
+
+### Validar build e lint do frontend:
 
 ```powershell
 cd frontend
 cmd /c "npm run lint && npm run build"
 ```
 
-### 4. Variáveis de ambiente e cuidados com credenciais
+---
 
-Copie `.env.example` ou defina a variável de ambiente `OPENAI_API_KEY` no sistema/IDE antes de iniciar o backend para habilitar respostas reais no chat com IA e na geração de questões com IA. Sem a chave configurada, o sistema funciona normalmente e informa de maneira transparente que a integração com IA está indisponível (HTTP 503). Nunca inclua chaves de API diretamente no código-fonte ou em commits.
+## 7. Como Testar a Conexão e a API
+
+### 7.1. Verificar o Status do Provedor de IA
+
+```bash
+curl http://localhost:8080/api/chat/status
+```
+
+Resposta quando não configurado:
+```json
+{
+  "providerName": "OpenAI",
+  "configured": false,
+  "model": "gpt-4o-mini"
+}
+```
+
+Resposta quando configurado:
+```json
+{
+  "providerName": "OpenAI",
+  "configured": true,
+  "model": "gpt-4o-mini"
+}
+```
+
+### 7.2. Fazer uma Pergunta ao Tutor via API
+
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Explique o conceito de injeção de dependências.",
+    "studyBlockId": "ID-DO-BLOCO-AQUI"
+  }'
+```
+
+---
+
+## 8. Tratamento de Erros Comuns e Soluções
+
+| Código HTTP | Causa Provável | Solução |
+| :--- | :--- | :--- |
+| **503 Service Unavailable** | `OPENAI_API_KEY` ausente, em branco ou chave revogada pela OpenAI. | Verifique o `.env`, certifique-se de que a variável `OPENAI_API_KEY` contém uma chave válida e reinicie o backend. |
+| **429 Too Many Requests** | Limite de requisições por minuto atingido (local: 20 req/min; ou cota da OpenAI). | Aguarde alguns segundos antes de enviar nova mensagem. Se for cota da conta OpenAI, verifique os créditos em platform.openai.com. |
+| **502 Bad Gateway** | Resposta da OpenAI malformada ou instabilidade no serviço da OpenAI. | Tente novamente em instantes. O backend descarta respostas corrompidas para não persistir dados inválidos. |
+| **504 Gateway Timeout** | A OpenAI demorou mais do que o tempo limite configurado (padrão 45s). | Reduza o tamanho do texto enviado ou divida o material em fontes menores. |
+| **400 Bad Request** | Arquivo corrompido, encriptado ou mensagem excedeu o limite máximo (40.000 caracteres). | Envie um arquivo legível e não protegido por senha. |
+| **413 Content Too Large** | Arquivo maior que o limite de upload (atualmente o padrão do Spring, **1 MB**, pois não há limite configurado). | Divida o arquivo ou configure `spring.servlet.multipart.max-file-size`. |
+| **415 Unsupported Media Type** | Extensão não suportada. | Utilize apenas `.txt`, `.md`, `.pdf` ou `.docx`. |
+| **422 Unprocessable Entity** | Bloco sem materiais cadastrados para gerar questões com IA ou vídeo YouTube sem legendas. | Adicione materiais com conteúdo de texto ao bloco antes de solicitar a geração. |
+
+---
+
+## 9. Extensão para Novos Provedores de IA
+
+Para adicionar outro provedor no futuro sem alterar o domínio:
+
+1. Implemente a interface [`AiTutorProvider`](file:///backend/src/main/java/br/com/estudos/estudos_backend/chat/AiTutorProvider.java):
+   ```java
+   public class ClaudeTutorProvider implements AiTutorProvider {
+       @Override public String providerName() { return "Claude"; }
+       @Override public boolean isConfigured() { return apiKey != null && !apiKey.isBlank(); }
+       @Override public AiTutorReply generateReply(AiTutorRequest request) { ... }
+   }
+   ```
+2. Registre o novo adaptador no Spring (`@Component` ou via configuração condicional).
+3. Toda a aplicação continuará funcionando sem qualquer alteração em entidades, migrações ou controllers.

@@ -1,0 +1,12 @@
+package br.com.estudos.estudos_backend.exercise;
+
+public enum PracticalExerciseType {
+	METHOD_IMPLEMENTATION,
+	PROBLEM_SOLVING,
+	SQL_QUERY,
+	FEATURE_IMPLEMENTATION,
+	CODE_FIX,
+	CODE_ANALYSIS,
+	SMALL_SOLUTION,
+	MULTI_TOPIC_INTEGRATION
+}

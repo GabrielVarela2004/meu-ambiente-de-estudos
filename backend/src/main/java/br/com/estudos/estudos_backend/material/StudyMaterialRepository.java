@@ -1,5 +1,6 @@
 package br.com.estudos.estudos_backend.material;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -10,5 +11,13 @@ public interface StudyMaterialRepository extends JpaRepository<StudyMaterial, UU
 	List<StudyMaterial> findAllByStudyBlockIdAndStatusOrderByUpdatedAtDesc(
 			UUID studyBlockId, StudyMaterialStatus status);
 
+	List<StudyMaterial> findAllByStudyBlockIdInAndStatusOrderByUpdatedAtDesc(
+			Collection<UUID> studyBlockIds, StudyMaterialStatus status);
+
 	List<StudyMaterial> findAllByStudyBlockIdOrderByUpdatedAtDesc(UUID studyBlockId);
+
+	long countByStudyBlockIdAndStatus(UUID studyBlockId, StudyMaterialStatus status);
+
+	boolean existsByStudyBlockIdAndExternalVideoIdAndStatus(
+			UUID studyBlockId, String externalVideoId, StudyMaterialStatus status);
 }
