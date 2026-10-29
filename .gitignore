@@ -1,0 +1,12 @@
+.env
+.idea/workspace.xml
+.idea/httpRequests/
+.idea/dataSources/
+
+backend/target/
+backend/effective-pom
+frontend/node_modules/
+frontend/dist/
+
+uploads/
+*.log
