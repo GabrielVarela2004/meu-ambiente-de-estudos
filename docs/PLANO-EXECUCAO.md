@@ -32,7 +32,9 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
   `hooks/useDeferredEffect` (lint sem avisos).
 - [x] Etapa 10 — Testes no frontend: Vitest + React Testing Library (jsdom), scripts `test` e `test:run`; 32 testes
   (http.ts, contrato das funções de API, player do YouTube, feedback da questão aberta, Button e utilitários).
-- [ ] Etapa 11 — CI no GitHub Actions
+- [x] Etapa 11 — CI no GitHub Actions: `.github/workflows/ci.yml` (backend com Java 21 Temurin, cache Maven e
+  PostgreSQL 17 `estudos_test`; frontend com Node LTS, cache npm, `npm ci`, lint, build e `test:run`); `mvnw` executável
+  no Git; badge no README.
 - [ ] Etapa 12 — Telas de Metas e Sessões
 - [ ] Etapa 13 — Documentação
 - [ ] Etapa 14 — Decisões de arquitetura (só registrar)

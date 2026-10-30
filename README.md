@@ -1,5 +1,7 @@
 # Plataforma de Estudos com Inteligência Artificial
 
+[![CI](https://github.com/GabrielVarela2004/meu-ambiente-de-estudos/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/GabrielVarela2004/meu-ambiente-de-estudos/actions/workflows/ci.yml)
+
 Plataforma pessoal para organização e aprofundamento de estudos baseada em materiais próprios (estilo *NotebookLM*). O sistema organiza os estudos em blocos independentes, importa documentos em múltiplos formatos e transcrições de vídeos do YouTube, fundamenta o chat com IA e a geração de questões exclusivamente no conteúdo ativo do estudante, rastreia retenção por repetição espaçada e mapa de tópicos.
 
 O projeto foi construído sobre uma **Arquitetura Modular Inspirada em Hexagonal/Ports & Adapters**, com persistência em **PostgreSQL 17**, versionamento de schema via **Flyway** (migrações V1 a V21), backend em **Java 21 / Spring Boot 4** e frontend reativo em **React 19 / TypeScript**.
@@ -199,6 +201,10 @@ A interface abrirá em `http://localhost:5173`, com proxy reverso configurado pa
 ## 6. Testes Automatizados
 
 A suíte de testes foi projetada para ser **100% offline e segura**, simulando o comportamento da OpenAI por meio de mocks sem realizar chamadas pagas à internet.
+
+**Integração contínua:** a cada push e pull request na `master`, o GitHub Actions (`.github/workflows/ci.yml`) roda os
+testes do backend contra um PostgreSQL 17 (banco `estudos_test`) e, no frontend, `npm ci`, lint, build e
+`npm run test:run`. Nenhuma chave de IA é usada no CI.
 
 ### Executar todos os testes do backend (108 testes):
 
