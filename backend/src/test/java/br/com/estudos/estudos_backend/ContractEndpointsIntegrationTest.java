@@ -1,5 +1,6 @@
 package br.com.estudos.estudos_backend;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -79,6 +80,13 @@ class ContractEndpointsIntegrationTest {
 	}
 
 	@Test
+	void unarchiveOfActiveBlockIsConflict() throws Exception {
+		String blockId = createBlock("Bloco já ativo");
+		mockMvc.perform(post("/api/study-blocks/" + blockId + "/unarchive").header(CurrentUserResolver.USER_HEADER, userId))
+				.andExpect(status().isConflict());
+	}
+
+	@Test
 	void unarchiveOfAnotherUsersBlockIsNotFound() throws Exception {
 		String blockId = createBlock("Bloco de outro usuário");
 		mockMvc.perform(post("/api/study-blocks/" + blockId + "/unarchive")
@@ -108,7 +116,9 @@ class ContractEndpointsIntegrationTest {
 				.header(CurrentUserResolver.USER_HEADER, userId)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"quantity\":11}"))
-				.andExpect(status().isBadRequest());
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Há campos com valores inválidos."))
+				.andExpect(jsonPath("$.fields.quantity").value(containsString("menor")));
 	}
 
 	@Test

@@ -16,4 +16,6 @@ public interface StudyQuestionAttemptRepository extends JpaRepository<StudyQuest
 	List<StudyQuestionAttempt> findAllByOwnerIdAndStudyBlockIdOrderByAnsweredAtDesc(String ownerId, UUID blockId);
 	List<StudyQuestionAttempt> findAllByStudyBlockIdInOrderByAnsweredAtDesc(Collection<UUID> blockIds);
 	long countByOwnerIdAndQuestionId(String ownerId, UUID questionId);
+	List<StudyQuestionAttempt> findAllByOwnerIdAndQuestionIdAndEvaluationStatusOrderByAnsweredAtDesc(
+			String ownerId, UUID questionId, QuestionEvaluationStatus evaluationStatus);
 }

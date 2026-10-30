@@ -4,6 +4,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,41 +26,21 @@ public class StudyMaterialService {
 	private final StudyMaterialRepository repository;
 	private final StudyBlockService studyBlockService;
 	private final MaterialFileStorage fileStorage;
-	private final YoutubeTranscriptExtractor youtubeTranscriptExtractor;
 	private final KnowledgeTopicService knowledgeTopicService;
 	private final WebPageExtractor webPageExtractor;
 	private final MaterialSummarizer summarizer;
-
-	public StudyMaterialService(
-			StudyMaterialRepository repository,
-			StudyBlockService studyBlockService,
-			MaterialFileStorage fileStorage,
-			YoutubeTranscriptExtractor youtubeTranscriptExtractor) {
-		this(repository, studyBlockService, fileStorage, youtubeTranscriptExtractor, null, null, null);
-	}
-
-	public StudyMaterialService(
-			StudyMaterialRepository repository,
-			StudyBlockService studyBlockService,
-			MaterialFileStorage fileStorage,
-			YoutubeTranscriptExtractor youtubeTranscriptExtractor,
-			KnowledgeTopicService knowledgeTopicService) {
-		this(repository, studyBlockService, fileStorage, youtubeTranscriptExtractor, knowledgeTopicService, null, null);
-	}
 
 	@Autowired
 	public StudyMaterialService(
 			StudyMaterialRepository repository,
 			StudyBlockService studyBlockService,
 			MaterialFileStorage fileStorage,
-			YoutubeTranscriptExtractor youtubeTranscriptExtractor,
 			KnowledgeTopicService knowledgeTopicService,
 			WebPageExtractor webPageExtractor,
 			MaterialSummarizer summarizer) {
 		this.repository = repository;
 		this.studyBlockService = studyBlockService;
 		this.fileStorage = fileStorage;
-		this.youtubeTranscriptExtractor = youtubeTranscriptExtractor;
 		this.knowledgeTopicService = knowledgeTopicService;
 		this.webPageExtractor = webPageExtractor;
 		this.summarizer = summarizer;
@@ -84,43 +67,6 @@ public class StudyMaterialService {
 		return saved;
 	}
 
-	@Transactional
-	public StudyMaterial importYoutubeVideo(UUID studyBlockId, String rawUrl) {
-		StudyBlock block = getActiveBlock(studyBlockId);
-		String videoId = YoutubeUrlParser.extractVideoId(rawUrl);
-		if (repository.existsByStudyBlockIdAndExternalVideoIdAndStatus(
-				studyBlockId, videoId, StudyMaterialStatus.ACTIVE)) {
-			throw new ResponseStatusException(
-					HttpStatus.CONFLICT,
-					"Este vídeo do YouTube já foi importado neste bloco de estudo.");
-		}
-		YoutubeTranscriptExtractor.ExtractedYoutubeTranscript extracted = youtubeTranscriptExtractor.extract(videoId);
-		if (extracted == null || extracted.transcriptText() == null || extracted.transcriptText().isBlank()) {
-			throw new ResponseStatusException(
-					HttpStatus.valueOf(422),
-					"Este vídeo não possui legendas ou transcrição disponíveis para extração.");
-		}
-		String title = (extracted.title() == null || extracted.title().isBlank())
-				? "Vídeo YouTube (" + videoId + ")"
-				: extracted.title().trim();
-		if (title.length() > 160) {
-			title = title.substring(0, 160);
-		}
-		StudyMaterial saved = repository.save(new StudyMaterial(
-				block,
-				title,
-				extracted.transcriptText().trim(),
-				StudyMaterialSourceType.YOUTUBE,
-				YoutubeUrlParser.canonicalUrl(videoId),
-				videoId,
-				extracted.language(),
-				StudyMaterialProcessingStatus.COMPLETED,
-				null));
-		studyBlockService.touch(block);
-		syncTopicsIfAvailable(studyBlockId);
-		return saved;
-	}
-
 	/**
 	 * Importa uma página web pública como fonte. Não é transacional durante o download
 	 * (rede lenta não deve segurar conexão com o banco); a gravação em si é atômica.
@@ -133,7 +79,7 @@ public class StudyMaterialService {
 		WebPageExtractor.ExtractedWebPage page = webPageExtractor.extract(rawUrl);
 		String url = page.finalUrl().length() > 1000 ? page.finalUrl().substring(0, 1000) : page.finalUrl();
 		if (repository.existsByStudyBlockIdAndSourceUrlAndStatus(studyBlockId, url, StudyMaterialStatus.ACTIVE)) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta página já foi importada neste bloco de estudo.");
+			throw new BusinessRuleException("Esta página já foi importada neste bloco de estudo.");
 		}
 		String title = page.title() == null || page.title().isBlank() ? url : page.title().strip();
 		if (title.length() > 160) {
@@ -162,7 +108,7 @@ public class StudyMaterialService {
 		StudyMaterial material = get(id);
 		validateOwnership(material, studyBlockId);
 		if (material.getStatus() == StudyMaterialStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study materials cannot be summarized");
+			throw new BusinessRuleException("Fontes arquivadas não podem ser resumidas.");
 		}
 		MaterialSummarizer.Summary summary = summarizer.summarize(material.getTitle(), material.getContent());
 		material.applySummary(summary.text(), summary.source());
@@ -209,7 +155,7 @@ public class StudyMaterialService {
 		StudyMaterial material = get(materialId);
 		validateOwnership(material, studyBlockId);
 		if (material.getStatus() != StudyMaterialStatus.ACTIVE) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Study material is archived");
+			throw new InvalidInputException("A fonte está arquivada.");
 		}
 		return material;
 	}
@@ -217,7 +163,7 @@ public class StudyMaterialService {
 	@Transactional(readOnly = true)
 	public StudyMaterial get(UUID id) {
 		return repository.findById(id)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study material not found"));
+				.orElseThrow(() -> new NotFoundException("Fonte não encontrada."));
 	}
 
 	@Transactional
@@ -225,7 +171,7 @@ public class StudyMaterialService {
 		StudyMaterial material = get(id);
 		validateOwnership(material, studyBlockId);
 		if (material.getStatus() == StudyMaterialStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study materials cannot be edited");
+			throw new BusinessRuleException("Fontes arquivadas não podem ser editadas.");
 		}
 		material.update(title, content);
 		StudyMaterial saved = repository.save(material);
@@ -239,7 +185,7 @@ public class StudyMaterialService {
 		StudyMaterial material = get(id);
 		validateOwnership(material, studyBlockId);
 		if (material.getStatus() == StudyMaterialStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study materials cannot be modified");
+			throw new BusinessRuleException("Fontes arquivadas não podem ser modificadas.");
 		}
 		material.setEnabledForChat(!material.isEnabledForChat());
 		StudyMaterial saved = repository.save(material);
@@ -266,14 +212,14 @@ public class StudyMaterialService {
 	private StudyBlock getActiveBlock(UUID id) {
 		StudyBlock block = studyBlockService.get(id);
 		if (block.getStatus() == StudyBlockStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study blocks cannot receive materials");
+			throw new BusinessRuleException("Blocos de estudo arquivados não podem receber fontes.");
 		}
 		return block;
 	}
 
 	private void validateOwnership(StudyMaterial material, UUID studyBlockId) {
 		if (!material.getStudyBlock().getId().equals(studyBlockId)) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Study material not found");
+			throw new NotFoundException("Fonte não encontrada.");
 		}
 	}
 }

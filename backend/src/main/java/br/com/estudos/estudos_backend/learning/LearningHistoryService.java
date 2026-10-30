@@ -204,7 +204,7 @@ public class LearningHistoryService {
 				.count();
 
 		List<StudyQuestionAttempt> evaluable = filtered.stream()
-				.filter(a -> a.getEvaluationStatus() != QuestionEvaluationStatus.UNGRADABLE)
+				.filter(a -> a.getEvaluationStatus() == null || a.getEvaluationStatus().isGraded())
 				.toList();
 		long evaluatedAttempts = evaluable.size();
 		long correctAttempts = evaluable.stream().filter(StudyQuestionAttempt::isCorrect).count();
@@ -238,7 +238,7 @@ public class LearningHistoryService {
 					.map(a -> a.getQuestionId() != null ? a.getQuestionId().toString() : a.getPromptSnapshot())
 					.filter(Objects::nonNull).distinct().count();
 			List<StudyQuestionAttempt> bEval = blockAttempts.stream()
-					.filter(a -> a.getEvaluationStatus() != QuestionEvaluationStatus.UNGRADABLE).toList();
+					.filter(a -> a.getEvaluationStatus() == null || a.getEvaluationStatus().isGraded()).toList();
 			long bEvalCount = bEval.size();
 			long bCorrect = bEval.stream().filter(StudyQuestionAttempt::isCorrect).count();
 			long bIncorrect = bEvalCount - bCorrect;
@@ -264,7 +264,7 @@ public class LearningHistoryService {
 						.map(a -> a.getQuestionId() != null ? a.getQuestionId().toString() : a.getPromptSnapshot())
 						.filter(Objects::nonNull).distinct().count();
 				List<StudyQuestionAttempt> tEval = tAttempts.stream()
-						.filter(a -> a.getEvaluationStatus() != QuestionEvaluationStatus.UNGRADABLE).toList();
+						.filter(a -> a.getEvaluationStatus() == null || a.getEvaluationStatus().isGraded()).toList();
 				long tEvalCount = tEval.size();
 				long tCorrect = tEval.stream().filter(StudyQuestionAttempt::isCorrect).count();
 				long tIncorrect = tEvalCount - tCorrect;
@@ -308,7 +308,7 @@ public class LearningHistoryService {
 			List<StudyQuestionAttempt> dAttempts = entry.getValue();
 			long dTotal = dAttempts.size();
 			List<StudyQuestionAttempt> dEval = dAttempts.stream()
-					.filter(a -> a.getEvaluationStatus() != QuestionEvaluationStatus.UNGRADABLE).toList();
+					.filter(a -> a.getEvaluationStatus() == null || a.getEvaluationStatus().isGraded()).toList();
 			long dCorrect = dEval.stream().filter(StudyQuestionAttempt::isCorrect).count();
 			long dIncorrect = dEval.size() - dCorrect;
 			Integer dAcc = dEval.isEmpty() ? null : (int) Math.round(dCorrect * 100.0 / dEval.size());
@@ -377,7 +377,7 @@ public class LearningHistoryService {
 		QuestionEvaluationStatus status = attempt.getEvaluationStatus() == null
 				? (attempt.isCorrect() ? QuestionEvaluationStatus.CORRECT : QuestionEvaluationStatus.INCORRECT)
 				: attempt.getEvaluationStatus();
-		boolean evaluable = status != QuestionEvaluationStatus.UNGRADABLE;
+		boolean evaluable = status.isGraded();
 		return new LearningAttemptRecord(
 				attempt.getId(),
 				attempt.getOwnerId(),

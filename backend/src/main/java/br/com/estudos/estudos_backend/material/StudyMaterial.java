@@ -59,6 +59,19 @@ public class StudyMaterial {
 	@Column(name = "enabled_for_chat", nullable = false)
 	private boolean enabledForChat;
 
+	@Column(name = "video_channel", length = 255)
+	private String videoChannel;
+
+	@Column(name = "video_thumbnail_url", length = 1000)
+	private String videoThumbnailUrl;
+
+	@Column(name = "video_duration_seconds")
+	private Integer videoDurationSeconds;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "analysis_method", length = 20)
+	private VideoAnalysisMethod analysisMethod;
+
 	@Column(columnDefinition = "TEXT")
 	private String summary;
 
@@ -205,6 +218,55 @@ public class StudyMaterial {
 
 	public void archive() {
 		status = StudyMaterialStatus.ARCHIVED;
+	}
+
+	/** Canal e miniatura do vídeo (oEmbed). Valores longos são cortados ao tamanho da coluna. */
+	public void applyVideoMetadata(String channel, String thumbnailUrl) {
+		this.videoChannel = channel == null || channel.length() <= 255 ? channel : channel.substring(0, 255);
+		this.videoThumbnailUrl = thumbnailUrl == null || thumbnailUrl.length() > 1000 ? null : thumbnailUrl;
+	}
+
+	/** Volta a fonte para "processando" (importação ou nova tentativa). */
+	public void startProcessing() {
+		this.processingStatus = StudyMaterialProcessingStatus.PROCESSING;
+		this.errorMessage = null;
+	}
+
+	/** Conclui o processamento do vídeo com o conteúdo obtido e o método usado. */
+	public void completeVideoProcessing(String title, String content, String language, VideoAnalysisMethod method,
+			Integer durationSeconds) {
+		if (title != null && !title.isBlank()) {
+			this.title = title.length() <= 160 ? title : title.substring(0, 160);
+		}
+		update(this.title, content);
+		this.language = language;
+		this.analysisMethod = method;
+		if (durationSeconds != null && durationSeconds >= 0) {
+			this.videoDurationSeconds = durationSeconds;
+		}
+		this.processingStatus = StudyMaterialProcessingStatus.COMPLETED;
+		this.errorMessage = null;
+	}
+
+	public void failProcessing(String message) {
+		this.processingStatus = StudyMaterialProcessingStatus.FAILED;
+		this.errorMessage = message == null || message.length() <= 1000 ? message : message.substring(0, 1000);
+	}
+
+	public String getVideoChannel() {
+		return videoChannel;
+	}
+
+	public String getVideoThumbnailUrl() {
+		return videoThumbnailUrl;
+	}
+
+	public Integer getVideoDurationSeconds() {
+		return videoDurationSeconds;
+	}
+
+	public VideoAnalysisMethod getAnalysisMethod() {
+		return analysisMethod;
 	}
 
 	public UUID getId() {

@@ -94,7 +94,7 @@ class YoutubeImportUnitTests {
 				</transcript>
 				""";
 		assertEquals(
-				"Olá & bem-vindos ao curso de 'Java'! Hoje estudaremos \"Coleções\" e Streams.",
+				"[00:00] Olá & bem-vindos ao curso de 'Java'! Hoje estudaremos \"Coleções\" e Streams.",
 				extractor.parseTranscriptPayload(xml));
 
 		String json3 = """
@@ -108,5 +108,27 @@ class YoutubeImportUnitTests {
 		assertEquals(
 				"Primeira frase do vídeo. Segunda frase com & entidade.",
 				extractor.parseTranscriptPayload(json3));
+	}
+
+	@Test
+	void transcriptGetsTimestampMarkersEveryThirtySecondsOrMore() {
+		String json3 = """
+				{
+					"events": [
+						{ "tStartMs": 0, "segs": [ { "utf8": "Abertura." } ] },
+						{ "tStartMs": 12000, "segs": [ { "utf8": "Ainda no começo." } ] },
+						{ "tStartMs": 31500, "segs": [ { "utf8": "Segundo trecho." } ] },
+						{ "tStartMs": 3725000, "segs": [ { "utf8": "Depois de uma hora." } ] }
+					]
+				}
+				""";
+		assertEquals(
+				"[00:00] Abertura. Ainda no começo.\n[00:31] Segundo trecho.\n[1:02:05] Depois de uma hora.",
+				extractor.parseTranscriptPayload(json3));
+
+		String srv3 = """
+				<timedtext><body><p t="0" d="1000">Primeiro.</p><p t="45000" d="1000">Quarenta e cinco.</p></body></timedtext>
+				""";
+		assertEquals("[00:00] Primeiro.\n[00:45] Quarenta e cinco.", extractor.parseTranscriptPayload(srv3));
 	}
 }

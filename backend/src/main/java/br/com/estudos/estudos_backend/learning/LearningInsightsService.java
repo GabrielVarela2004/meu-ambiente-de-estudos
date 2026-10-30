@@ -102,7 +102,7 @@ public class LearningInsightsService {
 
 		List<Activity> activities = new ArrayList<>();
 		for (StudyQuestionAttempt attempt : questionAttemptRepository.findAllByOwnerIdOrderByAnsweredAtDesc(ownerId)) {
-			if (attempt.getEvaluationStatus() == QuestionEvaluationStatus.UNGRADABLE || attempt.getAnsweredAt() == null) {
+			if ((attempt.getEvaluationStatus() != null && !attempt.getEvaluationStatus().isGraded()) || attempt.getAnsweredAt() == null) {
 				continue;
 			}
 			activities.add(new Activity(attempt.getAnsweredAt().atZoneSameInstant(zone).toLocalDate(), false,

@@ -35,10 +35,17 @@ public interface AiTutorProvider {
 			List<AiTutorMessage> conversationHistory,
 			String userPrompt,
 			boolean jsonObjectMode,
-			Integer maxOutputTokens) {
+			Integer maxOutputTokens,
+			/** Temperatura pedida (ex.: 0.1 em correções); null = padrão do modelo. Ignorada onde o modelo não aceita. */
+			Double temperature) {
 
 		public AiTutorRequest {
 			conversationHistory = conversationHistory == null ? List.of() : List.copyOf(conversationHistory);
+		}
+
+		public AiTutorRequest(String systemInstruction, List<AiTutorMessage> conversationHistory, String userPrompt,
+				boolean jsonObjectMode, Integer maxOutputTokens) {
+			this(systemInstruction, conversationHistory, userPrompt, jsonObjectMode, maxOutputTokens, null);
 		}
 
 		public static AiTutorRequest ofText(String systemInstruction, String userPrompt) {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { request } from '../../api/http'
+import { importMaterialFile } from '../../api/materials'
 
 export type SourceType =
   | 'TEXT'
@@ -13,6 +14,9 @@ export type SourceType =
   | 'WEB'
   | 'YOUTUBE'
 export type ProcessingStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+
+/** Como o conteúdo de um vídeo do YouTube foi obtido (análise do vídeo pela IA ou transcrição). */
+export type VideoAnalysisMethod = 'ANALISE_IA' | 'TRANSCRICAO'
 
 export type StudyMaterialItem = {
   id: string
@@ -27,6 +31,10 @@ export type StudyMaterialItem = {
   errorMessage: string | null
   metadataJson?: string | null
   enabledForChat?: boolean
+  videoChannel?: string | null
+  videoThumbnailUrl?: string | null
+  videoDurationSeconds?: number | null
+  analysisMethod?: VideoAnalysisMethod | null
   wordCount?: number
   charCount?: number
   status: 'ACTIVE' | 'ARCHIVED'
@@ -96,9 +104,9 @@ export function AddSourceModal({
       return
     }
 
-    const maxBytes = 15 * 1024 * 1024 // 15 MB
+    const maxBytes = 10 * 1024 * 1024 // 10 MB (mesmo limite do backend)
     if (selectedFile.size > maxBytes) {
-      setErrorMessage('O arquivo excede o tamanho máximo de 15 MB.')
+      setErrorMessage('O arquivo excede o tamanho máximo de 10 MB.')
       return
     }
 
@@ -107,16 +115,7 @@ export function AddSourceModal({
     setErrorMessage(null)
 
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-
-      const saved = await request<StudyMaterialItem>(
-        `/api/study-blocks/${blockId}/materials/import`,
-        {
-          method: 'POST',
-          body: formData,
-        },
-      )
+      const saved = await importMaterialFile<StudyMaterialItem>(blockId, selectedFile)
 
       setStatus('COMPLETED')
       setStatusMessage('Arquivo importado com sucesso!')
@@ -267,7 +266,7 @@ export function AddSourceModal({
                   <span className="file-drop-icon">📁</span>
                   <strong>Escolha ou arraste um arquivo</strong>
                   <span className="file-drop-hint">
-                    Suporta PDF, DOCX, TXT e Markdown (máx. 15 MB)
+                    Suporta PDF, DOCX, TXT e Markdown (máx. 10 MB)
                   </span>
                   <input
                     type="file"

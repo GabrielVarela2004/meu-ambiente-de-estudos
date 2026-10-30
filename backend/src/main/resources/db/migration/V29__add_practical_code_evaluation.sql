@@ -1,4 +1,4 @@
--- V27: correção automática dos exercícios práticos (testes em contêiner, conceito e boas práticas)
+-- V29: correção automática dos exercícios práticos (testes em contêiner, conceito e boas práticas)
 
 ALTER TABLE practical_exercises
     ADD COLUMN language VARCHAR(20),

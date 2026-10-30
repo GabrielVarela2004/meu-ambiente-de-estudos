@@ -4,7 +4,10 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
@@ -23,8 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class StudyQuestionController {
 	private final StudyQuestionService service;
 	private final AiQuestionGeneratorService aiGeneratorService;
+	private final DiscursiveAnswerService discursiveAnswerService;
 
-	public StudyQuestionController(StudyQuestionService service, AiQuestionGeneratorService aiGeneratorService) {
+	public StudyQuestionController(StudyQuestionService service, AiQuestionGeneratorService aiGeneratorService,
+			DiscursiveAnswerService discursiveAnswerService) {
+		this.discursiveAnswerService = discursiveAnswerService;
 		this.service = service;
 		this.aiGeneratorService = aiGeneratorService;
 	}
@@ -73,8 +79,7 @@ public class StudyQuestionController {
 			@RequestParam(required = false) Integer days) {
 		if (days == null) return service.stats(studyBlockId);
 		if (days < 1 || days > 365) {
-			throw new org.springframework.web.server.ResponseStatusException(
-					HttpStatus.BAD_REQUEST, "days must be between 1 and 365");
+			throw new InvalidInputException("O número de dias deve estar entre 1 e 365.");
 		}
 		return service.stats(studyBlockId, days);
 	}
@@ -87,8 +92,25 @@ public class StudyQuestionController {
 	@PostMapping("/{id}/answers")
 	public StudyQuestionService.StudyQuestionAnswer answer(@PathVariable UUID studyBlockId, @PathVariable UUID id,
 			@Valid @RequestBody AnswerRequest request) {
-		return service.answer(studyBlockId, id, request.optionId(), request.discursiveAnswer());
+		return discursiveAnswerService.answer(studyBlockId, id, request.optionId(), request.discursiveAnswer());
 	}
+
+	/** Tentativas desta questão que aguardam correção (IA estava indisponível). */
+	@GetMapping("/{id}/attempts/pending")
+	public List<PendingAttemptResponse> pendingAttempts(@PathVariable UUID studyBlockId, @PathVariable UUID id) {
+		return service.pendingAttempts(studyBlockId, id).stream()
+				.map(a -> new PendingAttemptResponse(a.getId(), a.getUserAnswerText(), a.getAnsweredAt()))
+				.toList();
+	}
+
+	/** Reavalia uma tentativa pendente quando a IA volta. */
+	@PostMapping("/{id}/attempts/{attemptId}/evaluate")
+	public StudyQuestionService.StudyQuestionAnswer reevaluate(@PathVariable UUID studyBlockId, @PathVariable UUID id,
+			@PathVariable UUID attemptId) {
+		return discursiveAnswerService.reevaluate(studyBlockId, id, attemptId);
+	}
+
+	public record PendingAttemptResponse(UUID attemptId, String answer, OffsetDateTime answeredAt) {}
 
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Void> archive(@PathVariable UUID studyBlockId, @PathVariable UUID id) {
@@ -106,7 +128,7 @@ public class StudyQuestionController {
 			@Size(max = 6) List<@Valid OptionRequest> options) {}
 
 	public record SimuladoRequest(
-			Integer quantity,
+			@Min(1) @Max(10) Integer quantity,
 			StudyQuestionDifficulty difficulty,
 			StudyQuestionFormat format,
 			UUID topicId) {}
@@ -144,10 +166,10 @@ public class StudyQuestionController {
 					question.getStudyMaterial() == null ? null : question.getStudyMaterial().getTitle(),
 					question.getSourceExcerpt(),
 					question.getPrompt(),
-					question.getExplanation(),
+					StudyQuestionVisibility.explanationBeforeAnswer(question),
 					question.getDifficulty(),
 					question.getFormat(),
-					question.getExpectedAnswer(),
+					StudyQuestionVisibility.expectedAnswerBeforeAnswer(question),
 					question.getStatus(),
 					question.getOptions().stream().map(option -> new OptionResponse(
 							option.getId(), option.getText(), option.getOrder())).toList(),

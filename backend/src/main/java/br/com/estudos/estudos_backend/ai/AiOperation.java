@@ -9,15 +9,29 @@ public enum AiOperation {
 	TOPIC_EXTRACTION("Extração de tópicos das fontes"),
 	MATERIAL_SUMMARY("Resumo de materiais"),
 	PERFORMANCE_ANALYSIS("Análise de desempenho"),
-	CAREER_ANALYSIS("Análise de vagas");
+	CAREER_ANALYSIS("Análise de vagas"),
+	/** Só o Gemini aceita vídeo do YouTube por URL: não tem rota configurável, mas entra no consumo. */
+	VIDEO_ANALYSIS("Análise de vídeos do YouTube", false),
+	ANSWER_EVALUATION("Correção de respostas abertas");
 
 	private final String label;
+	private final boolean routable;
 
 	AiOperation(String label) {
+		this(label, true);
+	}
+
+	AiOperation(String label, boolean routable) {
 		this.label = label;
+		this.routable = routable;
 	}
 
 	public String label() {
 		return label;
+	}
+
+	/** Se a operação aparece na tela de rotas (provedor por operação). */
+	public boolean routable() {
+		return routable;
 	}
 }

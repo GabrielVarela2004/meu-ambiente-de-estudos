@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../api/http'
 import type { SourceType, StudyMaterialItem } from '../sources/AddSourceModal'
+import { TimestampText } from '../../components/video/TimestampText'
+import { useVideoPlayer } from '../video/videoPlayer'
 
 type ChatHistoryItem = {
   id: string
@@ -79,6 +81,19 @@ export function TutorChatPanel({
     referencedSources?: ReferencedSource[]
   } | null>(null)
   const [history, setHistory] = useState<ChatHistoryItem[]>([])
+  const videoPlayer = useVideoPlayer()
+
+  /**
+   * Vídeo usado pelos minutos clicáveis: a fonte YouTube citada na resposta ou, sem citação,
+   * a primeira fonte YouTube ativa no chat. Sem vídeo, os minutos aparecem como texto comum.
+   */
+  const seekHandlerFor = (referencedIds: string[] = []) => {
+    const videos = activeSources.filter((s) => s.sourceType === 'YOUTUBE' && s.externalVideoId)
+    const video = videos.find((s) => referencedIds.includes(s.id)) ?? videos[0]
+    if (!video || !videoPlayer) return undefined
+    return (seconds: number) =>
+      videoPlayer.openVideo({ videoId: video.externalVideoId as string, title: video.title, seconds })
+  }
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -392,7 +407,12 @@ export function TutorChatPanel({
             <h3>Resposta do Tutor {chatMode === 'universal' ? '(Universal Multi-Bloco)' : ''}</h3>
             <span className="badge">Modelo: {latestAnswer.model}</span>
           </div>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{latestAnswer.answer}</p>
+          <p style={{ whiteSpace: 'pre-wrap' }}>
+            <TimestampText
+              text={latestAnswer.answer}
+              onSeek={seekHandlerFor(latestAnswer.referencedSources?.map((s) => s.id))}
+            />
+          </p>
           {latestAnswer.referencedSources && latestAnswer.referencedSources.length > 0 && (
             <div className="referenced-sources-box">
               <strong>Fontes citadas nesta resposta:</strong>
@@ -446,7 +466,8 @@ export function TutorChatPanel({
                   <strong>Você:</strong> {item.userMessage}
                 </p>
                 <p style={{ whiteSpace: 'pre-wrap' }}>
-                  <strong>Tutor ({item.modelName}):</strong> {item.assistantAnswer}
+                  <strong>Tutor ({item.modelName}):</strong>{' '}
+                  <TimestampText text={item.assistantAnswer} onSeek={seekHandlerFor()} />
                 </p>
                 {item.referencedMaterials && (
                   <p className="subtitle" style={{ fontSize: '0.8rem' }}>

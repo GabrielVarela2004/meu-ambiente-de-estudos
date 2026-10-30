@@ -1,11 +1,14 @@
 package br.com.estudos.estudos_backend.question;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +21,7 @@ import br.com.estudos.estudos_backend.chat.SourceContextSelector;
 import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
 import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicStatus;
+import br.com.estudos.estudos_backend.knowledge.SourceTopicExtractor;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialProcessingStatus;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
@@ -32,6 +36,9 @@ import br.com.estudos.estudos_backend.ai.AiOperationContext;
 public class AiQuestionGeneratorService {
 	private static final int MAX_CONTEXT_CHARACTERS = 20_000;
 	private static final int MIN_CHARS_PER_QUESTION_WHEN_MULTIPLE = 40;
+	/** Enunciados já existentes enviados à IA para evitar repetição. */
+	private static final int MAX_EXISTING_PROMPTS = 30;
+	private static final int MAX_LISTED_TOPICS = 40;
 	private static final String SYSTEM_INSTRUCTION = "Você é um gerador especialista de questões de estudo em português. "
 			+ "Gere exclusivamente questões baseadas nos materiais de referência fornecidos para o bloco de estudo atual. "
 			+ "Não utilize conhecimentos externos fora das fontes fornecidas. "
@@ -83,13 +90,13 @@ public class AiQuestionGeneratorService {
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, UUID topicId) {
 		int resolvedQuantity = quantity == null ? 1 : quantity;
 		if (resolvedQuantity < 1 || resolvedQuantity > 10) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+			throw new InvalidInputException(
 					"A quantidade de questões do simulado deve estar entre 1 e 10.");
 		}
 
 		StudyBlock block = studyBlockService.get(studyBlockId);
 		if (block.getStatus() == StudyBlockStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study blocks cannot receive questions");
+			throw new BusinessRuleException("Blocos de estudo arquivados não podem receber questões.");
 		}
 
 		List<StudyMaterial> materials = studyMaterialRepository
@@ -98,22 +105,24 @@ public class AiQuestionGeneratorService {
 				.filter(m -> m.getProcessingStatus() == null
 						|| m.getProcessingStatus() == StudyMaterialProcessingStatus.COMPLETED)
 				.filter(m -> m.getContent() != null && !m.getContent().isBlank())
+				// A IA só usa as fontes ativas no chat do bloco.
+				.filter(StudyMaterial::isEnabledForChat)
 				.toList();
 
 		if (materials.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.valueOf(422),
-					"Active study materials are required in this block to generate AI questions");
+					"Adicione uma fonte concluída ao bloco e deixe-a ativa no chat antes de gerar questões.");
 		}
 
 		KnowledgeTopic selectedTopic = null;
 		if (topicId != null) {
 			if (knowledgeTopicRepository == null) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Topic repository not available");
+				throw new InvalidInputException("Repositório de tópicos indisponível.");
 			}
 			selectedTopic = knowledgeTopicRepository.findById(topicId)
 					.filter(topic -> topic.getStudyBlock().getId().equals(studyBlockId))
 					.filter(topic -> topic.getStatus() == KnowledgeTopicStatus.ACTIVE)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					.orElseThrow(() -> new InvalidInputException(
 							"O tópico selecionado não pertence a este bloco de estudo ou está arquivado."));
 		}
 
@@ -128,23 +137,30 @@ public class AiQuestionGeneratorService {
 		}
 
 		StudyQuestionDifficulty resolvedDifficulty = difficulty == null ? StudyQuestionDifficulty.INTERMEDIATE : difficulty;
-		StudyQuestionFormat resolvedFormat = format == null ? StudyQuestionFormat.MULTIPLE_CHOICE : format;
+		// Área teórica: só questões abertas (Etapa 8). O formato pedido é ignorado; objetivas antigas continuam respondíveis.
+		StudyQuestionFormat resolvedFormat = StudyQuestionFormat.DISCURSIVE;
 
 		StudyMaterial primaryMaterial = resolvePrimaryMaterial(materials, selectedTopic);
+		// Sem tópico escolhido, cada questão é vinculada a um dos tópicos ativos do bloco.
+		List<KnowledgeTopic> blockTopics = selectedTopic == null ? activeTopics(studyBlockId) : List.of();
 
 		if (aiTutorProvider != null
 				&& AiOperationContext.call(AiOperation.QUESTION_GENERATION, aiTutorProvider::isConfigured)) {
-			String userPrompt = buildGenerationPrompt(block, materials, selectedTopic, resolvedQuantity, resolvedDifficulty, resolvedFormat);
+			List<String> existingPrompts = studyQuestionService.recentPrompts(studyBlockId, topicId, MAX_EXISTING_PROMPTS);
+			String userPrompt = buildGenerationPrompt(block, materials, selectedTopic, blockTopics, existingPrompts,
+					resolvedQuantity, resolvedDifficulty, resolvedFormat);
 			AiTutorProvider.AiTutorReply reply = AiOperationContext.call(AiOperation.QUESTION_GENERATION,
 					() -> aiTutorProvider.generateReply(AiTutorProvider.AiTutorRequest.ofJson(SYSTEM_INSTRUCTION, userPrompt)));
 			return parseAndSaveQuestions(
 					studyBlockId,
 					primaryMaterial,
 					selectedTopic,
+					blockTopics,
 					resolvedQuantity,
 					resolvedDifficulty,
 					resolvedFormat,
-					reply != null ? reply.answer() : null);
+					reply != null ? reply.answer() : null,
+					materials);
 		}
 
 		// Quando o provedor externo não está configurado, gera questões estritamente fundamentadas
@@ -154,6 +170,7 @@ public class AiQuestionGeneratorService {
 				materials,
 				primaryMaterial,
 				selectedTopic,
+				blockTopics,
 				resolvedQuantity,
 				resolvedDifficulty,
 				resolvedFormat);
@@ -171,7 +188,7 @@ public class AiQuestionGeneratorService {
 	}
 
 	private String buildGenerationPrompt(StudyBlock block, List<StudyMaterial> materials,
-			KnowledgeTopic selectedTopic, int quantity,
+			KnowledgeTopic selectedTopic, List<KnowledgeTopic> blockTopics, List<String> existingPrompts, int quantity,
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Gere ").append(quantity).append(" questão(ões) de estudo para o bloco \"")
@@ -188,16 +205,40 @@ public class AiQuestionGeneratorService {
 		} else {
 			sb.append("Abranja os conceitos mais relevantes disponíveis nas fontes do bloco.\n");
 		}
+		if (!blockTopics.isEmpty()) {
+			sb.append("Tópicos do bloco (vincule cada questão a exatamente um deles, copiando o título no campo \"topic\"):\n");
+			blockTopics.stream().limit(MAX_LISTED_TOPICS)
+					.forEach(topic -> sb.append("- ").append(topic.getTitle()).append("\n"));
+		}
+		if (!existingPrompts.isEmpty()) {
+			sb.append("\n[PERGUNTAS JÁ EXISTENTES — DADOS: não repita nem reformule; cubra outros aspectos do conteúdo]\n");
+			existingPrompts.forEach(prompt -> sb.append("- ").append(abbreviate(prompt, 200)).append("\n"));
+			sb.append("[FIM DAS PERGUNTAS JÁ EXISTENTES]\n\n");
+		}
 
 		String itemSchema;
 		if (format == StudyQuestionFormat.DISCURSIVE) {
-			itemSchema = "{\"prompt\":\"...\",\"explanation\":\"...\",\"expectedAnswer\":\"termos-chave obrigatórios separados por espaço\",\"sourceExcerpt\":\"trecho literal da fonte\"}";
+			sb.append("Regras das questões abertas:\n")
+					.append("- Cada pergunta exige explicação (por que, como funciona, compare, explique com um exemplo), ")
+					.append("nunca só uma definição decorada.\n")
+					.append("- A resposta-modelo é completa e usa SOMENTE o que o material diz, com a terminologia dele.\n")
+					.append("- A rubrica lista os conceitos essenciais (obrigatórios para estar correta), os complementares, ")
+					.append("os termos e expressões que o material usa e os erros conceituais comuns.\n")
+					.append("- \"sourceExcerpt\" é um trecho copiado literalmente do material que fundamenta a resposta; ")
+					.append("se a fonte for vídeo com marcações [MM:SS], informe o minuto em \"sourceTimestamp\".\n")
+					.append("- Não crie pergunta cuja resposta não esteja no material.\n");
+			itemSchema = "{\"prompt\":\"...\",\"modelAnswer\":\"resposta-modelo completa\",\"explanation\":\"por que a resposta-modelo está correta\","
+					+ "\"rubric\":{\"essentialConcepts\":[\"...\"],\"complementaryConcepts\":[\"...\"],\"materialTerms\":[\"...\"],\"commonMistakes\":[\"...\"]},"
+					+ "\"sourceExcerpt\":\"trecho literal do material\",\"sourceTimestamp\":\"MM:SS ou vazio\"}";
 		} else if (format == StudyQuestionFormat.TRUE_FALSE) {
 			itemSchema = "{\"prompt\":\"...\",\"explanation\":\"...\",\"sourceExcerpt\":\"trecho literal da fonte\",\"options\":[{\"text\":\"Verdadeiro\",\"correct\":true},{\"text\":\"Falso\",\"correct\":false}]} (apenas 1 correta)";
 		} else {
 			itemSchema = "{\"prompt\":\"...\",\"explanation\":\"...\",\"sourceExcerpt\":\"trecho literal da fonte\",\"options\":[{\"text\":\"...\",\"correct\":true},{\"text\":\"...\",\"correct\":false},{\"text\":\"...\",\"correct\":false},{\"text\":\"...\",\"correct\":false}]} (exatamente 1 correta)";
 		}
 
+		if (!blockTopics.isEmpty()) {
+			itemSchema = itemSchema.replaceFirst("^\\{", "{\"topic\":\"título exato de um dos tópicos listados\",");
+		}
 		if (quantity == 1) {
 			sb.append("Estrutura JSON obrigatória: ").append(itemSchema).append("\n");
 		} else {
@@ -236,11 +277,11 @@ public class AiQuestionGeneratorService {
 	}
 
 	private List<StudyQuestion> parseAndSaveQuestions(UUID studyBlockId, StudyMaterial primaryMaterial,
-			KnowledgeTopic selectedTopic, int expectedQuantity,
-			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String rawReply) {
+			KnowledgeTopic selectedTopic, List<KnowledgeTopic> blockTopics, int expectedQuantity,
+			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String rawReply, List<StudyMaterial> materials) {
 		try {
 			if (rawReply == null || rawReply.isBlank()) {
-				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI provider returned empty response");
+				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O provedor de IA retornou uma resposta vazia.");
 			}
 			String cleaned = cleanJsonEnvelope(rawReply);
 			JsonNode root = objectMapper.readTree(cleaned);
@@ -254,11 +295,10 @@ public class AiQuestionGeneratorService {
 			}
 
 			if (items.isEmpty()) {
-				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI provider returned no valid questions");
+				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O provedor de IA não retornou nenhuma questão válida.");
 			}
 
 			UUID materialId = primaryMaterial == null ? null : primaryMaterial.getId();
-			UUID topicId = selectedTopic == null ? null : selectedTopic.getId();
 			String defaultExcerpt = selectedTopic != null && selectedTopic.getSupportingExcerpt() != null
 					? selectedTopic.getSupportingExcerpt()
 					: extractDefaultExcerpt(primaryMaterial);
@@ -266,16 +306,84 @@ public class AiQuestionGeneratorService {
 			List<StudyQuestion> savedQuestions = new ArrayList<>();
 			for (int i = 0; i < Math.min(expectedQuantity, items.size()); i++) {
 				JsonNode node = items.get(i);
+				UUID topicId = selectedTopic != null
+						? selectedTopic.getId()
+						: resolveTopicId(node.path("topic").asText(""),
+								node.path("prompt").asText("") + " " + node.path("sourceExcerpt").asText(""), blockTopics);
+				if (format == StudyQuestionFormat.DISCURSIVE) {
+					StudyQuestion open = saveOpenQuestion(studyBlockId, materialId, topicId, difficulty, node, materials);
+					if (open != null) {
+						savedQuestions.add(open);
+					}
+					continue;
+				}
 				savedQuestions.add(parseSingleQuestionNode(
 						studyBlockId, materialId, topicId, defaultExcerpt, difficulty, format, node));
+			}
+			if (savedQuestions.isEmpty()) {
+				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "A IA não gerou perguntas fundamentadas no "
+						+ "material (cada resposta precisa estar no conteúdo das fontes). Tente gerar de novo.");
 			}
 			return savedQuestions;
 		} catch (ResponseStatusException exception) {
 			throw exception;
 		} catch (Exception exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-					"AI provider response could not be parsed as a valid question");
+					"Não foi possível interpretar a resposta do provedor de IA como uma questão válida.");
 		}
+	}
+
+	/**
+	 * Valida e grava uma questão aberta: enunciado, resposta-modelo, rubrica com ao menos um conceito essencial e
+	 * trecho que realmente aparece no material. Questão sem fundamento no material é descartada (devolve null).
+	 * A resposta-modelo e a rubrica são gravadas antes de a questão ser exibida.
+	 */
+	private StudyQuestion saveOpenQuestion(UUID studyBlockId, UUID materialId, UUID topicId,
+			StudyQuestionDifficulty difficulty, JsonNode node, List<StudyMaterial> materials) {
+		String prompt = node.path("prompt").asText("").strip();
+		String modelAnswer = node.path("modelAnswer").asText(node.path("expectedAnswer").asText("")).strip();
+		String excerpt = node.path("sourceExcerpt").asText("").strip();
+		QuestionRubric rubric = QuestionRubric.fromJson(node.path("rubric"));
+		if (prompt.isEmpty() || modelAnswer.isEmpty() || rubric.essentialConcepts().isEmpty()
+				|| !isGroundedInMaterials(excerpt, materials)) {
+			return null;
+		}
+		String explanation = node.path("explanation").asText("").strip();
+		String timestamp = node.path("sourceTimestamp").asText("").strip();
+		if (timestamp.length() > 12 || !timestamp.matches("(\\d{1,2}:)?\\d{1,2}:\\d{2}")) {
+			timestamp = null;
+		}
+		StudyQuestion question = studyQuestionService.create(studyBlockId, materialId, topicId,
+				excerpt.length() <= 2000 ? excerpt : excerpt.substring(0, 2000),
+				prompt, explanation.isEmpty() ? null : explanation, difficulty, StudyQuestionFormat.DISCURSIVE,
+				modelAnswer.length() <= 4000 ? modelAnswer : modelAnswer.substring(0, 4000), List.of());
+		if (question == null) {
+			return null;
+		}
+		return studyQuestionService.attachRubric(studyBlockId, question.getId(), modelAnswer, rubric.toJson(), timestamp);
+	}
+
+	/** O trecho citado aparece no material (literal ou com ao menos 80% das palavras significativas). */
+	static boolean isGroundedInMaterials(String excerpt, List<StudyMaterial> materials) {
+		String normalizedExcerpt = SourceTopicExtractor.normalizeKey(excerpt == null ? "" : excerpt);
+		if (normalizedExcerpt.length() < 20 || materials == null) {
+			return false;
+		}
+		Set<String> excerptWords = significantWords(normalizedExcerpt);
+		for (StudyMaterial material : materials) {
+			String content = SourceTopicExtractor.normalizeKey(material.getContent() == null ? "" : material.getContent());
+			if (content.contains(normalizedExcerpt)) {
+				return true;
+			}
+			if (!excerptWords.isEmpty()) {
+				Set<String> contentWords = significantWords(content);
+				long found = excerptWords.stream().filter(contentWords::contains).count();
+				if (found >= Math.ceil(excerptWords.size() * 0.8)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private StudyQuestion parseSingleQuestionNode(UUID studyBlockId, UUID primaryMaterialId,
@@ -288,7 +396,7 @@ public class AiQuestionGeneratorService {
 			sourceExcerpt = defaultExcerpt;
 		}
 		if (prompt.isBlank()) {
-			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI provider returned an empty question prompt");
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O provedor de IA retornou uma questão sem enunciado.");
 		}
 
 		// Mantém compatibilidade com a assinatura de 8 argumentos quando topicId e sourceExcerpt não foram enviados no JSON
@@ -298,7 +406,7 @@ public class AiQuestionGeneratorService {
 			String expectedAnswer = root.path("expectedAnswer").asText("").trim();
 			if (expectedAnswer.isBlank()) {
 				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-						"AI provider did not supply evaluation criteria for discursive question");
+						"O provedor de IA não informou os critérios de avaliação da questão discursiva.");
 			}
 			if (hasExtendedMetadata) {
 				return studyQuestionService.create(studyBlockId, primaryMaterialId, topicId, sourceExcerpt,
@@ -324,14 +432,14 @@ public class AiQuestionGeneratorService {
 					|| options.stream().filter(StudyQuestionController.OptionRequest::correct).count() != 1
 					|| options.stream().anyMatch(o -> o.text() == null || o.text().isBlank())) {
 				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-						"AI provider returned invalid options for true/false question: requires exactly 2 options with 1 correct");
+						"O provedor de IA retornou alternativas inválidas para verdadeiro ou falso (são exigidas 2 alternativas e 1 correta).");
 			}
 		} else { // MULTIPLE_CHOICE
 			if (options.size() < 2 || options.size() > 6
 					|| options.stream().filter(StudyQuestionController.OptionRequest::correct).count() != 1
 					|| options.stream().anyMatch(o -> o.text() == null || o.text().isBlank())) {
 				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-						"AI provider returned invalid options for multiple-choice question: requires 2 to 6 options with exactly 1 correct");
+						"O provedor de IA retornou alternativas inválidas para múltipla escolha (são exigidas de 2 a 6 alternativas e exatamente 1 correta).");
 			}
 		}
 
@@ -349,6 +457,7 @@ public class AiQuestionGeneratorService {
 			List<StudyMaterial> materials,
 			StudyMaterial primaryMaterial,
 			KnowledgeTopic selectedTopic,
+			List<KnowledgeTopic> blockTopics,
 			int quantity,
 			StudyQuestionDifficulty difficulty,
 			StudyQuestionFormat format) {
@@ -361,7 +470,7 @@ public class AiQuestionGeneratorService {
 		List<StudyQuestion> created = new ArrayList<>();
 		for (int i = 0; i < quantity; i++) {
 			SourceFact fact = facts.get(i % facts.size());
-			UUID topicId = selectedTopic != null ? selectedTopic.getId() : null;
+			UUID topicId = selectedTopic != null ? selectedTopic.getId() : resolveTopicId("", fact.statement(), blockTopics);
 			String subjectLabel = selectedTopic != null ? selectedTopic.getTitle() : fact.materialTitle();
 			String promptPrefix = switch (difficulty) {
 				case EASY -> "[Conceito Fundamental — " + subjectLabel + "] ";
@@ -566,6 +675,61 @@ public class AiQuestionGeneratorService {
 			}
 		}
 		return trimmed.trim();
+	}
+
+	private List<KnowledgeTopic> activeTopics(UUID studyBlockId) {
+		if (knowledgeTopicRepository == null) {
+			return List.of();
+		}
+		return knowledgeTopicRepository.findAllByStudyBlockIdAndStatusOrderByCreatedAtAsc(studyBlockId,
+				KnowledgeTopicStatus.ACTIVE);
+	}
+
+	/**
+	 * Tópico indicado pela IA (título igual, ignorando acentos e caixa); se não bater, o tópico com mais palavras
+	 * em comum com o texto da questão (subtópico vence empate, por ser mais específico). Sem tópicos, null.
+	 */
+	static UUID resolveTopicId(String aiTopic, String questionText, List<KnowledgeTopic> topics) {
+		if (topics == null || topics.isEmpty()) {
+			return null;
+		}
+		String key = SourceTopicExtractor.normalizeKey(aiTopic == null ? "" : aiTopic);
+		if (!key.isBlank()) {
+			for (KnowledgeTopic topic : topics) {
+				if (SourceTopicExtractor.normalizeKey(topic.getTitle()).equals(key)) {
+					return topic.getId();
+				}
+			}
+		}
+		Set<String> questionWords = significantWords(questionText + " " + (aiTopic == null ? "" : aiTopic));
+		KnowledgeTopic best = null;
+		long bestScore = 0;
+		for (KnowledgeTopic topic : topics) {
+			long score = significantWords(topic.getTitle() + " "
+					+ (topic.getDescription() == null ? "" : topic.getDescription()))
+					.stream().filter(questionWords::contains).count();
+			boolean moreSpecificTie = score == bestScore && best != null && topic.isSubtopic() && !best.isSubtopic();
+			if (score > bestScore || (score > 0 && moreSpecificTie)) {
+				best = topic;
+				bestScore = score;
+			}
+		}
+		return best == null ? null : best.getId();
+	}
+
+	private static Set<String> significantWords(String text) {
+		Set<String> words = new HashSet<>();
+		for (String word : SourceTopicExtractor.normalizeKey(text == null ? "" : text).split(" ")) {
+			if (word.length() >= 4) {
+				words.add(word);
+			}
+		}
+		return words;
+	}
+
+	private static String abbreviate(String text, int maxChars) {
+		String singleLine = text.replaceAll("\\s+", " ").trim();
+		return singleLine.length() <= maxChars ? singleLine : singleLine.substring(0, maxChars - 1) + "…";
 	}
 
 	private record SourceFact(UUID materialId, String materialTitle, String statement) {}

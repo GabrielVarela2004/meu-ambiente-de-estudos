@@ -6,12 +6,16 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
-import org.springframework.http.HttpStatus;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Configurações da camada de IA: preferências por provedor, rota por operação e disponibilidade
@@ -20,6 +24,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class AiSettingsService {
 
+	private static final Logger log = LoggerFactory.getLogger(AiSettingsService.class);
+
 	/** Ordem de preferência padrão e de fallback. */
 	private static final List<String> PROVIDER_ORDER = List.of("openai", "anthropic", "gemini");
 
@@ -27,9 +33,19 @@ public class AiSettingsService {
 	private final AiProviderSettingsRepository settingsRepository;
 	private final AiOperationRouteRepository routeRepository;
 	private final AiUsageRecordRepository usageRepository;
+	/** Provedor padrão de {@code app.ai.provider} (vazio = primeiro com chave). Rotas salvas no banco prevalecem. */
+	private final String preferredProviderId;
 
 	public AiSettingsService(List<AiModelProvider> providers, AiProviderSettingsRepository settingsRepository,
 			AiOperationRouteRepository routeRepository, AiUsageRecordRepository usageRepository) {
+		this(providers, settingsRepository, routeRepository, usageRepository, "");
+	}
+
+	@Autowired
+	public AiSettingsService(List<AiModelProvider> providers, AiProviderSettingsRepository settingsRepository,
+			AiOperationRouteRepository routeRepository, AiUsageRecordRepository usageRepository,
+			@Value("${app.ai.provider:}") String preferredProviderId) {
+		this.preferredProviderId = preferredProviderId == null ? "" : preferredProviderId.trim().toLowerCase(Locale.ROOT);
 		this.providers = providers.stream()
 				.sorted(Comparator.comparingInt(p -> {
 					int index = PROVIDER_ORDER.indexOf(p.id());
@@ -47,7 +63,7 @@ public class AiSettingsService {
 
 	public AiModelProvider provider(String id) {
 		return providers.stream().filter(p -> p.id().equals(id)).findFirst()
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provedor de IA desconhecido: " + id));
+				.orElseThrow(() -> new InvalidInputException("Provedor de IA desconhecido: " + id));
 	}
 
 	@Transactional(readOnly = true)
@@ -66,8 +82,18 @@ public class AiSettingsService {
 				.orElseGet(() -> new AiOperationRoute(operation, defaultProviderId(), true));
 	}
 
-	/** Primeiro provedor com chave configurada; sem nenhum, o primeiro da lista. */
-	private String defaultProviderId() {
+	/**
+	 * O provedor de {@code app.ai.provider}, se existir; senão, o primeiro com chave configurada; sem nenhum,
+	 * o primeiro da lista. Sem chave para o preferido, o fallback padrão da rota tenta os demais.
+	 */
+	String defaultProviderId() {
+		if (!preferredProviderId.isEmpty()) {
+			if (providers.stream().anyMatch(p -> p.id().equals(preferredProviderId))) {
+				return preferredProviderId;
+			}
+			log.warn("app.ai.provider='{}' não corresponde a nenhum provedor ({}); usando o padrão.", preferredProviderId,
+					providers.stream().map(AiModelProvider::id).toList());
+		}
 		return providers.stream().filter(AiModelProvider::isConfigured).findFirst()
 				.or(() -> providers.stream().findFirst())
 				.map(AiModelProvider::id)
@@ -110,7 +136,7 @@ public class AiSettingsService {
 	public AiProviderSettings updateProvider(String providerId, boolean enabled, String model, Integer dailyRequestLimit) {
 		provider(providerId);
 		if (model != null && model.length() > 120) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome de modelo muito longo.");
+			throw new InvalidInputException("Nome de modelo muito longo.");
 		}
 		AiProviderSettings settings = settingsRepository.findById(providerId).orElseGet(() -> new AiProviderSettings(providerId));
 		settings.update(enabled, model, dailyRequestLimit);

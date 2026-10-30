@@ -1,4 +1,4 @@
--- V26: tutoria por chat dentro do exercício prático e autonomia medida pela ajuda recebida
+-- V28: tutoria por chat dentro do exercício prático e autonomia medida pela ajuda recebida
 
 ALTER TABLE practical_exercises
     ADD COLUMN steps_json TEXT;

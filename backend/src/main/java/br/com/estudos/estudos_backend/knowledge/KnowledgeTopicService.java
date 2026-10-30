@@ -10,11 +10,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialProcessingStatus;
@@ -76,17 +77,17 @@ public class KnowledgeTopicService {
 	public KnowledgeTopic create(UUID blockId, String title, String description, UUID parentTopicId, UUID prerequisiteTopicId) {
 		StudyBlock block = blockService.get(blockId);
 		if (block.getStatus() == StudyBlockStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study blocks cannot receive topics");
+			throw new BusinessRuleException("Blocos de estudo arquivados não podem receber tópicos.");
 		}
 		if (parentTopicId != null) {
 			KnowledgeTopic parent = topicRepository.findById(parentTopicId)
 					.filter(topic -> topic.getStudyBlock().getId().equals(blockId))
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent topic"));
+					.orElseThrow(() -> new InvalidInputException("Tópico pai inválido."));
 			if (parent.getStatus() == KnowledgeTopicStatus.ARCHIVED) {
-				throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived topics cannot receive subtopics");
+				throw new BusinessRuleException("Tópicos arquivados não podem receber subtópicos.");
 			}
 			if (parent.isSubtopic()) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Subtopics cannot contain other subtopics");
+				throw new InvalidInputException("Subtópicos não podem conter outros subtópicos.");
 			}
 		}
 		if (prerequisiteTopicId != null) {
@@ -99,7 +100,7 @@ public class KnowledgeTopicService {
 	public List<TopicView> extractFromSources(UUID blockId, boolean requireSources) {
 		StudyBlock block = blockService.get(blockId);
 		if (block.getStatus() == StudyBlockStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study blocks cannot extract topics");
+			throw new BusinessRuleException("Não é possível extrair tópicos de um bloco de estudo arquivado.");
 		}
 		if (materialRepository == null || sourceTopicExtractor == null) {
 			return list(blockId, false);
@@ -145,15 +146,19 @@ public class KnowledgeTopicService {
 			}
 		}
 
-		if (activeMaterials.isEmpty()) {
+		// A extração usa só as fontes ativas no chat; a limpeza acima considera todas as ativas, para que
+		// desligar uma fonte no chat não arquive os tópicos dela.
+		List<StudyMaterial> chatMaterials = activeMaterials.stream().filter(StudyMaterial::isEnabledForChat).toList();
+		if (chatMaterials.isEmpty()) {
 			if (requireSources) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-						"Adicione ao menos uma fonte concluída ao bloco antes de extrair assuntos e tópicos.");
+				throw new InvalidInputException(activeMaterials.isEmpty()
+						? "Adicione ao menos uma fonte concluída ao bloco antes de extrair assuntos e tópicos."
+						: "Ative no chat ao menos uma fonte do bloco antes de extrair assuntos e tópicos.");
 			}
 			return list(blockId, false);
 		}
 
-		List<SourceTopicExtractor.ExtractedTopic> extractedTopics = sourceTopicExtractor.extractFromMaterials(block, activeMaterials);
+		List<SourceTopicExtractor.ExtractedTopic> extractedTopics = sourceTopicExtractor.extractFromMaterials(block, chatMaterials);
 		OffsetDateTime now = OffsetDateTime.now();
 
 		Map<String, KnowledgeTopic> existingMainByNormTitle = new LinkedHashMap<>();
@@ -237,7 +242,7 @@ public class KnowledgeTopicService {
 		return list(blockId, false).stream()
 				.filter(view -> view.topic().getId().equals(topicId))
 				.findFirst()
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Knowledge topic not found"));
+				.orElseThrow(() -> new NotFoundException("Tópico não encontrado."));
 	}
 
 	@Transactional(readOnly = true)
@@ -322,7 +327,7 @@ public class KnowledgeTopicService {
 	public void archive(UUID blockId, UUID topicId) {
 		KnowledgeTopic topic = getActiveOwned(blockId, topicId);
 		if (topicRepository.existsByParentTopicIdAndStatus(topicId, KnowledgeTopicStatus.ACTIVE)) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archive the active subtopics first");
+			throw new BusinessRuleException("Arquive primeiro os subtópicos ativos.");
 		}
 		topic.archive();
 		topicRepository.save(topic);
@@ -333,10 +338,10 @@ public class KnowledgeTopicService {
 		KnowledgeTopic topic = getActiveOwned(blockId, topicId);
 		StudyQuestion question = questionRepository.findById(questionId)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-						"Question does not belong to this study block"));
+				.orElseThrow(() -> new InvalidInputException(
+						"A questão não pertence a este bloco de estudo."));
 		if (question.getStatus() == StudyQuestionStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived questions cannot be linked");
+			throw new BusinessRuleException("Questões arquivadas não podem ser vinculadas.");
 		}
 		KnowledgeTopicQuestion.Key key = new KnowledgeTopicQuestion.Key(topic.getId(), questionId);
 		if (!linkRepository.existsById(key)) {
@@ -359,13 +364,13 @@ public class KnowledgeTopicService {
 
 	private void validatePrerequisiteTarget(UUID blockId, UUID sourceTopicId, UUID prerequisiteTopicId) {
 		if (sourceTopicId != null && sourceTopicId.equals(prerequisiteTopicId)) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A topic cannot be its own prerequisite");
+			throw new InvalidInputException("Um tópico não pode ser pré-requisito de si mesmo.");
 		}
 		KnowledgeTopic prereq = topicRepository.findById(prerequisiteTopicId)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid prerequisite topic"));
+				.orElseThrow(() -> new InvalidInputException("Tópico de pré-requisito inválido."));
 		if (prereq.getStatus() == KnowledgeTopicStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived topics cannot be prerequisites");
+			throw new BusinessRuleException("Tópicos arquivados não podem ser pré-requisitos.");
 		}
 		if (sourceTopicId != null) {
 			Set<UUID> visited = new HashSet<>();
@@ -373,8 +378,8 @@ public class KnowledgeTopicService {
 			UUID cursor = prereq.getPrerequisiteTopicId();
 			while (cursor != null) {
 				if (!visited.add(cursor)) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-							"Circular prerequisite dependency detected");
+					throw new InvalidInputException(
+							"Dependência circular de pré-requisitos detectada.");
 				}
 				cursor = topicRepository.findById(cursor)
 						.map(KnowledgeTopic::getPrerequisiteTopicId)
@@ -403,9 +408,9 @@ public class KnowledgeTopicService {
 		blockService.get(blockId);
 		KnowledgeTopic topic = topicRepository.findById(topicId)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Knowledge topic not found"));
+				.orElseThrow(() -> new NotFoundException("Tópico não encontrado."));
 		if (topic.getStatus() == KnowledgeTopicStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived topics cannot be modified");
+			throw new BusinessRuleException("Tópicos arquivados não podem ser modificados.");
 		}
 		return topic;
 	}

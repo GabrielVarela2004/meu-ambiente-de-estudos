@@ -70,6 +70,44 @@ class AiProviderRouterTest {
 		assertEquals(10, recorded.get(0).getInputTokens());
 	}
 
+	private AiProviderRouter routerPreferring(String preferred, AiModelProvider... providers) {
+		AiSettingsService settings = new AiSettingsService(List.of(providers), settingsRepository, routeRepository,
+				usageRepository, preferred);
+		return new AiProviderRouter(settings, new AiUsageService(usageRepository));
+	}
+
+	@Test
+	void appAiProviderChoosesTheDefaultProviderWhenNoRouteIsSaved() {
+		FakeProvider openai = FakeProvider.ok("openai", "resposta openai");
+		FakeProvider gemini = FakeProvider.ok("gemini", "resposta gemini");
+
+		AiTutorReply reply = routerPreferring("Gemini", openai, gemini).generateReply(AiTutorRequest.ofText("sys", "oi"));
+
+		assertEquals("resposta gemini", reply.answer());
+		assertEquals(0, openai.calls);
+	}
+
+	@Test
+	void savedRouteWinsOverAppAiProvider() {
+		FakeProvider openai = FakeProvider.ok("openai", "resposta openai");
+		FakeProvider gemini = FakeProvider.ok("gemini", "resposta gemini");
+		route(AiOperation.CHAT, "openai", false);
+
+		AiTutorReply reply = routerPreferring("gemini", openai, gemini).generateReply(AiTutorRequest.ofText("sys", "oi"));
+
+		assertEquals("resposta openai", reply.answer());
+	}
+
+	@Test
+	void unknownAppAiProviderFallsBackToFirstConfigured() {
+		FakeProvider openai = FakeProvider.ok("openai", "resposta openai");
+		FakeProvider gemini = FakeProvider.ok("gemini", "resposta gemini");
+
+		AiTutorReply reply = routerPreferring("inexistente", openai, gemini).generateReply(AiTutorRequest.ofText("sys", "oi"));
+
+		assertEquals("resposta openai", reply.answer());
+	}
+
 	@Test
 	void fallsBackToNextProviderOnTransientFailure() {
 		FakeProvider openai = FakeProvider.failing("openai", HttpStatus.TOO_MANY_REQUESTS);

@@ -20,7 +20,7 @@ de tópicos; preferências e busca manual de vagas.
   exercício prático, "buscar agora", status de vaga, avaliar competências e ativar fonte de vagas. Detalhes na tabela 4.2 da auditoria.
 - O agendamento automático de vagas está ativo (`app.scheduling.enabled`, padrão `true`).
 - Não há autenticação; o frontend não envia `X-Study-User-Id` (todo uso cai em `default-user`).
-- Upload limitado a **1 MB** (padrão do Spring; nenhum limite configurado).
+- Upload limitado a **10 MB** para PDF, DOCX e PPTX e **2 MB** para texto e código-fonte (`UPLOAD_MAX_FILE_SIZE` / `UPLOAD_MAX_REQUEST_SIZE`).
 - **Fórum** está oculto do menu (era apenas visual). **Metas e Sessões** têm tela própria na barra lateral.
 - **IA com vários provedores:** OpenAI, Anthropic (Claude) e Google Gemini. Em Configurações › Provedores de IA escolhe-se o provedor de cada operação (chat, questões, exercícios, tópicos), o fallback, o modelo e o limite diário; o consumo dos últimos 7 dias aparece na mesma tela. As chaves ficam só no `.env` (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
 - Plataforma de **uso individual** (sem login).
@@ -124,7 +124,7 @@ docker build -t estudos-java-runner:1 runner/java
 
 Sem a imagem (ou com o Docker parado), os exercícios continuam funcionando com autoavaliação. Para desativar a correção automática, use `RUNNER_ENABLED=false`.
 
-A IA gera os testes e a solução de referência junto com o exercício, e a solução é executada antes de liberar a correção automática. Com a OpenAI, aumente `OPENAI_MAX_OUTPUT_TOKENS` para ~4000; o padrão de 1200 corta exercícios com testes (Anthropic e Gemini já usam limites maiores).
+A IA gera os testes e a solução de referência junto com o exercício, e a solução é executada antes de liberar a correção automática. O Gemini (gratuito) já tem limite de resposta suficiente; com a OpenAI, aumente `OPENAI_MAX_OUTPUT_TOKENS` para ~4000.
 
 Nota de cada tentativa prática: corretude pelos testes (50%), conceito (25%) e boas práticas (25%), multiplicada pela autonomia, que cai conforme as ajudas pedidas à tutora no chat do exercício. O desempenho de um tópico é 70% prática + 30% teoria.
 
@@ -155,6 +155,33 @@ OPENAI_MAX_REQUESTS_PER_MINUTE=20
 ```
 
 > **Nota de Degradação Segura:** Se a `OPENAI_API_KEY` permanecer em branco, a plataforma iniciará normalmente em modo offline. As funcionalidades de IA retornarão HTTP 503 com mensagem informativa amigável na interface, e a geração de simulados utilizará a extração heurística baseada nos materiais locais.
+
+### 4.3. Usar o Google Gemini (chave gratuita)
+
+O Gemini tem plano gratuito, suficiente para estudar com o chat, gerar questões e extrair tópicos.
+
+1. Acesse [Google AI Studio › API keys](https://aistudio.google.com/apikey) com sua conta Google.
+2. Clique em **Create API key** (crie ou escolha um projeto do Google Cloud quando pedir) e copie a chave.
+3. No arquivo `.env` **da raiz do projeto** (o mesmo copiado do `.env.example`), preencha:
+   ```env
+   GEMINI_API_KEY=cole-a-chave-aqui
+   # Para usar o Gemini em todas as operações que não têm provedor escolhido na tela de Configurações:
+   AI_PROVIDER=gemini
+   ```
+4. Reinicie o backend. Em **Configurações › Provedores de IA** o Gemini aparece como disponível; ali dá para
+   escolher o provedor de cada operação, ligar o fallback e definir um limite diário de chamadas.
+
+Observações:
+- A chave fica só no `.env` (que não vai para o Git) e é enviada ao Google no cabeçalho `x-goog-api-key`,
+  nunca na URL nem ao navegador.
+- Modelo padrão: `gemini-3.8-flash` (`GEMINI_MODEL`); o `gemini-3.5-flash-lite` é mais leve. Os limites do plano
+  gratuito (requisições por minuto e por dia) variam por modelo e aparecem em
+  [AI Studio › Rate limits](https://aistudio.google.com/rate-limit). O backend limita a 10 chamadas por minuto
+  (`GEMINI_MAX_REQUESTS_PER_MINUTE`).
+- Quando a cota acaba, a tela mostra se foi o limite por minuto (aguarde um minuto) ou a cota diária, que é
+  renovada à meia-noite do horário do Pacífico (por volta das 4h ou 5h em Brasília).
+- A IA só usa as fontes do bloco que estão **ativas no chat**, e o conteúdo delas vai marcado como dado, nunca
+  como instrução.
 
 ---
 
@@ -258,11 +285,11 @@ curl -X POST http://localhost:8080/api/chat \
 | Código HTTP | Causa Provável | Solução |
 | :--- | :--- | :--- |
 | **503 Service Unavailable** | `OPENAI_API_KEY` ausente, em branco ou chave revogada pela OpenAI. | Verifique o `.env`, certifique-se de que a variável `OPENAI_API_KEY` contém uma chave válida e reinicie o backend. |
-| **429 Too Many Requests** | Limite de requisições por minuto atingido (local: 20 req/min; ou cota da OpenAI). | Aguarde alguns segundos antes de enviar nova mensagem. Se for cota da conta OpenAI, verifique os créditos em platform.openai.com. |
+| **429 Too Many Requests** | Limite de requisições por minuto atingido (local: 20 req/min na OpenAI, 10 no Gemini) ou cota do provedor. | Aguarde alguns segundos antes de enviar nova mensagem. Na OpenAI, verifique os créditos em platform.openai.com. No Gemini gratuito, a mensagem indica se é o limite por minuto ou a cota diária (renovada à meia-noite do Pacífico). |
 | **502 Bad Gateway** | Resposta da OpenAI malformada ou instabilidade no serviço da OpenAI. | Tente novamente em instantes. O backend descarta respostas corrompidas para não persistir dados inválidos. |
 | **504 Gateway Timeout** | A OpenAI demorou mais do que o tempo limite configurado (padrão 45s). | Reduza o tamanho do texto enviado ou divida o material em fontes menores. |
 | **400 Bad Request** | Arquivo corrompido, encriptado ou mensagem excedeu o limite máximo (40.000 caracteres). | Envie um arquivo legível e não protegido por senha. |
-| **413 Content Too Large** | Arquivo maior que o limite de upload (atualmente o padrão do Spring, **1 MB**, pois não há limite configurado). | Divida o arquivo ou configure `spring.servlet.multipart.max-file-size`. |
+| **413 Content Too Large** | Arquivo maior que o limite de upload (**10 MB** por padrão; 2 MB para texto e código-fonte). A resposta traz a mensagem em português. | Divida o arquivo ou ajuste `UPLOAD_MAX_FILE_SIZE` e `UPLOAD_MAX_REQUEST_SIZE` no `.env`. |
 | **415 Unsupported Media Type** | Extensão não suportada. | Utilize apenas `.txt`, `.md`, `.pdf` ou `.docx`. |
 | **422 Unprocessable Entity** | Bloco sem materiais cadastrados para gerar questões com IA ou vídeo YouTube sem legendas. | Adicione materiais com conteúdo de texto ao bloco antes de solicitar a geração. |
 

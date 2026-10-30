@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
+import { submitExerciseAttempt } from '../api/exercises'
 import { CodeIcon, FolderIcon, SparklesIcon } from '../components/icons'
 import { AttemptResultPanel, type AttemptResult } from '../features/exercises/AttemptResultPanel'
 import { ExerciseTutorChat } from '../features/exercises/ExerciseTutorChat'
@@ -87,7 +88,8 @@ export function PracticalExercisesPage({
   const [genMaterialId, setGenMaterialId] = useState('')
   const [genTopicId, setGenTopicId] = useState('')
   const [genDifficulty, setGenDifficulty] = useState('INTERMEDIATE')
-  const [genType, setGenType] = useState('PROBLEM_SOLVING')
+  // Vazio: o backend escolhe o formato menos praticado no bloco, para variar os exercícios.
+  const [genType, setGenType] = useState('')
   const [genMaterials, setGenMaterials] = useState<SourceOption[]>([])
   const [genTopics, setGenTopics] = useState<SourceOption[]>([])
 
@@ -173,7 +175,7 @@ export function PracticalExercisesPage({
             materialId: effectiveMaterialId || null,
             topicId: effectiveTopicId || null,
             difficulty: genDifficulty,
-            exerciseType: genType,
+            exerciseType: genType || null,
           }),
         }
       )
@@ -190,19 +192,19 @@ export function PracticalExercisesPage({
     const userAnswer = answers[ex.id] ?? (ex.starterCode || '')
     // Com correção automática confirmada, a nota vem da execução; senão, vale a autoavaliação.
     const selfRating = ex.autoEvaluable === true ? null : ratings[ex.id] || 4
+    const blockId = ex.studyBlockId || selectedBlockId
+    if (!blockId) {
+      setError('Não foi possível identificar o bloco deste exercício.')
+      return
+    }
 
     setSubmittingId(ex.id)
     try {
       // O backend executa o código (quando há testes) e aplica a autonomia, calculada pelas ajudas da tutora.
-      const res = await request<AttemptResult & { id: string }>(
-        `/api/study-blocks/${ex.studyBlockId || selectedBlockId}/exercises/${ex.id}/attempts`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            answer: userAnswer,
-            selfRating,
-          }),
-        }
+      const res = await submitExerciseAttempt<AttemptResult & { id: string }>(
+        blockId,
+        ex.id,
+        { answer: userAnswer, selfRating },
       )
       setFeedback((prev) => ({ ...prev, [ex.id]: res }))
       setAttemptCounts((prev) => ({ ...prev, [ex.id]: (prev[ex.id] ?? 0) + 1 }))
@@ -328,6 +330,7 @@ export function PracticalExercisesPage({
           <label className="exercise-generator-field">
             <span className="text-xs text-muted">Tipo</span>
             <select className="form-select" value={genType} onChange={(e) => setGenType(e.target.value)}>
+              <option value="">Variar automaticamente</option>
               {Object.entries(exerciseTypeLabels).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}

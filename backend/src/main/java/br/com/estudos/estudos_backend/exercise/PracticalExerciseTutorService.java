@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import br.com.estudos.estudos_backend.ai.AiOperation;
 import br.com.estudos.estudos_backend.ai.AiOperationContext;
 import br.com.estudos.estudos_backend.chat.AiTutorProvider;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockRepository;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockStatus;
@@ -217,10 +218,10 @@ public class PracticalExerciseTutorService {
 		String ownerId = currentUserResolver.currentUserId();
 		blockRepository.findByIdAndOwnerId(blockId, ownerId)
 				.filter(block -> block.getStatus() == StudyBlockStatus.ACTIVE)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found"));
+				.orElseThrow(() -> new NotFoundException("Bloco de estudo não encontrado."));
 		return exerciseRepository.findById(exerciseId)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Exercise not found"));
+				.orElseThrow(() -> new NotFoundException("Exercício prático não encontrado."));
 	}
 
 	record ParsedReply(String answer, ExerciseHelpLevel helpLevel, Integer stepIndex) {}

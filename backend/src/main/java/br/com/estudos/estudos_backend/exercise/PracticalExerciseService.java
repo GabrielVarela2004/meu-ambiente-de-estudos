@@ -1,8 +1,14 @@
 package br.com.estudos.estudos_backend.exercise;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -135,19 +141,19 @@ public class PracticalExerciseService {
 		StudyMaterial material = null;
 		if (materialId != null) {
 			if (materialRepository == null) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Material repository not configured");
+				throw new InvalidInputException("Repositório de materiais indisponível.");
 			}
 			material = materialRepository.findById(materialId)
 					.filter(item -> item.getStudyBlock().getId().equals(blockId))
 					.filter(item -> item.getStatus() == StudyMaterialStatus.ACTIVE)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid study material"));
+					.orElseThrow(() -> new InvalidInputException("Material de estudo inválido."));
 		}
 
 		if (topicId != null && knowledgeTopicRepository != null) {
 			knowledgeTopicRepository.findById(topicId)
 					.filter(t -> t.getStudyBlock().getId().equals(blockId))
 					.filter(t -> t.getStatus() == KnowledgeTopicStatus.ACTIVE)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid knowledge topic"));
+					.orElseThrow(() -> new InvalidInputException("Tópico inválido."));
 		}
 
 		String resolvedExcerpt = sourceExcerpt;
@@ -179,7 +185,7 @@ public class PracticalExerciseService {
 			PracticalExerciseType exerciseType) {
 		activeBlock(blockId);
 		if (materialRepository == null) {
-			throw new ResponseStatusException(HttpStatus.valueOf(422), "Material repository not available");
+			throw new ResponseStatusException(HttpStatus.valueOf(422), "Repositório de materiais indisponível.");
 		}
 
 		List<StudyMaterial> materials = materialRepository
@@ -188,11 +194,13 @@ public class PracticalExerciseService {
 				.filter(m -> m.getProcessingStatus() == null
 						|| m.getProcessingStatus() == StudyMaterialProcessingStatus.COMPLETED)
 				.filter(m -> m.getContent() != null && !m.getContent().isBlank())
+				// A IA só usa as fontes ativas no chat do bloco.
+				.filter(StudyMaterial::isEnabledForChat)
 				.toList();
 
 		if (materials.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.valueOf(422),
-					"Active study materials are required in this block to generate practical exercises");
+					"Adicione uma fonte concluída ao bloco e deixe-a ativa no chat antes de gerar exercícios práticos.");
 		}
 
 		KnowledgeTopic topic = null;
@@ -200,7 +208,7 @@ public class PracticalExerciseService {
 			topic = knowledgeTopicRepository.findById(topicId)
 					.filter(t -> t.getStudyBlock().getId().equals(blockId))
 					.filter(t -> t.getStatus() == KnowledgeTopicStatus.ACTIVE)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid knowledge topic"));
+					.orElseThrow(() -> new InvalidInputException("Tópico inválido."));
 		}
 
 		// Sem material escolhido: usa a fonte do tópico, se houver, ou combina os materiais mais recentes do bloco.
@@ -209,8 +217,8 @@ public class PracticalExerciseService {
 			contextMaterials = List.of(materials.stream()
 					.filter(m -> m.getId().equals(materialId))
 					.findFirst()
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-							"O material selecionado não pertence a este bloco ou está inativo.")));
+					.orElseThrow(() -> new InvalidInputException(
+							"O material selecionado não pertence a este bloco, está inativo ou está desativado no chat.")));
 		} else {
 			UUID topicSourceId = topic == null ? null : topic.getSourceMaterialId();
 			contextMaterials = materials.stream()
@@ -222,7 +230,7 @@ public class PracticalExerciseService {
 		StudyMaterial targetMaterial = contextMaterials.get(0);
 
 		StudyQuestionDifficulty resolvedDifficulty = difficulty == null ? StudyQuestionDifficulty.INTERMEDIATE : difficulty;
-		PracticalExerciseType resolvedType = exerciseType == null ? PracticalExerciseType.PROBLEM_SOLVING : exerciseType;
+		PracticalExerciseType resolvedType = exerciseType == null ? leastUsedType(blockId) : exerciseType;
 		String defaultExcerpt = topic != null && topic.getSupportingExcerpt() != null && !topic.getSupportingExcerpt().isBlank()
 				? topic.getSupportingExcerpt()
 				: extractDefaultExcerpt(targetMaterial);
@@ -427,7 +435,7 @@ public class PracticalExerciseService {
 
 		CodeEvaluationReport report = runAutomaticEvaluation(exercise, answer);
 		if (report == null && rating == null) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+			throw new InvalidInputException(
 					"Este exercício não tem correção automática disponível; informe a autoavaliação (1 a 5).");
 		}
 
@@ -501,14 +509,14 @@ public class PracticalExerciseService {
 	@Transactional
 	public PracticalExercise rescheduleReview(UUID exerciseId, int days) {
 		if (days < 1 || days > 365) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 1 and 365");
+			throw new InvalidInputException("O número de dias deve estar entre 1 e 365.");
 		}
 		String ownerId = currentUserResolver.currentUserId();
 		PracticalExercise exercise = exerciseRepository.findById(exerciseId)
 				.filter(item -> item.getStudyBlock().getOwnerId().equals(ownerId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Practical exercise not found"));
+				.orElseThrow(() -> new NotFoundException("Exercício prático não encontrado."));
 		if (exercise.getStatus() == PracticalExerciseStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived exercises cannot be rescheduled");
+			throw new BusinessRuleException("Exercícios arquivados não podem ser reagendados.");
 		}
 		exercise.scheduleNextReview(true);
 		return exerciseRepository.save(exercise);
@@ -524,13 +532,31 @@ public class PracticalExerciseService {
 		activeBlock(blockId);
 		return exerciseRepository.findById(exerciseId)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Exercise not found"));
+				.orElseThrow(() -> new NotFoundException("Exercício prático não encontrado."));
+	}
+
+	/** Formatos genéricos o bastante para qualquer fonte; SQL, feature e integração ficam para escolha explícita. */
+	private static final List<PracticalExerciseType> VARIED_TYPES = List.of(
+			PracticalExerciseType.PROBLEM_SOLVING,
+			PracticalExerciseType.METHOD_IMPLEMENTATION,
+			PracticalExerciseType.CODE_FIX,
+			PracticalExerciseType.CODE_ANALYSIS,
+			PracticalExerciseType.SMALL_SOLUTION);
+
+	/** Sem tipo escolhido, usa o formato menos praticado no bloco, para variar os exercícios gerados. */
+	PracticalExerciseType leastUsedType(UUID blockId) {
+		Map<PracticalExerciseType, Long> usage = exerciseRepository.findAllByStudyBlockIdOrderByUpdatedAtDesc(blockId)
+				.stream()
+				.collect(Collectors.groupingBy(PracticalExercise::getExerciseType, Collectors.counting()));
+		return VARIED_TYPES.stream()
+				.min(Comparator.comparingLong(type -> usage.getOrDefault(type, 0L)))
+				.orElse(PracticalExerciseType.PROBLEM_SOLVING);
 	}
 
 	private StudyBlock activeBlock(UUID id) {
 		String ownerId = currentUserResolver.currentUserId();
 		return blockRepository.findByIdAndOwnerId(id, ownerId)
 				.filter(block -> block.getStatus() == StudyBlockStatus.ACTIVE)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found"));
+				.orElseThrow(() -> new NotFoundException("Bloco de estudo não encontrado."));
 	}
 }

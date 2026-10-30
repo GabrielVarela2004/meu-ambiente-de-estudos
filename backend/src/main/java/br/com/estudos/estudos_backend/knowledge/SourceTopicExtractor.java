@@ -101,6 +101,10 @@ public class SourceTopicExtractor {
 				() -> aiTutorProvider.generateReply(SYSTEM_INSTRUCTION, promptText));
 		String cleaned = cleanJsonEnvelope(reply.answer());
 		JsonNode root = objectMapper.readTree(cleaned);
+		// Alguns provedores (ex.: Gemini) envolvem a lista num objeto: {"topics":[...]}.
+		if (root.isObject() && root.path("topics").isArray()) {
+			root = root.path("topics");
+		}
 		if (!root.isArray()) {
 			return List.of();
 		}

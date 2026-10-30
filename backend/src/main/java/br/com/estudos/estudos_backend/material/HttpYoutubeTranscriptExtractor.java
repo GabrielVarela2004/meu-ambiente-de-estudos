@@ -251,7 +251,7 @@ public class HttpYoutubeTranscriptExtractor implements YoutubeTranscriptExtracto
 			if (!events.isArray()) {
 				return "";
 			}
-			StringBuilder sb = new StringBuilder();
+			TimedText sb = new TimedText();
 			for (JsonNode event : events) {
 				JsonNode segs = event.path("segs");
 				if (segs.isArray()) {
@@ -262,7 +262,7 @@ public class HttpYoutubeTranscriptExtractor implements YoutubeTranscriptExtracto
 							line.append(utf8);
 						}
 					}
-					appendCleanSegment(sb, line.toString());
+					sb.append(event.has("tStartMs") ? event.path("tStartMs").asLong() / 1000.0 : null, line.toString());
 				}
 			}
 			return sb.toString().trim();
@@ -285,16 +285,16 @@ public class HttpYoutubeTranscriptExtractor implements YoutubeTranscriptExtracto
 			DocumentBuilder builder = factory.newDocumentBuilder();
 			Document doc = builder.parse(new ByteArrayInputStream(xmlPayload.getBytes(StandardCharsets.UTF_8)));
 
-			StringBuilder sb = new StringBuilder();
+			TimedText sb = new TimedText();
 			NodeList textNodes = doc.getElementsByTagName("text");
 			if (textNodes.getLength() > 0) {
 				for (int i = 0; i < textNodes.getLength(); i++) {
-					appendCleanSegment(sb, textNodes.item(i).getTextContent());
+					sb.append(secondsAttribute(textNodes.item(i), "start", 1.0), textNodes.item(i).getTextContent());
 				}
 			} else {
 				NodeList pNodes = doc.getElementsByTagName("p");
 				for (int i = 0; i < pNodes.getLength(); i++) {
-					appendCleanSegment(sb, pNodes.item(i).getTextContent());
+					sb.append(secondsAttribute(pNodes.item(i), "t", 1000.0), pNodes.item(i).getTextContent());
 				}
 			}
 			return sb.toString().trim();
@@ -302,6 +302,45 @@ public class HttpYoutubeTranscriptExtractor implements YoutubeTranscriptExtracto
 			throw new ResponseStatusException(
 					HttpStatus.valueOf(422),
 					"Não foi possível processar o arquivo XML de legendas do YouTube.");
+		}
+	}
+
+	/**
+	 * Texto da transcrição com marcações [MM:SS] no início e a cada {@value #MARKER_INTERVAL_SECONDS} s ou mais,
+	 * para o chat e as questões citarem o minuto do vídeo. Segmentos sem tempo entram sem marcação.
+	 */
+	static final class TimedText {
+		static final int MARKER_INTERVAL_SECONDS = 30;
+		private final StringBuilder sb = new StringBuilder();
+		private double lastMarker = -MARKER_INTERVAL_SECONDS;
+
+		void append(Double startSeconds, String rawSegment) {
+			if (startSeconds != null && startSeconds >= 0 && startSeconds - lastMarker >= MARKER_INTERVAL_SECONDS
+					&& rawSegment != null && !rawSegment.isBlank()) {
+				lastMarker = startSeconds;
+				if (!sb.isEmpty()) {
+					sb.append('\n');
+				}
+				sb.append('[').append(VideoAnalysisParser.formatTimestamp((int) Math.floor(startSeconds))).append(']');
+			}
+			appendCleanSegment(sb, rawSegment);
+		}
+
+		@Override
+		public String toString() {
+			return sb.toString();
+		}
+	}
+
+	private static Double secondsAttribute(org.w3c.dom.Node node, String attribute, double divisor) {
+		org.w3c.dom.Node value = node.getAttributes() == null ? null : node.getAttributes().getNamedItem(attribute);
+		if (value == null) {
+			return null;
+		}
+		try {
+			return Double.parseDouble(value.getNodeValue()) / divisor;
+		} catch (NumberFormatException e) {
+			return null;
 		}
 	}
 

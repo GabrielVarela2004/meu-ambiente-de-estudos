@@ -3,14 +3,14 @@ package br.com.estudos.estudos_backend.studyblock;
 import java.util.List;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialStatus;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class StudyBlockService {
@@ -52,7 +52,7 @@ public class StudyBlockService {
 	public StudyBlock get(UUID id) {
 		String ownerId = currentUserResolver.currentUserId();
 		return repository.findByIdAndOwnerId(id, ownerId)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found"));
+				.orElseThrow(() -> new NotFoundException("Bloco de estudo não encontrado."));
 	}
 
 	@Transactional(readOnly = true)
@@ -70,7 +70,7 @@ public class StudyBlockService {
 	public StudyBlock update(UUID id, String title, String description, String learningObjective) {
 		StudyBlock block = get(id);
 		if (block.getStatus() == StudyBlockStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study blocks cannot be edited");
+			throw new BusinessRuleException("Blocos de estudo arquivados não podem ser editados.");
 		}
 		block.update(title, description, learningObjective);
 		return repository.save(block);
@@ -86,6 +86,9 @@ public class StudyBlockService {
 	@Transactional
 	public StudyBlock unarchive(UUID id) {
 		StudyBlock block = get(id);
+		if (block.getStatus() == StudyBlockStatus.ACTIVE) {
+			throw new BusinessRuleException("O bloco de estudo já está ativo.");
+		}
 		block.unarchive();
 		return repository.save(block);
 	}

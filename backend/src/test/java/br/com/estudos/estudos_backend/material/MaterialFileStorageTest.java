@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -142,6 +143,32 @@ class MaterialFileStorageTest {
 				() -> storage.readAndStore(exeFile));
 
 		assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getStatusCode());
+	}
+
+	@Test
+	void rejectsBinaryFileAboveDefaultLimitOfTenMegabytes() {
+		MockMultipartFile largePdf = new MockMultipartFile(
+				"file", "grande.pdf", "application/pdf", new byte[10 * 1024 * 1024 + 1]);
+
+		ResponseStatusException ex = assertThrows(
+				ResponseStatusException.class,
+				() -> storage.readAndStore(largePdf));
+
+		assertEquals(HttpStatus.CONTENT_TOO_LARGE, ex.getStatusCode());
+		assertEquals("O arquivo excede o tamanho máximo de 10 MB para este formato.", ex.getReason());
+	}
+
+	@Test
+	void binaryLimitFollowsConfiguredMultipartSize() {
+		MaterialFileStorage smallLimit = new MaterialFileStorage(tempDir.toString(), DataSize.ofMegabytes(1));
+		MockMultipartFile pdf = new MockMultipartFile(
+				"file", "medio.pdf", "application/pdf", new byte[1024 * 1024 + 1]);
+
+		ResponseStatusException ex = assertThrows(
+				ResponseStatusException.class,
+				() -> smallLimit.readAndStore(pdf));
+
+		assertEquals(HttpStatus.CONTENT_TOO_LARGE, ex.getStatusCode());
 	}
 
 	@Test
