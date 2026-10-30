@@ -24,7 +24,7 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
   `{ status, error, message, fields, timestamp }`, locale pt-BR fixo para validação, 500 sem stack trace. Services
   convertidos um pacote por commit e mensagens traduzidas. Erros de provedores externos (429/502/503/504) seguem
   como `ResponseStatusException`, no mesmo formato. `http.ts` já lia `message`. Backend: 145 testes.
-- [ ] Etapa 6 — Integração com o Gemini (em andamento; plano abaixo)
+- [x] Etapa 6 — Integração com o Gemini (plano e o que foi feito abaixo). Backend: 169 testes.
 - [ ] Etapa 7 — Vídeos do YouTube como fonte
 - [ ] Etapa 8 — Questões teóricas abertas com correção rigorosa
 - [ ] Etapa 9 — Limpeza
@@ -60,7 +60,8 @@ do Pacífico).
    JSON continua validado no backend. (Questões teóricas sempre abertas: Etapa 8.)
 6. Toda questão gerada fica vinculada a um tópico: sem tópico escolhido, o prompt lista os tópicos ativos do bloco,
    a IA devolve `topic` em cada questão e o backend associa ao tópico existente (fallback por similaridade).
-7. Trechos relevantes: já atendido pelo `SourceContextSelector` (consulta = título + descrição do tópico); só conferir.
+7. Trechos relevantes: já atendido pelo `SourceContextSelector` (consulta = título + descrição do tópico); conferido,
+   sem mudança.
 8. Testes com HTTP do Gemini simulado: sucesso, sem chave, cota esgotada, timeout e JSON inválido; mais testes de
    `app.ai.provider`, filtro de chat, perguntas existentes no prompt e vínculo com tópico.
 9. `.env.example` e README: como criar a chave gratuita no Google AI Studio e configurá-la no `.env` da raiz.

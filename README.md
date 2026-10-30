@@ -142,6 +142,33 @@ OPENAI_MAX_REQUESTS_PER_MINUTE=20
 
 > **Nota de Degradação Segura:** Se a `OPENAI_API_KEY` permanecer em branco, a plataforma iniciará normalmente em modo offline. As funcionalidades de IA retornarão HTTP 503 com mensagem informativa amigável na interface, e a geração de simulados utilizará a extração heurística baseada nos materiais locais.
 
+### 4.3. Usar o Google Gemini (chave gratuita)
+
+O Gemini tem plano gratuito, suficiente para estudar com o chat, gerar questões e extrair tópicos.
+
+1. Acesse [Google AI Studio › API keys](https://aistudio.google.com/apikey) com sua conta Google.
+2. Clique em **Create API key** (crie ou escolha um projeto do Google Cloud quando pedir) e copie a chave.
+3. No arquivo `.env` **da raiz do projeto** (o mesmo copiado do `.env.example`), preencha:
+   ```env
+   GEMINI_API_KEY=cole-a-chave-aqui
+   # Para usar o Gemini em todas as operações que não têm provedor escolhido na tela de Configurações:
+   AI_PROVIDER=gemini
+   ```
+4. Reinicie o backend. Em **Configurações › Provedores de IA** o Gemini aparece como disponível; ali dá para
+   escolher o provedor de cada operação, ligar o fallback e definir um limite diário de chamadas.
+
+Observações:
+- A chave fica só no `.env` (que não vai para o Git) e é enviada ao Google no cabeçalho `x-goog-api-key`,
+  nunca na URL nem ao navegador.
+- Modelo padrão: `gemini-3.8-flash` (`GEMINI_MODEL`); o `gemini-3.5-flash-lite` é mais leve. Os limites do plano
+  gratuito (requisições por minuto e por dia) variam por modelo e aparecem em
+  [AI Studio › Rate limits](https://aistudio.google.com/rate-limit). O backend limita a 10 chamadas por minuto
+  (`GEMINI_MAX_REQUESTS_PER_MINUTE`).
+- Quando a cota acaba, a tela mostra se foi o limite por minuto (aguarde um minuto) ou a cota diária, que é
+  renovada à meia-noite do horário do Pacífico (por volta das 4h ou 5h em Brasília).
+- A IA só usa as fontes do bloco que estão **ativas no chat**, e o conteúdo delas vai marcado como dado, nunca
+  como instrução.
+
 ---
 
 ## 5. Execução do Projeto
@@ -244,7 +271,7 @@ curl -X POST http://localhost:8080/api/chat \
 | Código HTTP | Causa Provável | Solução |
 | :--- | :--- | :--- |
 | **503 Service Unavailable** | `OPENAI_API_KEY` ausente, em branco ou chave revogada pela OpenAI. | Verifique o `.env`, certifique-se de que a variável `OPENAI_API_KEY` contém uma chave válida e reinicie o backend. |
-| **429 Too Many Requests** | Limite de requisições por minuto atingido (local: 20 req/min; ou cota da OpenAI). | Aguarde alguns segundos antes de enviar nova mensagem. Se for cota da conta OpenAI, verifique os créditos em platform.openai.com. |
+| **429 Too Many Requests** | Limite de requisições por minuto atingido (local: 20 req/min na OpenAI, 10 no Gemini) ou cota do provedor. | Aguarde alguns segundos antes de enviar nova mensagem. Na OpenAI, verifique os créditos em platform.openai.com. No Gemini gratuito, a mensagem indica se é o limite por minuto ou a cota diária (renovada à meia-noite do Pacífico). |
 | **502 Bad Gateway** | Resposta da OpenAI malformada ou instabilidade no serviço da OpenAI. | Tente novamente em instantes. O backend descarta respostas corrompidas para não persistir dados inválidos. |
 | **504 Gateway Timeout** | A OpenAI demorou mais do que o tempo limite configurado (padrão 45s). | Reduza o tamanho do texto enviado ou divida o material em fontes menores. |
 | **400 Bad Request** | Arquivo corrompido, encriptado ou mensagem excedeu o limite máximo (40.000 caracteres). | Envie um arquivo legível e não protegido por senha. |
