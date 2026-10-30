@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { request } from '../../api/http'
+import { toggleCareerSource } from '../../api/career'
 import '../../styles/pages/career.css'
 
 type JobSource = {
@@ -36,10 +37,7 @@ export function CareerSourcesPage() {
 
   const handleToggle = async (sourceId: string, currentEnabled: boolean) => {
     try {
-      await request(`/api/career/sources/${sourceId}/toggle`, {
-        method: 'PATCH',
-        body: JSON.stringify({ enabled: !currentEnabled }),
-      })
+      await toggleCareerSource(sourceId, !currentEnabled)
       setSources((prev) =>
         prev.map((s) => (s.id === sourceId ? { ...s, enabled: !currentEnabled } : s))
       )

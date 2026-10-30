@@ -7,8 +7,8 @@ Linha de base (2026-10-30, antes da Etapa 0): backend com 131 testes passando; f
 Várias etapas já tinham sido cobertas pelo plano do `docs/AUDITORIA.md` (Etapas A–J, concluídas em 2026-10-29/30).
 Nesses casos a etapa aqui é só conferida e completada no que faltar.
 
-- [ ] Etapa 0 — Contexto (`CLAUDE.md` com "Regras de trabalho")
-- [ ] Etapa 1 — Rotas quebradas no frontend + funções tipadas em `frontend/src/api/`
+- [x] Etapa 0 — Contexto (`CLAUDE.md` com "Regras de trabalho")
+- [x] Etapa 1 — Rotas quebradas no frontend + funções tipadas em `frontend/src/api/` (rotas já corrigidas na Etapa A da auditoria; criados `api/materials.ts`, `questions.ts`, `exercises.ts`, `career.ts`)
 - [ ] Etapa 2 — Rotas com backend novo (desarquivar, simulado; itens 9 e 10)
 - [ ] Etapa 3 — Agendamento de vagas
 - [ ] Etapa 4 — Limite de upload (10MB, 413)

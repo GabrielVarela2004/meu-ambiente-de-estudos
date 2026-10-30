@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { request } from '../../api/http'
+import { answerQuestion, rescheduleQuestionReview } from '../../api/questions'
+import type { QuestionAnswerPayload } from '../../api/questions'
 import '../../styles/pages/learning-panels.css'
 
 export type QuestionDifficulty = 'EASY' | 'INTERMEDIATE' | 'HARD'
@@ -118,17 +120,11 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
     setFeedbackMessage(null)
 
     try {
-      const payload: { optionId?: string; discursiveAnswer?: string } = {}
+      const payload: QuestionAnswerPayload = {}
       if (optionId) payload.optionId = optionId
       if (textAnswer) payload.discursiveAnswer = textAnswer
 
-      const res = await request<AnswerResult>(
-        `/api/study-blocks/${currentQ.studyBlockId}/questions/${currentQ.id}/answers`,
-        {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        },
-      )
+      const res = await answerQuestion<AnswerResult>(currentQ.studyBlockId, currentQ.id, payload)
 
       setBatteryAnswers((prev) => ({ ...prev, [currentQ.id]: res }))
       if (res.correct) {
@@ -159,10 +155,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
 
   const handleReschedule = async (questionId: string, days: number) => {
     try {
-      await request<DueReviewQuestion>(
-        `/api/reviews/questions/${questionId}/reschedule?days=${days}`,
-        { method: 'POST' },
-      )
+      await rescheduleQuestionReview<DueReviewQuestion>(questionId, days)
       setQuestions((prev) => prev.filter((q) => q.id !== questionId))
       if (summary) {
         setSummary({ ...summary, totalDue: Math.max(0, summary.totalDue - 1) })
@@ -175,7 +168,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
 
   const handleAnswerInline = async (question: DueReviewQuestion, optionId?: string) => {
     try {
-      const payload: { optionId?: string; discursiveAnswer?: string } = {}
+      const payload: QuestionAnswerPayload = {}
       if (optionId) {
         payload.optionId = optionId
       } else if (discursiveListAnswers[question.id]) {
@@ -184,13 +177,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
         return
       }
 
-      const res = await request<AnswerResult>(
-        `/api/study-blocks/${question.studyBlockId}/questions/${question.id}/answers`,
-        {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        },
-      )
+      const res = await answerQuestion<AnswerResult>(question.studyBlockId, question.id, payload)
 
       setInlineResults((prev) => ({ ...prev, [question.id]: res }))
       void loadData()

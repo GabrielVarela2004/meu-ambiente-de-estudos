@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
+import { submitExerciseAttempt } from '../api/exercises'
 import { CodeIcon, FolderIcon, SparklesIcon, CheckCircleIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
@@ -131,19 +132,19 @@ export function PracticalExercisesPage({
   const handleSubmitExercise = async (ex: PracticalExercise) => {
     const userAnswer = answers[ex.id] ?? (ex.starterCode || '')
     const selfRating = ratings[ex.id] || 4
+    const blockId = ex.studyBlockId || selectedBlockId
+    if (!blockId) {
+      setError('Não foi possível identificar o bloco deste exercício.')
+      return
+    }
 
     setSubmittingId(ex.id)
     try {
       // O backend registra a tentativa com a autoavaliação (1–5); não há correção automática.
-      const res = await request<{ id: string; selfRating: number }>(
-        `/api/study-blocks/${ex.studyBlockId || selectedBlockId}/exercises/${ex.id}/attempts`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            answer: userAnswer,
-            selfRating,
-          }),
-        }
+      const res = await submitExerciseAttempt<{ id: string; selfRating: number }>(
+        blockId,
+        ex.id,
+        { answer: userAnswer, selfRating },
       )
       setFeedback((prev) => ({
         ...prev,

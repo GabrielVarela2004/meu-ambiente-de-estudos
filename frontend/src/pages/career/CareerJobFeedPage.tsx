@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../../api/http'
+import { runCareerAgent } from '../../api/career'
 import {
   BriefcaseIcon,
   ChevronDownIcon,
@@ -85,7 +86,7 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
     setSearching(true)
     setError(null)
     try {
-      await request('/api/career/agent/run', { method: 'POST' })
+      await runCareerAgent()
       await loadJobs()
     } catch {
       setError('Erro ao acionar varredura do agente de vagas.')

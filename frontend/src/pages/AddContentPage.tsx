@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { request } from '../api/http'
+import { importMaterialFile, toggleMaterialChat } from '../api/materials'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, PlusCircleIcon, SearchIcon, SparklesIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/add-content.css'
@@ -43,7 +44,7 @@ async function applySourceOptions(
     })
   }
   if (options.enabledForChat !== material.enabledForChat) {
-    await request(`/api/study-blocks/${blockId}/materials/${material.id}/toggle-chat`, { method: 'PATCH' })
+    await toggleMaterialChat(blockId, material.id)
   }
 }
 
@@ -148,13 +149,7 @@ export function AddContentPage({
     setSubmitting(true)
     setFeedback(null)
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-
-      const created = await request<CreatedMaterial>(`/api/study-blocks/${targetBlockId}/materials/import`, {
-        method: 'POST',
-        body: formData,
-      })
+      const created = await importMaterialFile<CreatedMaterial>(targetBlockId, selectedFile)
       await applySourceOptions(targetBlockId, created, { title: fileTitle, enabledForChat: fileEnabledForChat })
 
       setFeedback({

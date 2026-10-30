@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
+import { toggleMaterialChat } from '../api/materials'
 import {
   BookOpenIcon,
   ChevronLeftIcon,
@@ -90,10 +91,7 @@ export function BlockWorkspacePage({
     setTogglingChatId(mat.id)
     try {
       // O backend alterna o estado e devolve o material atualizado.
-      const updated = await request<StudyMaterialItem>(
-        `/api/study-blocks/${block.id}/materials/${mat.id}/toggle-chat`,
-        { method: 'PATCH' },
-      )
+      const updated = await toggleMaterialChat<StudyMaterialItem>(block.id, mat.id)
       setMaterials((prev) =>
         prev.map((m) => (m.id === mat.id ? { ...m, enabledForChat: updated.enabledForChat } : m))
       )

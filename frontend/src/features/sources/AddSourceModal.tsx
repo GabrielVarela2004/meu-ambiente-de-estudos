@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { request } from '../../api/http'
+import { importMaterialFile } from '../../api/materials'
 
 export type SourceType =
   | 'TEXT'
@@ -107,16 +108,7 @@ export function AddSourceModal({
     setErrorMessage(null)
 
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-
-      const saved = await request<StudyMaterialItem>(
-        `/api/study-blocks/${blockId}/materials/import`,
-        {
-          method: 'POST',
-          body: formData,
-        },
-      )
+      const saved = await importMaterialFile<StudyMaterialItem>(blockId, selectedFile)
 
       setStatus('COMPLETED')
       setStatusMessage('Arquivo importado com sucesso!')

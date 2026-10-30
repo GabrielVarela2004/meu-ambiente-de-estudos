@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { request } from '../../api/http'
+import { runCareerAgent } from '../../api/career'
 import '../../styles/pages/career.css'
 import { CheckCircleIcon, ClockIcon, SparklesIcon } from '../../components/icons'
 
@@ -78,7 +79,7 @@ export function CareerAgentSchedulePage() {
   const handleRunManual = async () => {
     setRunningManual(true)
     try {
-      await request('/api/career/agent/run', { method: 'POST' })
+      await runCareerAgent()
       void loadData()
     } catch (err: any) {
       alert(err.message || 'Erro ao iniciar rodada do agente.')

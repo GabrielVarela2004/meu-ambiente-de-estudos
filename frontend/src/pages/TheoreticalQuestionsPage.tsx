@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
+import { answerQuestion } from '../api/questions'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, SparklesIcon } from '../components/icons'
 import { SimuladoConfigModal } from '../features/questions/SimuladoConfigModal'
 import type { StudyBlock } from './StudyBlocksPage'
@@ -141,13 +142,7 @@ export function TheoreticalQuestionsPage({
         body = { optionId }
       }
 
-      const res = await request<{ correct: boolean; explanation: string | null }>(
-        `/api/study-blocks/${q.studyBlockId}/questions/${q.id}/answers`,
-        {
-          method: 'POST',
-          body: JSON.stringify(body),
-        }
-      )
+      const res = await answerQuestion<{ correct: boolean; explanation: string | null }>(q.studyBlockId, q.id, body)
 
       setQuestionResults((prev) => ({
         ...prev,
