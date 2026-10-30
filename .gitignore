@@ -4,9 +4,8 @@
 backend/.env
 backend/.env.*
 
-.idea/workspace.xml
-.idea/httpRequests/
-.idea/dataSources/
+# Configurações da IDE (IntelliJ): locais de cada máquina, fora do repositório.
+.idea/
 
 backend/target/
 backend/effective-pom
