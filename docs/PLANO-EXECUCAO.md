@@ -142,6 +142,21 @@ existente em inglês — `CORRECT`, `PARTIAL`, `INCORRECT`, `PENDING_EVALUATION`
     palavras soltas (INCORRETA), afirmação errada, manipulação, IA indisponível (PENDENTE), JSON inválido e
     resposta-modelo não exposta antes da resposta.
 
+## Avaliação prática (pedido do usuário em 2026-10-30, fora da sequência de etapas)
+
+- [x] Tutoria por chat dentro do exercício: cada resposta da IA é classificada pelo nível de ajuda
+  (`ExerciseHelpLevel`) e vira desconto de autonomia (`ExerciseAutonomyCalculator`; limite de 50%, solução
+  revelada limita a 30% e não conta para domínio). Migração V28.
+- [x] Exercícios gerados de qualquer bloco, com foco opcional em tópico ou material, divididos em etapas.
+- [x] Correção automática em Docker (`runner/java`, `DockerCodeRunner`): testes JUnit gerados pela IA e validados
+  com a solução de referência, checagens de conceito e regras de boas práticas (JavaParser). Nota
+  (`PracticalScoreCalculator`): corretude 50% + conceito 25% + boas práticas 25%, × autonomia. Sem Docker ou sem
+  a imagem, cai na autoavaliação. Migração V29.
+- [x] Desempenho do tópico = 70% prática + 30% teoria (`TopicMasteryCalculator`); "dominado" exige prática ≥ 85%
+  em 3 exercícios e teoria consistente ≥ 80%.
+- Backend: 235 testes, 226 passando; as 9 falhas (questões: `EstudosBackendApplicationTests`, `Etapa5…`, `Etapa7…`,
+  `AiQuestionGenerationVarietyTest`) já existiam na `master` com a Etapa 8 em andamento.
+
 ## Observações
 
 - O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta.

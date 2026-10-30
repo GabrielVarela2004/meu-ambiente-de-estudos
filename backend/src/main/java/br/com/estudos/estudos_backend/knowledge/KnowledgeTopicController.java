@@ -122,11 +122,21 @@ public class KnowledgeTopicController {
 			TopicLearningState learningState,
 			String stateReason,
 			int attempts,
-			Integer recentAccuracyPercent) {
+			Integer recentAccuracyPercent,
+			Integer masteryPercent,
+			Integer theoryPercent,
+			Integer practicalPercent,
+			int practicalExercises,
+			boolean mastered,
+			String masteryReason) {
 
 		static TopicResponse from(KnowledgeTopicService.TopicView view) {
 			KnowledgeTopic topic = view.topic();
 			TopicLearningAssessment assessment = view.assessment();
+			// Visões sem cálculo de domínio (criação, validação) partem só da teoria.
+			TopicMasteryCalculator.TopicMastery mastery = view.mastery() != null
+					? view.mastery()
+					: new TopicMasteryCalculator().calculate(assessment, List.of());
 			return new TopicResponse(
 					topic.getId(),
 					topic.getStudyBlock().getId(),
@@ -148,7 +158,13 @@ public class KnowledgeTopicController {
 					assessment.state(),
 					assessment.reason(),
 					assessment.attempts(),
-					assessment.recentAccuracyPercent());
+					assessment.recentAccuracyPercent(),
+					mastery.combinedPercent(),
+					mastery.theoryPercent(),
+					mastery.practicalPercent(),
+					mastery.practicalExercises(),
+					mastery.mastered(),
+					mastery.reason());
 		}
 	}
 }

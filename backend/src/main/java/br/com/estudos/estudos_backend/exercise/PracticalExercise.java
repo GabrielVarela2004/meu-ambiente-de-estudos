@@ -67,6 +67,22 @@ public class PracticalExercise {
 	@Column(name = "test_cases_json", columnDefinition = "TEXT")
 	private String testCasesJson;
 
+	@Column(name = "steps_json", columnDefinition = "TEXT")
+	private String stepsJson;
+
+	@Column(length = 20)
+	private String language;
+
+	@Column(name = "test_code", columnDefinition = "TEXT")
+	private String testCode;
+
+	/** Checagens de conceito, uma por linha no formato TIPO|arg1|arg2. */
+	@Column(name = "concept_checks", columnDefinition = "TEXT")
+	private String conceptChecks;
+
+	@Column(name = "auto_evaluable")
+	private Boolean autoEvaluable;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	private PracticalExerciseStatus status;
@@ -225,6 +241,23 @@ public class PracticalExercise {
 		nextReviewAt = OffsetDateTime.now().plusDays(reviewIntervalDays);
 	}
 
+	/** Etapas do exercício (lista JSON de textos) usadas pela tutoria para localizar a dificuldade. */
+	public void defineSteps(String stepsJson) { this.stepsJson = stepsJson; }
+
+	public void configureAutoEvaluation(String language, String testCode, String conceptChecks) {
+		this.language = language;
+		this.testCode = testCode;
+		this.conceptChecks = conceptChecks;
+		this.autoEvaluable = null;
+	}
+
+	/** Resultado da validação: a solução de referência passou (true) ou não (false) nos próprios testes. */
+	public void markAutoEvaluable(boolean autoEvaluable) { this.autoEvaluable = autoEvaluable; }
+
+	public boolean hasAutomaticTests() {
+		return "JAVA".equals(language) && testCode != null && !testCode.isBlank();
+	}
+
 	public void archive() { status = PracticalExerciseStatus.ARCHIVED; }
 	public UUID getId() { return id; }
 	public StudyBlock getStudyBlock() { return studyBlock; }
@@ -240,6 +273,11 @@ public class PracticalExercise {
 	public String getSolutionCode() { return solutionCode; }
 	public String getHintsJson() { return hintsJson; }
 	public String getTestCasesJson() { return testCasesJson; }
+	public String getStepsJson() { return stepsJson; }
+	public String getLanguage() { return language; }
+	public String getTestCode() { return testCode; }
+	public String getConceptChecks() { return conceptChecks; }
+	public Boolean getAutoEvaluable() { return autoEvaluable; }
 	public PracticalExerciseStatus getStatus() { return status; }
 	public OffsetDateTime getCreatedAt() { return createdAt; }
 	public OffsetDateTime getUpdatedAt() { return updatedAt; }
