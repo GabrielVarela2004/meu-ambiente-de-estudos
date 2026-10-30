@@ -22,6 +22,7 @@ Windows/PowerShell. Banco: PostgreSQL 17 via `docker compose up -d postgres` (po
 npm run dev
 npm run lint        # oxlint
 npm run build       # tsc -b && vite build
+npm run test:run    # Vitest uma vez (npm test = modo observação); testes em src/**/*.test.ts(x)
 
 # Ambos em janelas separadas
 .\start-dev.ps1     # ou start-dev.bat
@@ -61,6 +62,7 @@ mudança de schema sempre em migração nova.
 
 **Testes:** integração com `@SpringBootTest` + `@AutoConfigureMockMvc` + `@ActiveProfiles("test")` contra o
 PostgreSQL real; serviços de IA testados com `AiTutorProvider` mockado. Nenhum teste chama APIs externas reais.
+Frontend: Vitest + React Testing Library (jsdom); `src/test/fetchMock.ts` simula o `fetch` (testes de contrato da API).
 
 **Frontend** (`frontend/`, React 19 + TypeScript + Vite): sem React Router — `App.tsx` guarda a página atual e o
 bloco selecionado, e `components/Sidebar.tsx` define o tipo das páginas e o menu. Chamadas HTTP via
