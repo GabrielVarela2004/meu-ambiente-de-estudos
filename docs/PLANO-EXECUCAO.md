@@ -26,7 +26,7 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
   como `ResponseStatusException`, no mesmo formato. `http.ts` já lia `message`. Backend: 145 testes.
 - [x] Etapa 6 — Integração com o Gemini (plano e o que foi feito abaixo). Backend: 169 testes.
 - [x] Etapa 7 — Vídeos do YouTube como fonte (plano abaixo; playlist: D2 decidida — vários links de uma vez). Backend: 212 testes.
-- [ ] Etapa 8 — Questões teóricas abertas com correção rigorosa
+- [ ] Etapa 8 — Questões teóricas abertas com correção rigorosa (em andamento; plano abaixo)
 - [ ] Etapa 9 — Limpeza
 - [ ] Etapa 10 — Testes no frontend (Vitest)
 - [ ] Etapa 11 — CI no GitHub Actions
@@ -99,6 +99,48 @@ transcrição. oEmbed devolve título, canal e miniatura (sem duração).
 10. Aviso na tela: limite de ~8 h de vídeo por dia no plano gratuito e só vídeos públicos.
 - [x] Ponto de decisão D2 (playlist): decidido em 2026-10-30 — colar vários links de uma vez (opção C), feito antes
   da Etapa 8 (`features/sources/YoutubeBatchImport.tsx`, até 50 links por envio, repetidos descartados).
+
+## Plano da Etapa 8 — Questões teóricas abertas com correção rigorosa
+
+Hoje: a geração aceita múltipla escolha, V/F e discursiva; a discursiva é corrigida por palavras-chave
+(`evaluateDiscursiveCriteria`, 60% dos termos) dentro de `@Transactional`; `StudyQuestionResponse` e a revisão
+global expõem `expectedAnswer`/`explanation` **antes** da resposta; `QuestionEvaluationStatus` só tem
+CORRECT/INCORRECT/UNGRADABLE; a revisão espaçada só conhece acerto/erro; por tópico há contagem de acertos, sem
+nota média.
+
+Nomes: as classificações pedidas (CORRETA, PARCIAL, INCORRETA, PENDENTE_DE_AVALIACAO) viram os valores do enum
+existente em inglês — `CORRECT`, `PARTIAL`, `INCORRECT`, `PENDING_EVALUATION` — e aparecem em português na tela.
+
+1. Formato: a geração da área teórica (gerar, simulado e revisão) passa a criar só questões abertas
+   (`DISCURSIVE`); o formato pedido é ignorado. Objetivas antigas e seus históricos continuam respondíveis; a
+   criação manual com alternativas continua no backend. O seletor de formato sai do modal de simulado.
+2. Geração com rubrica: JSON validado por questão — enunciado que exige explicação, resposta-modelo só com o
+   material, rubrica (conceitos essenciais, complementares, termos do material, erros comuns), trecho literal
+   (+ minuto, se vídeo), tópico e dificuldade. Questão cujo trecho não aparece no material é descartada.
+   Campos novos em `study_questions` (V27): `model_answer`, `rubric_json`, `source_timestamp`.
+3. Sigilo: para questões abertas, `expectedAnswer`, `explanation` e a rubrica não saem nas listagens (bloco e
+   revisão global); só voltam no feedback, depois da resposta.
+4. `DiscursiveAnswerEvaluator` (operação de IA nova `ANSWER_EVALUATION`): a IA dá notas 0–100 por critério
+   (exatidão, cobertura dos essenciais, profundidade, terminologia, ausência de erros) e lista acertos, faltas,
+   termos e erros; **o backend** calcula a nota geral (média ponderada) e aplica as regras de rigor
+   (falta essencial → no máx. PARCIAL; erro conceitual → penalização forte; superficial → nunca CORRETA; sem a
+   terminologia → no máx. PARCIAL no RIGOROSO; lista de palavras → INCORRETA; CORRETA só com ≥ 85 e todos os
+   essenciais). Resposta delimitada como dado; tentativa de manipulação detectada também no backend.
+   Temperatura baixa onde o modelo aceita (`AiTutorRequest.temperature`; OpenAI e Gemini 2.x; Gemini 3.6+
+   ignora o parâmetro e ele não é enviado). Chamada de IA fora de transação.
+5. Feedback na tela: classificação e nota, o que acertou, essenciais faltando, termos do material, erros,
+   resposta-modelo, trecho (minuto clicável se vídeo) e orientação curta.
+6. Persistência: tentativa guarda classificação, nota, notas por critério, feedback e nível de rigor (snapshot);
+   desempenho por tópico ganha nota média; PARCIAL não conta como acerto; PENDENTE fica fora das estatísticas.
+   Revisão: INCORRETA reinicia, PARCIAL mantém intervalo curto, CORRETA avança.
+7. Responder de novo a mesma pergunta após o feedback (nova tentativa).
+8. Sem IA: tentativa `PENDING_EVALUATION` (nada de palavras-chave), aviso na tela e reavaliação depois
+   (`POST …/questions/{id}/attempts/{attemptId}/evaluate`).
+9. Rigor em Configurações (`RIGOROSO` padrão, `MODERADO`), por usuário.
+10. Migração V27 para os campos e a tabela de preferência.
+11. Testes com IA simulada: completa (CORRETA), superficial (PARCIAL), sem terminologia (PARCIAL no RIGOROSO),
+    palavras soltas (INCORRETA), afirmação errada, manipulação, IA indisponível (PENDENTE), JSON inválido e
+    resposta-modelo não exposta antes da resposta.
 
 ## Observações
 
