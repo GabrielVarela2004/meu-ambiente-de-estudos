@@ -9,6 +9,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -24,10 +26,13 @@ public class AiSettingsController {
 
 	private final AiSettingsService settingsService;
 	private final AiUsageService usageService;
+	private final AiResponseCacheService cacheService;
 
-	public AiSettingsController(AiSettingsService settingsService, AiUsageService usageService) {
+	public AiSettingsController(AiSettingsService settingsService, AiUsageService usageService,
+			AiResponseCacheService cacheService) {
 		this.settingsService = settingsService;
 		this.usageService = usageService;
+		this.cacheService = cacheService;
 	}
 
 	@GetMapping("/settings")
@@ -37,7 +42,7 @@ public class AiSettingsController {
 				.filter(AiOperation::routable)
 				.map(op -> {
 					AiOperationRoute route = settingsService.route(op);
-					return new RouteResponse(op, op.label(), route.getProviderId(), route.isFallbackEnabled());
+					return new RouteResponse(op, op.label(), route.getProviderId(), route.isFallbackEnabled(), route.getModel());
 				})
 				.toList();
 		return new SettingsResponse(providers, routes);
@@ -51,13 +56,28 @@ public class AiSettingsController {
 
 	@PutMapping("/routes/{operation}")
 	public RouteResponse updateRoute(@PathVariable AiOperation operation, @Valid @RequestBody RouteRequest request) {
-		AiOperationRoute route = settingsService.updateRoute(operation, request.providerId(), request.fallbackEnabled());
-		return new RouteResponse(operation, operation.label(), route.getProviderId(), route.isFallbackEnabled());
+		AiOperationRoute route = settingsService.updateRoute(operation, request.providerId(), request.fallbackEnabled(),
+				request.model());
+		return new RouteResponse(operation, operation.label(), route.getProviderId(), route.isFallbackEnabled(),
+				route.getModel());
 	}
 
 	@GetMapping("/usage")
 	public List<AiUsageService.UsageSummary> usage(@RequestParam(defaultValue = "7") int days) {
 		return usageService.summary(days);
+	}
+
+	/** Cache de respostas do usuário: entradas, chamadas evitadas e tokens economizados. */
+	@GetMapping("/cache")
+	public AiResponseCacheService.CacheStats cache() {
+		return cacheService.stats();
+	}
+
+	/** Apaga o cache do usuário (as próximas chamadas vão de novo ao provedor). */
+	@DeleteMapping("/cache")
+	public ResponseEntity<Void> clearCache() {
+		cacheService.clear();
+		return ResponseEntity.noContent().build();
 	}
 
 	private ProviderResponse toResponse(AiModelProvider provider) {
@@ -79,13 +99,15 @@ public class AiSettingsController {
 	public record ProviderRequest(boolean enabled, @Size(max = 120) String model,
 			@Min(1) @Max(1_000_000) Integer dailyRequestLimit) {}
 
-	public record RouteRequest(@NotBlank String providerId, boolean fallbackEnabled) {}
+	/** {@code model} vazio ou ausente = modelo do provedor. */
+	public record RouteRequest(@NotBlank String providerId, boolean fallbackEnabled, @Size(max = 120) String model) {}
 
 	public record ProviderResponse(String id, String displayName, boolean keyConfigured, boolean enabled,
 			String defaultModel, String modelOverride, String effectiveModel, List<String> suggestedModels,
 			Integer dailyRequestLimit, long requestsToday, String unavailableReason) {}
 
-	public record RouteResponse(AiOperation operation, String label, String providerId, boolean fallbackEnabled) {}
+	public record RouteResponse(AiOperation operation, String label, String providerId, boolean fallbackEnabled,
+			String model) {}
 
 	public record SettingsResponse(List<ProviderResponse> providers, List<RouteResponse> routes) {}
 }

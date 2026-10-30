@@ -76,6 +76,18 @@ public class AiSettingsService {
 		return model == null ? provider.defaultModel() : model;
 	}
 
+	/**
+	 * Modelo da operação: o da rota, quando o provedor é o da rota e ela tem modelo próprio; senão, o do provedor.
+	 * No fallback para outro provedor vale o modelo dele.
+	 */
+	public String effectiveModel(AiModelProvider provider, AiOperation operation) {
+		AiOperationRoute route = route(operation);
+		if (provider.id().equals(route.getProviderId()) && route.getModel() != null) {
+			return route.getModel();
+		}
+		return effectiveModel(provider);
+	}
+
 	@Transactional(readOnly = true)
 	public AiOperationRoute route(AiOperation operation) {
 		return routeRepository.findById(operation)
@@ -144,11 +156,14 @@ public class AiSettingsService {
 	}
 
 	@Transactional
-	public AiOperationRoute updateRoute(AiOperation operation, String providerId, boolean fallbackEnabled) {
+	public AiOperationRoute updateRoute(AiOperation operation, String providerId, boolean fallbackEnabled, String model) {
 		provider(providerId);
+		if (model != null && model.length() > 120) {
+			throw new InvalidInputException("Nome de modelo muito longo.");
+		}
 		AiOperationRoute route = routeRepository.findById(operation)
 				.orElseGet(() -> new AiOperationRoute(operation, providerId, fallbackEnabled));
-		route.update(providerId, fallbackEnabled);
+		route.update(providerId, fallbackEnabled, model);
 		return routeRepository.save(route);
 	}
 }

@@ -171,8 +171,16 @@ Ordem combinada: 1 → 3 → 2 → 4. Decisão do usuário: a área teórica con
   (`GET …/questions/{id}/study-view`: resposta-modelo, explicação, conceitos essenciais e erros comuns, sem gravar
   tentativa nem mexer na revisão espaçada); prompt de geração pede erros comuns no formato "se você achou que…,
   …" e explicação detalhada. Sem migração.
-- [ ] 3. Limites da API: cache de respostas (`ai_response_cache`, TTL), contingência em 429 e painel de consumo.
-- [ ] 2. Qualidade: modelo por operação na rota (3.8 Flash ou 3.5 Flash Lite), validações e prompts enxutos.
+- [x] 3. Limites da API: cache de respostas (`AiResponseCacheService`, migração V30, chave SHA-256 de usuário +
+  operação + provedor + modelo + pedido, validade `app.ai.cache.ttl-hours` = 168 h) só nas operações
+  `cacheable` (tópicos, resumos, análises e correção; geração, chat e tutoria nunca); 429 em todos os provedores
+  vira mensagem clara; `GET/DELETE /api/ai/cache` e quadro "Cache de respostas" em Configurações. O lote já existe
+  (N questões numa chamada) e o consumo já era registrado em `ai_usage_records`.
+- [x] 2. Qualidade: modelo por operação na rota (migração V31, coluna "Modelo" em Configurações; vazio = modelo do
+  provedor; no fallback vale o modelo do outro provedor), ex.: 3.5 Flash Lite para gerar e 3.8 Flash para corrigir.
+  Temperatura/top_p: o Gemini 3.6+ ignora (já documentado no `GeminiModelProvider`); a correção já pede temperatura
+  baixa onde o modelo aceita. Validações já existentes mantidas (trecho precisa estar no material, rubrica com
+  conceito essencial, JSON forçado). Ajuste fino não feito: pouco dado e custo alto; o caminho é few-shot.
 - [ ] 4. Reinício: `HealthIndicator` dos provedores (sem chamar a API) e laço de reinício no `start-dev.ps1`.
 
 ## Observações

@@ -49,8 +49,24 @@
   color: var(--color-text);
   font-size: var(--text-md);
 }
-.table-responsive + .ai-subheading {
+.table-responsive + .ai-subheading,
+.empty-subnotice + .ai-subheading {
   margin-top: var(--space-6);
+}
+
+.ai-route-model {
+  min-width: 200px;
+  font-size: var(--text-sm);
+}
+
+.ai-cache-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .ai-inline-check {

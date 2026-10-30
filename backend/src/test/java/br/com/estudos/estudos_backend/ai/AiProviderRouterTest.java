@@ -11,7 +11,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.chat.AiTutorProvider.AiTutorReply;
 import br.com.estudos.estudos_backend.chat.AiTutorProvider.AiTutorRequest;
+import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 
 class AiProviderRouterTest {
 
@@ -180,6 +183,106 @@ class AiProviderRouterTest {
 
 		assertEquals("claude-haiku-5-5", anthropic.lastModel);
 		assertEquals("claude-haiku-5-5", reply.modelName());
+	}
+
+	@Test
+	void routeModelIsUsedOnlyForItsOperationAndProvider() {
+		FakeProvider gemini = FakeProvider.ok("gemini", "ok");
+		FakeProvider openai = FakeProvider.failing("openai", HttpStatus.SERVICE_UNAVAILABLE);
+		AiOperationRoute questions = new AiOperationRoute(AiOperation.QUESTION_GENERATION, "gemini", true);
+		questions.update("gemini", true, "gemini-3.5-flash-lite");
+		when(routeRepository.findById(eq(AiOperation.QUESTION_GENERATION))).thenReturn(Optional.of(questions));
+		route(AiOperation.ANSWER_EVALUATION, "gemini", false);
+		AiProviderRouter router = router(openai, gemini);
+
+		AiTutorReply generated = AiOperationContext.call(AiOperation.QUESTION_GENERATION,
+				() -> router.generateReply(AiTutorRequest.ofJson("sys", "gere")));
+		assertEquals("gemini-3.5-flash-lite", generated.modelName());
+
+		// Outra operação no mesmo provedor continua com o modelo do provedor.
+		AiTutorReply evaluated = AiOperationContext.call(AiOperation.ANSWER_EVALUATION,
+				() -> router.generateReply(AiTutorRequest.ofJson("sys", "corrija")));
+		assertEquals("gemini-default", evaluated.modelName());
+	}
+
+	@Test
+	void fallbackProviderUsesItsOwnModelNotTheRouteModel() {
+		FakeProvider anthropic = FakeProvider.failing("anthropic", HttpStatus.TOO_MANY_REQUESTS);
+		FakeProvider gemini = FakeProvider.ok("gemini", "ok");
+		AiOperationRoute chat = new AiOperationRoute(AiOperation.CHAT, "anthropic", true);
+		chat.update("anthropic", true, "claude-haiku-5-5");
+		when(routeRepository.findById(eq(AiOperation.CHAT))).thenReturn(Optional.of(chat));
+
+		AiTutorReply reply = router(anthropic, gemini).generateReply(AiTutorRequest.ofText("sys", "oi"));
+
+		assertEquals("claude-haiku-5-5", anthropic.lastModel);
+		assertEquals("gemini-default", reply.modelName());
+	}
+
+	/** Roteador com cache em memória (repositório simulado). */
+	private AiProviderRouter routerWithCache(Map<String, AiResponseCacheEntry> store, AiModelProvider... providers) {
+		AiResponseCacheRepository cacheRepository = mock(AiResponseCacheRepository.class);
+		when(cacheRepository.findById(anyString())).thenAnswer(inv -> Optional.ofNullable(store.get(inv.getArgument(0))));
+		when(cacheRepository.save(any())).thenAnswer(inv -> {
+			AiResponseCacheEntry entry = inv.getArgument(0);
+			store.put(entry.getCacheKey(), entry);
+			return entry;
+		});
+		AiResponseCacheService cache = new AiResponseCacheService(cacheRepository, new CurrentUserResolver(), true, 24);
+		AiSettingsService settings = new AiSettingsService(List.of(providers), settingsRepository, routeRepository, usageRepository);
+		return new AiProviderRouter(settings, new AiUsageService(usageRepository), cache);
+	}
+
+	@Test
+	void cacheableOperationReusesTheSameAnswerWithoutCallingTheProviderAgain() {
+		FakeProvider gemini = FakeProvider.ok("gemini", "resumo");
+		Map<String, AiResponseCacheEntry> store = new HashMap<>();
+		AiProviderRouter router = routerWithCache(store, gemini);
+
+		AiTutorReply first = AiOperationContext.call(AiOperation.MATERIAL_SUMMARY,
+				() -> router.generateReply(AiTutorRequest.ofText("sys", "texto da fonte")));
+		AiTutorReply second = AiOperationContext.call(AiOperation.MATERIAL_SUMMARY,
+				() -> router.generateReply(AiTutorRequest.ofText("sys", "texto da fonte")));
+
+		assertEquals("resumo", first.answer());
+		assertEquals("resumo", second.answer());
+		assertEquals(1, gemini.calls);
+		assertEquals(1, store.values().iterator().next().getHitCount());
+		assertEquals(30, store.values().iterator().next().savedTokens());
+
+		// Conteúdo diferente gera nova chamada.
+		AiOperationContext.call(AiOperation.MATERIAL_SUMMARY,
+				() -> router.generateReply(AiTutorRequest.ofText("sys", "outro texto")));
+		assertEquals(2, gemini.calls);
+	}
+
+	@Test
+	void generationAndChatNeverUseTheCache() {
+		FakeProvider gemini = FakeProvider.ok("gemini", "questões");
+		Map<String, AiResponseCacheEntry> store = new HashMap<>();
+		AiProviderRouter router = routerWithCache(store, gemini);
+
+		for (int i = 0; i < 2; i++) {
+			AiOperationContext.call(AiOperation.QUESTION_GENERATION,
+					() -> router.generateReply(AiTutorRequest.ofJson("sys", "gere")));
+		}
+
+		assertEquals(2, gemini.calls);
+		assertTrue(store.isEmpty());
+	}
+
+	@Test
+	void rateLimitOnEveryProviderReturnsAClearMessage() {
+		FakeProvider openai = FakeProvider.failing("openai", HttpStatus.TOO_MANY_REQUESTS);
+		FakeProvider gemini = FakeProvider.failing("gemini", HttpStatus.TOO_MANY_REQUESTS);
+		route(AiOperation.CHAT, "openai", true);
+
+		ResponseStatusException error = assertThrows(ResponseStatusException.class,
+				() -> router(openai, gemini).generateReply(AiTutorRequest.ofText("sys", "oi")));
+
+		assertEquals(429, error.getStatusCode().value());
+		assertEquals(AiProviderRouter.RATE_LIMIT_MESSAGE, error.getReason());
+		assertEquals(1, gemini.calls);
 	}
 
 	@Test

@@ -3,6 +3,7 @@ package br.com.estudos.estudos_backend.ai;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -65,10 +66,11 @@ class AiSettingsControllerIntegrationTest {
 
 		mockMvc.perform(put("/api/ai/routes/QUESTION_GENERATION")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"providerId\":\"gemini\",\"fallbackEnabled\":false}"))
+				.content("{\"providerId\":\"gemini\",\"fallbackEnabled\":false,\"model\":\"gemini-3.5-flash-lite\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.providerId").value("gemini"))
-				.andExpect(jsonPath("$.fallbackEnabled").value(false));
+				.andExpect(jsonPath("$.fallbackEnabled").value(false))
+				.andExpect(jsonPath("$.model").value("gemini-3.5-flash-lite"));
 
 		mockMvc.perform(get("/api/ai/settings"))
 				.andExpect(jsonPath("$.routes[1].operation").value("QUESTION_GENERATION"))
@@ -91,5 +93,15 @@ class AiSettingsControllerIntegrationTest {
 	@Test
 	void usageSummaryIsAvailable() throws Exception {
 		mockMvc.perform(get("/api/ai/usage?days=7")).andExpect(status().isOk());
+	}
+
+	@Test
+	void cacheStatsAndClearAreAvailable() throws Exception {
+		mockMvc.perform(get("/api/ai/cache"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.enabled").value(false))
+				.andExpect(jsonPath("$.entries").value(0))
+				.andExpect(jsonPath("$.savedTokens").value(0));
+		mockMvc.perform(delete("/api/ai/cache")).andExpect(status().isNoContent());
 	}
 }

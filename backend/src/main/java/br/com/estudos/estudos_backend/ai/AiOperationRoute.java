@@ -26,6 +26,10 @@ public class AiOperationRoute {
 	@Column(name = "fallback_enabled", nullable = false)
 	private boolean fallbackEnabled = true;
 
+	/** Modelo só para esta operação, no provedor da rota; null = modelo do provedor. */
+	@Column(length = 120)
+	private String model;
+
 	@Column(name = "updated_at", nullable = false)
 	private OffsetDateTime updatedAt;
 
@@ -49,8 +53,14 @@ public class AiOperationRoute {
 		this.fallbackEnabled = fallbackEnabled;
 	}
 
+	public void update(String providerId, boolean fallbackEnabled, String model) {
+		update(providerId, fallbackEnabled);
+		this.model = model == null || model.isBlank() ? null : model.strip();
+	}
+
 	public AiOperation getOperation() { return operation; }
 	public String getProviderId() { return providerId; }
+	public String getModel() { return model; }
 	public boolean isFallbackEnabled() { return fallbackEnabled; }
 	public OffsetDateTime getUpdatedAt() { return updatedAt; }
 }

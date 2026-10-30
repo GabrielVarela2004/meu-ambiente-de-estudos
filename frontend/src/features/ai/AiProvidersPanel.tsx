@@ -25,6 +25,8 @@ type Route = {
   label: string
   providerId: string
   fallbackEnabled: boolean
+  /** Modelo só desta operação; null = modelo do provedor. */
+  model: string | null
 }
 
 type UsageSummary = {
@@ -35,6 +37,14 @@ type UsageSummary = {
   inputTokens: number
   outputTokens: number
   averageLatencyMs: number
+}
+
+type CacheStats = {
+  enabled: boolean
+  ttlHours: number
+  entries: number
+  hits: number
+  savedTokens: number
 }
 
 type ProviderDraft = { enabled: boolean; model: string; dailyRequestLimit: string }
@@ -60,6 +70,8 @@ export function AiProvidersPanel() {
   const [providers, setProviders] = useState<Provider[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
   const [usage, setUsage] = useState<UsageSummary[]>([])
+  const [cache, setCache] = useState<CacheStats | null>(null)
+  const [clearingCache, setClearingCache] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, ProviderDraft>>({})
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -89,7 +101,28 @@ export function AiProvidersPanel() {
     } finally {
       setLoading(false)
     }
+    // O cache é complementar: se falhar, o resto da tela continua.
+    try {
+      setCache(await request<CacheStats>('/api/ai/cache'))
+    } catch {
+      setCache(null)
+    }
   }, [])
+
+  const clearCache = async () => {
+    setClearingCache(true)
+    setError(null)
+    setNotice(null)
+    try {
+      await request('/api/ai/cache', { method: 'DELETE' })
+      setNotice('Cache de respostas apagado.')
+      setCache(await request<CacheStats>('/api/ai/cache'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao apagar o cache.')
+    } finally {
+      setClearingCache(false)
+    }
+  }
 
   useDeferredEffect(() => load(), [load])
 
@@ -117,7 +150,7 @@ export function AiProvidersPanel() {
     }
   }
 
-  const saveRoute = async (route: Route, changes: Partial<Pick<Route, 'providerId' | 'fallbackEnabled'>>) => {
+  const saveRoute = async (route: Route, changes: Partial<Pick<Route, 'providerId' | 'fallbackEnabled' | 'model'>>) => {
     const next = { ...route, ...changes }
     setRoutes((prev) => prev.map((r) => (r.operation === route.operation ? next : r)))
     setError(null)
@@ -125,7 +158,7 @@ export function AiProvidersPanel() {
     try {
       await request(`/api/ai/routes/${route.operation}`, {
         method: 'PUT',
-        body: JSON.stringify({ providerId: next.providerId, fallbackEnabled: next.fallbackEnabled }),
+        body: JSON.stringify({ providerId: next.providerId, fallbackEnabled: next.fallbackEnabled, model: next.model }),
       })
       setNotice(`Rota de "${route.label}" atualizada.`)
     } catch (err) {
@@ -259,6 +292,7 @@ export function AiProvidersPanel() {
                 <tr>
                   <th>Operação</th>
                   <th>Provedor</th>
+                  <th>Modelo</th>
                   <th>Fallback para os demais</th>
                 </tr>
               </thead>
@@ -271,7 +305,7 @@ export function AiProvidersPanel() {
                         className="form-select form-select-sm"
                         aria-label={`Provedor para ${route.label}`}
                         value={route.providerId}
-                        onChange={(e) => void saveRoute(route, { providerId: e.target.value })}
+                        onChange={(e) => void saveRoute(route, { providerId: e.target.value, model: null })}
                       >
                         {providers.map((p) => (
                           <option key={p.id} value={p.id}>
@@ -280,6 +314,21 @@ export function AiProvidersPanel() {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td>
+                      <input
+                        key={`${route.operation}-${route.providerId}-${route.model ?? ''}`}
+                        className="form-input ai-route-model"
+                        aria-label={`Modelo para ${route.label}`}
+                        list={`models-${route.providerId}`}
+                        maxLength={120}
+                        placeholder={`Do provedor: ${providers.find((p) => p.id === route.providerId)?.effectiveModel ?? ''}`}
+                        defaultValue={route.model ?? ''}
+                        onBlur={(e) => {
+                          const model = e.target.value.trim() || null
+                          if (model !== route.model) void saveRoute(route, { model })
+                        }}
+                      />
                     </td>
                     <td>
                       <label className="checkbox-row ai-inline-check">
@@ -330,6 +379,32 @@ export function AiProvidersPanel() {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {/* ---- Cache de respostas ---- */}
+          {cache && (
+            <>
+              <h3 className="ai-subheading">Cache de respostas</h3>
+              <p className="form-hint mb-3">
+                {cache.enabled
+                  ? `Resumos, tópicos, correções e análises repetidos vêm do cache por ${numberFormat.format(cache.ttlHours)} h, sem nova chamada. Geração de questões e chat nunca usam cache.`
+                  : 'Cache desligado (AI_CACHE_ENABLED=false).'}
+              </p>
+              <div className="ai-cache-row">
+                <span>
+                  {numberFormat.format(cache.entries)} respostas guardadas · {numberFormat.format(cache.hits)} chamadas
+                  evitadas · {numberFormat.format(cache.savedTokens)} tokens economizados
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={clearingCache || cache.entries === 0}
+                  onClick={() => void clearCache()}
+                >
+                  {clearingCache ? 'Apagando…' : 'Limpar cache'}
+                </button>
+              </div>
+            </>
           )}
         </>
       )}
