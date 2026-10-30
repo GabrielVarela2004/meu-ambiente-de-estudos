@@ -25,7 +25,7 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
   convertidos um pacote por commit e mensagens traduzidas. Erros de provedores externos (429/502/503/504) seguem
   como `ResponseStatusException`, no mesmo formato. `http.ts` já lia `message`. Backend: 145 testes.
 - [x] Etapa 6 — Integração com o Gemini (plano e o que foi feito abaixo). Backend: 169 testes.
-- [x] Etapa 7 — Vídeos do YouTube como fonte (plano abaixo; playlist inteira = decisão D2 [!]). Backend: 212 testes.
+- [x] Etapa 7 — Vídeos do YouTube como fonte (plano abaixo; playlist: D2 decidida — vários links de uma vez). Backend: 212 testes.
 - [ ] Etapa 8 — Questões teóricas abertas com correção rigorosa
 - [ ] Etapa 9 — Limpeza
 - [ ] Etapa 10 — Testes no frontend (Vitest)
@@ -97,12 +97,12 @@ transcrição. oEmbed devolve título, canal e miniatura (sem duração).
 9. Testes com Gemini, oEmbed e transcrição simulados: link com `?si=`, análise com sucesso, cota esgotada →
    transcrição, vídeo privado, JSON inválido, reprocessamento.
 10. Aviso na tela: limite de ~8 h de vídeo por dia no plano gratuito e só vídeos públicos.
-- [!] Ponto de decisão: importar playlist inteira (exige YouTube Data API e outra chave) → D2 em `DECISOES-PENDENTES.md`.
+- [ ] Ponto de decisão D2 (playlist): decidido em 2026-10-30 — colar vários links de uma vez (opção C), feito antes
+  da Etapa 8.
 
 ## Observações
 
-- O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta,
-  o que conflita com a regra "não faça push". Registrado em `docs/DECISOES-PENDENTES.md` (D1); até a decisão,
-  os commits por etapa são feitos manualmente e o hook continua como está.
+- O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta.
+  Decisão D1 (2026-10-30): o usuário mantém o hook como está; os commits por etapa continuam manuais.
 - A máquina de desenvolvimento tem pouca RAM livre: logs de build vão para arquivo e os testes do backend
   rodam com memória limitada (`maven-surefire-plugin` no `backend/pom.xml`).

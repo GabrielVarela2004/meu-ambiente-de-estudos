@@ -85,8 +85,8 @@ Resumo das regras gerais do `docs/VISAO-PRODUTO.md` (leia o documento antes de c
 - Mudanças pequenas e focadas; não alterar regras de negócio além do pedido, não remover funcionalidades nem dados.
 - Ao fim de cada etapa: `.\mvnw.cmd test` no backend; `npm run lint`, `npm run build` (e `npm run test:run`, quando
   existir) no frontend. Só avançar com tudo passando.
-- Um commit por etapa (ou subitem), Conventional Commits em português. Sem push (ver D1 em `DECISOES-PENDENTES.md`:
-  há um hook Stop que faz commit e push automáticos).
+- Um commit por etapa (ou subitem), Conventional Commits em português. Não faça push manual: o hook Stop
+  (`.claude/hooks/auto-commit-push.sh`) faz commit e push ao fim de cada resposta — decisão D1, mantida pelo usuário.
 - Nenhuma chave real em código, testes ou commits; nenhum teste chama APIs externas reais.
 - Pontos de decisão: não implementar; registrar em `docs/DECISOES-PENDENTES.md` (contexto, opções, prós/contras,
   recomendação), marcar `[!]` e seguir.

@@ -16,6 +16,9 @@ Cada item traz contexto, opções, prós e contras e uma recomendação. Nada aq
 
 **Recomendação:** B — tira o push automático (a regra do plano) e mantém a proteção contra perda de trabalho.
 
+**Decisão (2026-10-30): A — manter o hook como está.** O usuário escolheu manter o commit e o push automáticos
+ao fim de cada resposta. Os commits por etapa/subitem continuam sendo feitos manualmente; o push fica a cargo do hook.
+
 ## D2 — Importar uma playlist inteira do YouTube de uma vez (Etapa 7)
 
 **Contexto:** hoje cada vídeo é adicionado pelo link e analisado uma vez pelo Gemini (ou pela transcrição).
@@ -31,3 +34,5 @@ analisadas por IA.
 | C. Colar vários links de uma vez (um por linha), sem API | baixo (algumas horas) | Sem nova chave; reaproveita a importação atual | O usuário precisa copiar os links da playlist |
 
 **Recomendação:** C agora (resolve o caso comum sem nova dependência) e B depois, se as playlists forem frequentes.
+
+**Decisão (2026-10-30): C — colar vários links de uma vez**, implementada antes da Etapa 8.
