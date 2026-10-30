@@ -181,7 +181,11 @@ Ordem combinada: 1 → 3 → 2 → 4. Decisão do usuário: a área teórica con
   Temperatura/top_p: o Gemini 3.6+ ignora (já documentado no `GeminiModelProvider`); a correção já pede temperatura
   baixa onde o modelo aceita. Validações já existentes mantidas (trecho precisa estar no material, rubrica com
   conceito essencial, JSON forçado). Ajuste fino não feito: pouco dado e custo alto; o caminho é few-shot.
-- [ ] 4. Reinício: `HealthIndicator` dos provedores (sem chamar a API) e laço de reinício no `start-dev.ps1`.
+- [x] 4. Reinício: `AiProvidersHealthIndicator` (componente `aiProviders` em `/actuator/health`, sem chamar as APIs;
+  fica UP sem IA porque há fallbacks) e detalhes do health ligados. `start-dev.ps1` sobe Docker Desktop e
+  PostgreSQL, abre backend e frontend pelo `dev-restart-loop.ps1` (reinicia se cair; para após 5 quedas em
+  10 min; Java com `-Xmx768m`) e espera o health antes de abrir o navegador. PM2/supervisord descartados: o
+  supervisord não roda no Windows e o PM2 seria mais um processo Node na máquina com pouca RAM.
 
 ## Observações
 

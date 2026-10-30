@@ -24,7 +24,8 @@ npm run lint        # oxlint
 npm run build       # tsc -b && vite build
 npm run test:run    # Vitest uma vez (npm test = modo observação); testes em src/**/*.test.ts(x)
 
-# Ambos em janelas separadas
+# Tudo de uma vez: Docker/PostgreSQL, backend e frontend em janelas próprias com reinício automático
+# (dev-restart-loop.ps1) e espera do /actuator/health antes de abrir o navegador
 .\start-dev.ps1     # ou start-dev.bat
 ```
 
