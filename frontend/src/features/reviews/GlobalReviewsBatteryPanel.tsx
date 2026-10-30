@@ -117,12 +117,12 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
     setFeedbackMessage(null)
 
     try {
-      const payload: { optionId?: string; textAnswer?: string } = {}
+      const payload: { optionId?: string; discursiveAnswer?: string } = {}
       if (optionId) payload.optionId = optionId
-      if (textAnswer) payload.textAnswer = textAnswer
+      if (textAnswer) payload.discursiveAnswer = textAnswer
 
       const res = await request<AnswerResult>(
-        `/api/study-blocks/${currentQ.studyBlockId}/questions/${currentQ.id}/answer`,
+        `/api/study-blocks/${currentQ.studyBlockId}/questions/${currentQ.id}/answers`,
         {
           method: 'POST',
           body: JSON.stringify(payload),
@@ -156,11 +156,11 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
     }
   }
 
-  const handleReschedule = async (questionId: string, studyBlockId: string, days: number) => {
+  const handleReschedule = async (questionId: string, days: number) => {
     try {
       await request<DueReviewQuestion>(
-        `/api/study-blocks/${studyBlockId}/questions/${questionId}/reschedule?days=${days}`,
-        { method: 'PATCH' },
+        `/api/reviews/questions/${questionId}/reschedule?days=${days}`,
+        { method: 'POST' },
       )
       setQuestions((prev) => prev.filter((q) => q.id !== questionId))
       if (summary) {
@@ -174,17 +174,17 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
 
   const handleAnswerInline = async (question: DueReviewQuestion, optionId?: string) => {
     try {
-      const payload: { optionId?: string; textAnswer?: string } = {}
+      const payload: { optionId?: string; discursiveAnswer?: string } = {}
       if (optionId) {
         payload.optionId = optionId
       } else if (discursiveListAnswers[question.id]) {
-        payload.textAnswer = discursiveListAnswers[question.id]
+        payload.discursiveAnswer = discursiveListAnswers[question.id]
       } else {
         return
       }
 
       const res = await request<AnswerResult>(
-        `/api/study-blocks/${question.studyBlockId}/questions/${question.id}/answer`,
+        `/api/study-blocks/${question.studyBlockId}/questions/${question.id}/answers`,
         {
           method: 'POST',
           body: JSON.stringify(payload),
@@ -351,21 +351,21 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => void handleReschedule(currentQ.id, currentQ.studyBlockId, 1)}
+                      onClick={() => void handleReschedule(currentQ.id, 1)}
                     >
                       Adiar +1 dia
                     </button>
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => void handleReschedule(currentQ.id, currentQ.studyBlockId, 3)}
+                      onClick={() => void handleReschedule(currentQ.id, 3)}
                     >
                       Adiar +3 dias
                     </button>
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => void handleReschedule(currentQ.id, currentQ.studyBlockId, 7)}
+                      onClick={() => void handleReschedule(currentQ.id, 7)}
                     >
                       Adiar +7 dias
                     </button>
@@ -502,21 +502,21 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => void handleReschedule(q.id, q.studyBlockId, 1)}
+                        onClick={() => void handleReschedule(q.id, 1)}
                       >
                         Adiar 1 dia
                       </button>
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => void handleReschedule(q.id, q.studyBlockId, 3)}
+                        onClick={() => void handleReschedule(q.id, 3)}
                       >
                         Adiar 3 dias
                       </button>
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => void handleReschedule(q.id, q.studyBlockId, 7)}
+                        onClick={() => void handleReschedule(q.id, 7)}
                       >
                         Adiar 7 dias
                       </button>

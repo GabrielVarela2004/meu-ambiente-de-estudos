@@ -35,7 +35,10 @@ export function CareerSourcesPage() {
 
   const handleToggle = async (sourceId: string, currentEnabled: boolean) => {
     try {
-      await request(`/api/career/sources/${sourceId}/toggle`, { method: 'POST' })
+      await request(`/api/career/sources/${sourceId}/toggle`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: !currentEnabled }),
+      })
       setSources((prev) =>
         prev.map((s) => (s.id === sourceId ? { ...s, enabled: !currentEnabled } : s))
       )

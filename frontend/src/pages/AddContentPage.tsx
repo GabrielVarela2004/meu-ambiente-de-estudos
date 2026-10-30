@@ -14,6 +14,38 @@ type Props = {
 
 type TabMode = 'TEXT' | 'FILE' | 'YOUTUBE'
 
+type CreatedMaterial = {
+  id: string
+  title: string
+  content: string
+  enabledForChat: boolean
+}
+
+// Limites do backend para PUT /materials/{id} (StudyMaterialRequest).
+const MAX_TITLE_LENGTH = 160
+const MAX_EDITABLE_CONTENT_LENGTH = 100000
+
+/**
+ * As rotas de criação (texto, arquivo e YouTube) não recebem título personalizado
+ * nem a opção de chat. Aplica essas escolhas depois, usando as rotas de edição.
+ */
+async function applySourceOptions(
+  blockId: string,
+  material: CreatedMaterial,
+  options: { title?: string; enabledForChat: boolean },
+) {
+  const title = options.title?.trim().slice(0, MAX_TITLE_LENGTH)
+  if (title && title !== material.title && material.content.length <= MAX_EDITABLE_CONTENT_LENGTH) {
+    await request(`/api/study-blocks/${blockId}/materials/${material.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title, content: material.content }),
+    })
+  }
+  if (options.enabledForChat !== material.enabledForChat) {
+    await request(`/api/study-blocks/${blockId}/materials/${material.id}/toggle-chat`, { method: 'PATCH' })
+  }
+}
+
 export function AddContentPage({
   blocks,
   selectedBlockId,
@@ -75,14 +107,14 @@ export function AddContentPage({
     setSubmitting(true)
     setFeedback(null)
     try {
-      await request(`/api/study-blocks/${targetBlockId}/materials`, {
+      const created = await request<CreatedMaterial>(`/api/study-blocks/${targetBlockId}/materials`, {
         method: 'POST',
         body: JSON.stringify({
           title: textTitle.trim(),
           content: textContent.trim(),
-          enabledForChat: textEnabledForChat,
         }),
       })
+      await applySourceOptions(targetBlockId, created, { enabledForChat: textEnabledForChat })
       setFeedback({
         type: 'success',
         message: `Fonte canônica "${textTitle}" adicionada com sucesso ao bloco!`,
@@ -113,18 +145,12 @@ export function AddContentPage({
     try {
       const formData = new FormData()
       formData.append('file', selectedFile)
-      if (fileTitle.trim()) {
-        formData.append('title', fileTitle.trim())
-      }
-      formData.append('enabledForChat', String(fileEnabledForChat))
 
-      const res = await fetch(`/api/study-blocks/${targetBlockId}/materials/upload`, {
+      const created = await request<CreatedMaterial>(`/api/study-blocks/${targetBlockId}/materials/import`, {
         method: 'POST',
         body: formData,
       })
-      if (!res.ok) {
-        throw new Error(`Upload failed with status ${res.status}`)
-      }
+      await applySourceOptions(targetBlockId, created, { title: fileTitle, enabledForChat: fileEnabledForChat })
 
       setFeedback({
         type: 'success',
@@ -157,15 +183,11 @@ export function AddContentPage({
     setSubmitting(true)
     setFeedback(null)
     try {
-      await request(`/api/study-blocks/${targetBlockId}/materials/youtube`, {
+      const created = await request<CreatedMaterial>(`/api/study-blocks/${targetBlockId}/materials/youtube`, {
         method: 'POST',
-        body: JSON.stringify({
-          youtubeUrl: ytUrl.trim(),
-          title: ytTitle.trim() || undefined,
-          language: ytLanguage,
-          enabledForChat: ytEnabledForChat,
-        }),
+        body: JSON.stringify({ url: ytUrl.trim() }),
       })
+      await applySourceOptions(targetBlockId, created, { title: ytTitle, enabledForChat: ytEnabledForChat })
       setFeedback({
         type: 'success',
         message: 'Vídeo do YouTube importado! As legendas/transcrição estão disponíveis como fonte.',

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { FolderIcon, PlusCircleIcon, SearchIcon } from '../components/icons'
+import '../styles/pages/study-blocks.css'
 
 export type StudyBlock = {
   id: string
@@ -176,7 +177,7 @@ export function StudyBlocksPage({
                     <span className="block-type-pill">Caderno de Estudo</span>
                     <h2 className="block-card-title">{block.title}</h2>
                   </div>
-                  <span className={`block-status-tag ${block.status.toLowerCase()}`}>
+                  <span className={`badge ${block.status === 'ACTIVE' ? 'badge-success' : 'badge-subtle'}`}>
                     {block.status === 'ACTIVE' ? 'Ativo' : 'Arquivado'}
                   </span>
                 </div>
@@ -184,6 +185,9 @@ export function StudyBlocksPage({
                 <div className="block-card-body">
                   {block.description && (
                     <p className="block-card-desc">{block.description}</p>
+                  )}
+                  {!block.description && !block.learningObjective && (
+                    <p className="block-card-empty-desc">Sem descrição ou objetivo definidos.</p>
                   )}
                   {block.learningObjective && (
                     <div className="block-card-objective">
@@ -203,7 +207,7 @@ export function StudyBlocksPage({
                     <span className="stat-label">Questões</span>
                   </div>
                   <div className="block-stat-item">
-                    <span className="stat-number">
+                    <span className="stat-number stat-date">
                       {new Date(block.updatedAt).toLocaleDateString('pt-BR')}
                     </span>
                     <span className="stat-label">Atualizado</span>
@@ -211,51 +215,55 @@ export function StudyBlocksPage({
                 </div>
 
                 <div className="block-card-footer">
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      onSelectBlock(block.id)
-                      onOpenBlockWorkspace(block)
-                    }}
-                  >
-                    <span>Abrir Bloco</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => onNavigateToAddContent(block.id)}
-                    title="Adicionar novas fontes a este bloco"
-                  >
-                    <span>+ Fonte</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => handleOpenEdit(block)}
-                  >
-                    Editar
-                  </button>
-
-                  {block.status === 'ACTIVE' ? (
+                  <div className="block-card-footer-group">
                     <button
                       type="button"
-                      className="btn btn-ghost-danger btn-sm"
-                      onClick={() => void onArchiveBlock(block.id)}
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        onSelectBlock(block.id)
+                        onOpenBlockWorkspace(block)
+                      }}
                     >
-                      Arquivar
+                      <span>Abrir Bloco</span>
                     </button>
-                  ) : (
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onNavigateToAddContent(block.id)}
+                      title="Adicionar novas fontes a este bloco"
+                    >
+                      <span>+ Fonte</span>
+                    </button>
+                  </div>
+
+                  <div className="block-card-footer-group">
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={() => void onUnarchiveBlock(block.id)}
+                      onClick={() => handleOpenEdit(block)}
                     >
-                      Restaurar
+                      Editar
                     </button>
-                  )}
+
+                    {block.status === 'ACTIVE' ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost-danger btn-sm"
+                        onClick={() => void onArchiveBlock(block.id)}
+                      >
+                        Arquivar
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => void onUnarchiveBlock(block.id)}
+                      >
+                        Restaurar
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )

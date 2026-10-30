@@ -68,21 +68,24 @@ APIs externas: OpenAI (Chat Completions) · YouTube (transcrição) · Remotive 
 ### 4.2 Quebrados na interface — o backend existe, mas o frontend chama rota ou formato errado 🔴
 Verificado lendo os controllers e testando contra o backend em execução.
 
-| # | Tela / ação | Frontend chama | Backend expõe |
-|---|---|---|---|
-| 1 | Blocos › **Restaurar** bloco arquivado | `POST /study-blocks/{id}/unarchive` | não existe (não há desarquivamento) |
-| 2 | Exercícios Teóricos › **Gerar simulado** | `POST …/questions/generate-simulado` | só `POST …/questions/generate` (1 questão); `generateSimulado()` existe no serviço, mas não está exposto |
-| 3 | Área do bloco › **Ativar/desativar fonte no chat** | `PATCH …/materials/{id}/chat-toggle` | `PATCH …/materials/{id}/toggle-chat` |
-| 4 | Adicionar Conteúdo › **Upload de arquivo** | `POST …/materials/upload` | `POST …/materials/import` (multipart) |
-| 5 | Revisar Dificuldades › **Responder** questão | `POST …/questions/{id}/answer`, corpo `textAnswer` | `POST …/questions/{id}/answers`, corpo `discursiveAnswer` |
-| 6 | Revisar Dificuldades › **Adiar** revisão | `PATCH /study-blocks/{b}/questions/{q}/reschedule` | `POST /api/reviews/questions/{q}/reschedule?days=N` |
-| 7 | Exercícios Práticos › **Enviar resposta** | corpo `{ codeAnswer, selfRating }` | exige `{ answer, selfRating }` (`@NotBlank answer` → 400) |
-| 8 | Feed de Vagas › **Buscar agora** | `POST /career/agent/search-now` | `POST /career/agent/run` |
-| 9 | Feed de Vagas › **Mudar status** da vaga | `PATCH /career/jobs/{id}/status` | não existe; a entidade `CareerJob` não tem campo de status |
-| 10 | Competências › **Avaliar** | `POST /career/skills/assess` | não existe |
-| 11 | Fontes de Vagas › **Ativar/desativar** | `POST /career/sources/{id}/toggle` | `PATCH /career/sources/{id}/toggle` |
+| # | Tela / ação | Frontend chamava | Backend expõe | Situação |
+|---|---|---|---|---|
+| 1 | Blocos › **Restaurar** bloco arquivado | `POST /study-blocks/{id}/unarchive` | não existe (não há desarquivamento) | ⏳ Requer backend novo |
+| 2 | Exercícios Teóricos › **Gerar simulado** | `POST …/questions/generate-simulado` | só `POST …/questions/generate` (1 questão); `generateSimulado()` existe no serviço, mas não está exposto | ⏳ Requer backend novo |
+| 3 | Área do bloco › **Ativar/desativar fonte no chat** | `PATCH …/materials/{id}/chat-toggle` | `PATCH …/materials/{id}/toggle-chat` | ✅ Corrigido (2026-10-29) |
+| 4 | Adicionar Conteúdo › **Upload de arquivo** | `POST …/materials/upload` | `POST …/materials/import` (multipart) | ✅ Corrigido (2026-10-29) |
+| 5 | Revisar Dificuldades › **Responder** questão | `POST …/questions/{id}/answer`, corpo `textAnswer` | `POST …/questions/{id}/answers`, corpo `discursiveAnswer` | ✅ Corrigido (2026-10-29) |
+| 6 | Revisar Dificuldades › **Adiar** revisão | `PATCH /study-blocks/{b}/questions/{q}/reschedule` | `POST /api/reviews/questions/{q}/reschedule?days=N` | ✅ Corrigido (2026-10-29) |
+| 7 | Exercícios Práticos › **Enviar resposta** | corpo `{ codeAnswer, selfRating }` | exige `{ answer, selfRating }` (`@NotBlank answer` → 400) | ✅ Corrigido (2026-10-29) |
+| 8 | Feed de Vagas › **Buscar agora** | `POST /career/agent/search-now` | `POST /career/agent/run` | ✅ Corrigido (2026-10-29) |
+| 9 | Feed de Vagas › **Mudar status** da vaga | `PATCH /career/jobs/{id}/status` | não existe; a entidade `CareerJob` não tem campo de status | ⏳ Requer backend novo |
+| 10 | Competências › **Avaliar** | `POST /career/skills/assess` | não existe | ⏳ Requer backend novo |
+| 11 | Fontes de Vagas › **Ativar/desativar** | `POST /career/sources/{id}/toggle` | `PATCH /career/sources/{id}/toggle` | ✅ Corrigido (2026-10-29) |
+| 12 | Adicionar Conteúdo › **YouTube** | corpo `{ youtubeUrl, … }` | exige `{ url }` (`@NotBlank` → 400) | ✅ Corrigido (2026-10-29) |
 
-Consequência: a **revisão espaçada não registra respostas pela tela de revisão**, e **exercícios práticos não
+**Atualização 2026-10-29 (Etapa A):** os itens 3–8, 11 e 12 foram corrigidos só no frontend e validados contra o backend em execução. Título personalizado e "incluir no chat" agora são aplicados após a criação (PUT e toggle-chat), pois as rotas de criação não recebem esses campos. O seletor de idioma do YouTube continua sem efeito (o backend não recebe idioma). Itens 1, 2, 9 e 10 dependem de backend novo.
+
+Consequência (antes da correção): a **revisão espaçada não registra respostas pela tela de revisão**, e **exercícios práticos não
 registram tentativas**. Por isso o histórico e o desempenho só são alimentados pela tela de Questões Teóricas.
 
 ### 4.3 Parcialmente implementados 🟡

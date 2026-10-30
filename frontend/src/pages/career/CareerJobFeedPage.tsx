@@ -63,7 +63,7 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
     setSearching(true)
     setError(null)
     try {
-      await request('/api/career/agent/search-now', { method: 'POST' })
+      await request('/api/career/agent/run', { method: 'POST' })
       await loadJobs()
     } catch {
       setError('Erro ao acionar varredura do agente de vagas.')

@@ -42,7 +42,7 @@ export function PracticalExercisesPage({
   // Submissão e respostas
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [ratings, setRatings] = useState<Record<string, number>>({})
-  const [feedback, setFeedback] = useState<Record<string, { score: number; text: string; passed: boolean }>>({})
+  const [feedback, setFeedback] = useState<Record<string, { selfRating: number; passed: boolean }>>({})
   const [submittingId, setSubmittingId] = useState<string | null>(null)
 
   // Visualização de excerto / dicas
@@ -127,12 +127,13 @@ export function PracticalExercisesPage({
 
     setSubmittingId(ex.id)
     try {
-      const res = await request<{ score: number; feedback: string; passed: boolean }>(
+      // O backend registra a tentativa com a autoavaliação (1–5); não há correção automática.
+      const res = await request<{ id: string; selfRating: number }>(
         `/api/study-blocks/${ex.studyBlockId || selectedBlockId}/exercises/${ex.id}/attempts`,
         {
           method: 'POST',
           body: JSON.stringify({
-            codeAnswer: userAnswer,
+            answer: userAnswer,
             selfRating,
           }),
         }
@@ -140,9 +141,8 @@ export function PracticalExercisesPage({
       setFeedback((prev) => ({
         ...prev,
         [ex.id]: {
-          score: res.score,
-          text: res.feedback,
-          passed: res.passed,
+          selfRating: res.selfRating,
+          passed: res.selfRating >= 4,
         },
       }))
     } catch {
@@ -339,7 +339,7 @@ export function PracticalExercisesPage({
                     onClick={() => void handleSubmitExercise(ex)}
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? 'Avaliando...' : 'Submeter Solução'}
+                    {isSubmitting ? 'Registrando...' : 'Registrar Tentativa'}
                   </button>
                 </div>
 
@@ -350,12 +350,18 @@ export function PracticalExercisesPage({
                       <div className="flex-gap-center">
                         <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
                         <strong className="text-emerald-400">
-                          {result.passed ? 'Solução Validada' : 'Revisão Recomendada'}
+                          Tentativa registrada no histórico
                         </strong>
                       </div>
-                      <span className="badge badge-emerald">Nota: {result.score}%</span>
+                      <span className={`badge ${result.passed ? 'badge-emerald' : 'badge-amber'}`}>
+                        Autoavaliação: {result.selfRating}/5
+                      </span>
                     </div>
-                    <p className="whitespace-pre-wrap text-sm">{result.text}</p>
+                    <p className="text-sm">
+                      {result.passed
+                        ? 'Bom domínio declarado. A próxima revisão deste exercício será espaçada.'
+                        : 'Domínio ainda baixo. Este exercício voltará antes na sua fila de revisão.'}
+                    </p>
                   </div>
                 )}
               </div>

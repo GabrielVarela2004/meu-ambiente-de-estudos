@@ -67,13 +67,13 @@ export function BlockWorkspacePage({
     e.stopPropagation()
     setTogglingChatId(mat.id)
     try {
-      const newEnabled = !(mat.enabledForChat ?? true)
-      await request(`/api/study-blocks/${block.id}/materials/${mat.id}/chat-toggle`, {
-        method: 'PATCH',
-        body: JSON.stringify({ enabledForChat: newEnabled }),
-      })
+      // O backend alterna o estado e devolve o material atualizado.
+      const updated = await request<StudyMaterialItem>(
+        `/api/study-blocks/${block.id}/materials/${mat.id}/toggle-chat`,
+        { method: 'PATCH' },
+      )
       setMaterials((prev) =>
-        prev.map((m) => (m.id === mat.id ? { ...m, enabledForChat: newEnabled } : m))
+        prev.map((m) => (m.id === mat.id ? { ...m, enabledForChat: updated.enabledForChat } : m))
       )
     } catch {
       alert('Erro ao alterar inclusão da fonte no chat.')
