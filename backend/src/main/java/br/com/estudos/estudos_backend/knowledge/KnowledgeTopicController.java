@@ -5,7 +5,10 @@ import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,9 +27,44 @@ import org.springframework.web.bind.annotation.RestController;
 public class KnowledgeTopicController {
 
 	private final KnowledgeTopicService service;
+	private final TopicReviewService reviewService;
 
-	public KnowledgeTopicController(KnowledgeTopicService service) {
+	public KnowledgeTopicController(KnowledgeTopicService service, TopicReviewService reviewService) {
 		this.service = service;
+		this.reviewService = reviewService;
+	}
+
+	/** Sugestões aguardando validação (aba Mapeamento de Fontes), da mais para a menos relevante. */
+	@GetMapping("/review")
+	public ReviewBoardResponse reviewBoard(@PathVariable UUID studyBlockId) {
+		TopicReviewService.ReviewBoard board = reviewService.board(studyBlockId);
+		return new ReviewBoardResponse(board.items().stream().map(ReviewItemResponse::from).toList(), board.summary());
+	}
+
+	/** Aprovar, excluir ou comentar (e opcionalmente renomear) uma sugestão. */
+	@PostMapping("/review/{topicId}")
+	public ReviewItemResponse review(@PathVariable UUID studyBlockId, @PathVariable UUID topicId,
+			@Valid @RequestBody ReviewRequest request) {
+		KnowledgeTopic topic = reviewService.review(studyBlockId, topicId, request.action(), request.feedback(),
+				request.title());
+		return ReviewItemResponse.from(new TopicReviewService.ReviewItem(topic, null, null, null));
+	}
+
+	@PostMapping("/review/approve-relevant")
+	public BulkResponse approveRelevant(@PathVariable UUID studyBlockId, @Valid @RequestBody BulkApproveRequest request) {
+		return new BulkResponse(reviewService.approveRelevant(studyBlockId, request.minRelevance()));
+	}
+
+	/** Revisa com IA os tópicos com comentário e devolve-os numa nova rodada. */
+	@PostMapping("/review/refine")
+	public BulkResponse refine(@PathVariable UUID studyBlockId) {
+		return new BulkResponse(reviewService.refine(studyBlockId));
+	}
+
+	/** Oficializa os aprovados e arquiva os excluídos. */
+	@PostMapping("/review/publish")
+	public TopicReviewService.PublishResult publish(@PathVariable UUID studyBlockId) {
+		return reviewService.publish(studyBlockId);
 	}
 
 	@PostMapping
@@ -100,6 +138,44 @@ public class KnowledgeTopicController {
 			@Size(max = 2000) String description) {}
 
 	public record PrerequisiteRequest(UUID prerequisiteTopicId) {}
+
+	public record ReviewRequest(
+			@NotNull TopicReviewState action,
+			@Size(max = 1000) String feedback,
+			@Size(max = 160) String title) {}
+
+	public record BulkApproveRequest(@Min(0) @Max(100) int minRelevance) {}
+
+	public record BulkResponse(int count) {}
+
+	public record ReviewBoardResponse(List<ReviewItemResponse> items, TopicReviewService.ReviewSummary summary) {}
+
+	public record ReviewItemResponse(
+			UUID id,
+			UUID parentTopicId,
+			String officialParentTitle,
+			String title,
+			String previousTitle,
+			String description,
+			String supportingExcerpt,
+			UUID sourceMaterialId,
+			String sourceMaterialTitle,
+			String sourceVideoId,
+			Integer relevanceScore,
+			String relevanceReason,
+			int reviewRound,
+			TopicReviewState reviewState,
+			String userFeedback) {
+
+		static ReviewItemResponse from(TopicReviewService.ReviewItem item) {
+			KnowledgeTopic topic = item.topic();
+			return new ReviewItemResponse(topic.getId(), topic.getParentTopicId(), item.officialParentTitle(),
+					topic.getTitle(), topic.getPreviousTitle(), topic.getDescription(), topic.getSupportingExcerpt(),
+					topic.getSourceMaterialId(), item.sourceMaterialTitle(), item.sourceVideoId(),
+					topic.getRelevanceScore(), topic.getRelevanceReason(), topic.getReviewRound(), topic.getReviewState(),
+					topic.getUserFeedback());
+		}
+	}
 
 	public record TopicResponse(
 			UUID id,

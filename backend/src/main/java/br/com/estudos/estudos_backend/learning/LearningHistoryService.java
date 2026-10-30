@@ -249,7 +249,7 @@ public class LearningHistoryService {
 			List<GlobalPerformanceDashboardResponse.TopicPerformanceSummary> topicSummaries = new ArrayList<>();
 
 			for (KnowledgeTopic topic : topics) {
-				if (filterTopicId != null && !topic.getId().equals(filterTopicId)) {
+				if (topic.isPendingReview() || (filterTopicId != null && !topic.getId().equals(filterTopicId))) {
 					continue;
 				}
 				List<StudyQuestionAttempt> tAttempts = blockAttempts.stream()

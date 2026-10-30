@@ -43,13 +43,15 @@ public class KnowledgeTopicService {
 	private final StudyMaterialRepository materialRepository;
 	private final SourceTopicExtractor sourceTopicExtractor;
 	private final PracticalExerciseAttemptRepository practicalAttemptRepository;
+	/** Memória das decisões de revisão (null nos testes que montam o serviço à mão). */
+	private final TopicReviewService reviewService;
 	private final TopicLearningStateEvaluator evaluator = new TopicLearningStateEvaluator();
 	private final TopicMasteryCalculator masteryCalculator = new TopicMasteryCalculator();
 
 	public KnowledgeTopicService(KnowledgeTopicRepository topicRepository,
 			KnowledgeTopicQuestionRepository linkRepository, StudyBlockService blockService,
 			StudyQuestionRepository questionRepository, StudyQuestionAttemptRepository attemptRepository) {
-		this(topicRepository, linkRepository, blockService, questionRepository, attemptRepository, null, null, null);
+		this(topicRepository, linkRepository, blockService, questionRepository, attemptRepository, null, null, null, null);
 	}
 
 	@Autowired
@@ -57,7 +59,8 @@ public class KnowledgeTopicService {
 			KnowledgeTopicQuestionRepository linkRepository, StudyBlockService blockService,
 			StudyQuestionRepository questionRepository, StudyQuestionAttemptRepository attemptRepository,
 			StudyMaterialRepository materialRepository, SourceTopicExtractor sourceTopicExtractor,
-			PracticalExerciseAttemptRepository practicalAttemptRepository) {
+			PracticalExerciseAttemptRepository practicalAttemptRepository, TopicReviewService reviewService) {
+		this.reviewService = reviewService;
 		this.topicRepository = topicRepository;
 		this.linkRepository = linkRepository;
 		this.blockService = blockService;
@@ -123,6 +126,14 @@ public class KnowledgeTopicService {
 		// Arquiva subtópicos e tópicos extraídos por IA (não validados manualmente) cujas fontes foram arquivadas/removidas
 		List<KnowledgeTopic> allBlockTopics = topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(blockId);
 		for (KnowledgeTopic topic : allBlockTopics) {
+			// Sugestão pendente cuja fonte saiu do bloco não tem mais o que validar.
+			if (topic.isPendingReview() && topic.getSourceMaterialId() != null
+					&& !activeMaterialIds.contains(topic.getSourceMaterialId())) {
+				topic.archive();
+				topicRepository.save(topic);
+			}
+		}
+		for (KnowledgeTopic topic : allBlockTopics) {
 			if (topic.getStatus() == KnowledgeTopicStatus.ACTIVE
 					&& topic.isSubtopic()
 					&& topic.getOrigin() == KnowledgeTopicOrigin.AI_EXTRACTED
@@ -158,80 +169,112 @@ public class KnowledgeTopicService {
 			return list(blockId, false);
 		}
 
-		List<SourceTopicExtractor.ExtractedTopic> extractedTopics = sourceTopicExtractor.extractFromMaterials(block, chatMaterials);
+		List<SourceTopicExtractor.ExtractedTopic> extractedTopics = sourceTopicExtractor.extractFromMaterials(block,
+				chatMaterials, reviewService == null ? SourceTopicExtractor.ReviewMemory.empty() : reviewService.memory());
 		OffsetDateTime now = OffsetDateTime.now();
 
 		Map<String, KnowledgeTopic> existingMainByNormTitle = new LinkedHashMap<>();
 		Map<String, KnowledgeTopic> existingSubByParentAndNormTitle = new LinkedHashMap<>();
+		// Títulos que o usuário excluiu neste bloco: não voltam, seja qual for o tópico principal.
+		Set<String> rejectedKeys = new HashSet<>();
 		for (KnowledgeTopic existing : topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(blockId)) {
-			String key = SourceTopicExtractor.normalizeKey(existing.getTitle());
-			if (!existing.isSubtopic()) {
-				existingMainByNormTitle.putIfAbsent(key, existing);
-			} else {
-				existingSubByParentAndNormTitle.putIfAbsent(existing.getParentTopicId() + "::" + key, existing);
+			// O nome sugerido antes de uma renomeação também identifica o tópico.
+			List<String> keys = new ArrayList<>();
+			keys.add(SourceTopicExtractor.normalizeKey(existing.getTitle()));
+			if (existing.getPreviousTitle() != null) {
+				keys.add(SourceTopicExtractor.normalizeKey(existing.getPreviousTitle()));
+			}
+			for (String key : keys) {
+				if (wasRejected(existing)) {
+					rejectedKeys.add(key);
+				}
+				if (!existing.isSubtopic()) {
+					existingMainByNormTitle.putIfAbsent(key, existing);
+				} else {
+					existingSubByParentAndNormTitle.putIfAbsent(existing.getParentTopicId() + "::" + key, existing);
+				}
 			}
 		}
 
 		for (SourceTopicExtractor.ExtractedTopic extractedMain : extractedTopics) {
 			String mainKey = SourceTopicExtractor.normalizeKey(extractedMain.title());
-			if (mainKey.isBlank()) {
+			if (mainKey.isBlank() || rejectedKeys.contains(mainKey)) {
 				continue;
 			}
 			KnowledgeTopic mainTopic = existingMainByNormTitle.get(mainKey);
+			if (mainTopic != null && wasRejected(mainTopic)) {
+				// O usuário já excluiu este tópico: nem ele nem os subtópicos voltam.
+				continue;
+			}
 			if (mainTopic == null) {
-				mainTopic = topicRepository.save(new KnowledgeTopic(
+				// Tudo que a extração encontra entra como sugestão; só vira oficial depois da validação manual.
+				mainTopic = topicRepository.save(KnowledgeTopic.suggestion(
 						block,
-						null,
 						null,
 						extractedMain.title(),
 						normalize(extractedMain.description()),
 						extractedMain.sourceMaterialId(),
 						normalize(extractedMain.supportingExcerpt()),
-						KnowledgeTopicOrigin.AI_EXTRACTED,
-						false,
+						extractedMain.relevance(),
+						extractedMain.relevanceReason(),
 						now));
 				existingMainByNormTitle.put(mainKey, mainTopic);
 			} else {
-				mainTopic.updateExtractedEvidence(
-						normalize(extractedMain.description()),
-						extractedMain.sourceMaterialId(),
-						normalize(extractedMain.supportingExcerpt()),
-						now);
+				refreshEvidence(mainTopic, extractedMain.description(), extractedMain.sourceMaterialId(),
+						extractedMain.supportingExcerpt(), extractedMain.relevance(), extractedMain.relevanceReason(), now);
 				mainTopic = topicRepository.save(mainTopic);
 			}
 
 			for (SourceTopicExtractor.ExtractedSubtopic extractedSub : extractedMain.subtopics()) {
 				String subKey = SourceTopicExtractor.normalizeKey(extractedSub.title());
-				if (subKey.isBlank() || subKey.equals(mainKey)) {
+				if (subKey.isBlank() || subKey.equals(mainKey) || rejectedKeys.contains(subKey)) {
 					continue;
 				}
 				String compositeKey = mainTopic.getId() + "::" + subKey;
 				KnowledgeTopic subTopic = existingSubByParentAndNormTitle.get(compositeKey);
+				if (subTopic != null && wasRejected(subTopic)) {
+					continue;
+				}
 				if (subTopic == null) {
-					subTopic = topicRepository.save(new KnowledgeTopic(
+					subTopic = topicRepository.save(KnowledgeTopic.suggestion(
 							block,
 							mainTopic.getId(),
-							null,
 							extractedSub.title(),
 							normalize(extractedSub.description()),
 							extractedSub.sourceMaterialId(),
 							normalize(extractedSub.supportingExcerpt()),
-							KnowledgeTopicOrigin.AI_EXTRACTED,
-							false,
+							extractedSub.relevance(),
+							extractedSub.relevanceReason(),
 							now));
 					existingSubByParentAndNormTitle.put(compositeKey, subTopic);
 				} else {
-					subTopic.updateExtractedEvidence(
-							normalize(extractedSub.description()),
-							extractedSub.sourceMaterialId(),
-							normalize(extractedSub.supportingExcerpt()),
-							now);
+					refreshEvidence(subTopic, extractedSub.description(), extractedSub.sourceMaterialId(),
+							extractedSub.supportingExcerpt(), extractedSub.relevance(), extractedSub.relevanceReason(), now);
 					topicRepository.save(subTopic);
 				}
 			}
 		}
 
 		return list(blockId, false);
+	}
+
+	private static boolean wasRejected(KnowledgeTopic topic) {
+		return topic.getStatus() == KnowledgeTopicStatus.ARCHIVED && topic.getReviewState() == TopicReviewState.REJECTED;
+	}
+
+	/**
+	 * Tópico que a extração reencontra: oficial continua oficial (só atualiza a evidência); sugestão pendente atualiza a
+	 * relevância; arquivado (fonte removida e devolvida) volta como sugestão, nunca direto como oficial.
+	 */
+	private void refreshEvidence(KnowledgeTopic topic, String description, UUID sourceMaterialId, String excerpt,
+			int relevance, String relevanceReason, OffsetDateTime now) {
+		if (topic.getStatus() == KnowledgeTopicStatus.ARCHIVED) {
+			topic.resubmitForReview();
+		}
+		if (topic.isPendingReview()) {
+			topic.updateRelevance(relevance, relevanceReason);
+		}
+		topic.updateExtractedEvidence(normalize(description), sourceMaterialId, normalize(excerpt), now);
 	}
 
 	@Transactional
@@ -248,8 +291,10 @@ public class KnowledgeTopicService {
 	@Transactional(readOnly = true)
 	public List<TopicView> list(UUID blockId, boolean includeArchived) {
 		blockService.get(blockId);
+		// Sugestões pendentes ficam só na revisão (TopicReviewService), nunca na lista de tópicos oficiais.
 		List<KnowledgeTopic> topics = includeArchived
-				? topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(blockId)
+				? topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(blockId).stream()
+						.filter(topic -> !topic.isPendingReview()).toList()
 				: topicRepository.findAllByStudyBlockIdAndStatusOrderByCreatedAtAsc(blockId, KnowledgeTopicStatus.ACTIVE);
 		if (topics.isEmpty()) return List.of();
 

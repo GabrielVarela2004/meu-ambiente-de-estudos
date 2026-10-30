@@ -187,6 +187,24 @@ Ordem combinada: 1 → 3 → 2 → 4. Decisão do usuário: a área teórica con
   10 min; Java com `-Xmx768m`) e espera o health antes de abrir o navegador. PM2/supervisord descartados: o
   supervisord não roda no Windows e o PM2 seria mais um processo Node na máquina com pouca RAM.
 
+## Validação manual dos tópicos (pedido do usuário em 2026-10-30, fora da sequência de etapas)
+
+Decisões do usuário: tópicos `ACTIVE` existentes continuam oficiais; com sugestões pendentes, as questões continuam
+usando o bloco inteiro.
+
+- [x] Modelo (migração V32): status `PENDING_REVIEW` (fora de questões, desempenho e carreira), relevância 0–100 e
+  justificativa, rodada, decisão (`TopicReviewState`), comentário e título anterior; tabela `topic_review_decisions`.
+- [x] Extração (`SourceTopicExtractor`): só tópicos técnicos, agrupados, com relevância; backend descarta relevância
+  < 40, ruído de transcrição (saudação, curso, like), trecho que não está na fonte e títulos já excluídos. Sem IA, o
+  fallback filtra as mesmas frases e dá relevância por tipo de evidência. Limite de saída explícito (8000 tokens).
+- [x] Fluxo (`TopicReviewService`, `…/topics/review`): aprovar, excluir (o principal leva os filhos), comentar,
+  renomear, aprovar em lote por relevância, revisar com IA os comentados (nova rodada, com "antes → depois" e
+  subtópicos pedidos) e oficializar. Excluído nunca volta na extração, nem com o tópico principal renomeado.
+- [x] Memória: os últimos excluídos e comentários do usuário entram no prompt da próxima extração; taxa de aprovação
+  na 1ª rodada exibida como precisão da extração.
+- [x] Tela: painel "Sugestões para validar" no topo da aba Mapeamento de Fontes (relevância colorida, trecho com
+  minuto clicável se vídeo, progresso, atalhos A/E/C); o modal do simulado avisa quando há sugestões pendentes.
+
 ## Observações
 
 - O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta.

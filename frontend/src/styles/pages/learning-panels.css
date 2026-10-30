@@ -571,3 +571,90 @@
   height: 100%;
   background: var(--color-accent);
 }
+
+/* ---- Validação manual dos tópicos sugeridos (TopicReviewPanel) ---- */
+.topic-review-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  border-color: var(--color-info-border);
+}
+.topic-review-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 220px;
+}
+.topic-review-toolbar {
+  margin-top: 0;
+}
+.topic-suggestion-list,
+.topic-suggestion-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.topic-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+.topic-suggestion:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+.topic-suggestion.subtopic {
+  margin-left: var(--space-6);
+}
+.topic-suggestion.is-approved { border-left-color: var(--color-success); }
+.topic-suggestion.is-rejected { border-left-color: var(--color-danger); opacity: 0.7; }
+.topic-suggestion.is-feedback { border-left-color: var(--color-warning); }
+.topic-suggestion h4 {
+  margin: 0;
+}
+.topic-suggestion-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.topic-suggestion-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.relevance-badge,
+.review-state-badge {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.relevance-badge.is-high { color: var(--color-success); background: var(--color-success-bg); border-color: var(--color-success-border); }
+.relevance-badge.is-mid { color: var(--color-info); background: var(--color-info-bg); border-color: var(--color-info-border); }
+.relevance-badge.is-low { color: var(--color-warning); background: var(--color-warning-bg); border-color: var(--color-warning-border); }
+.review-state-badge.is-approved { color: var(--color-success); border-color: var(--color-success-border); }
+.review-state-badge.is-rejected { color: var(--color-danger); border-color: var(--color-danger-border); }
+.review-state-badge.is-feedback { color: var(--color-warning); border-color: var(--color-warning-border); }
+.topic-suggestion-feedback {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-warning-bg);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.topic-suggestion-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.topic-suggestion-form .card-actions {
+  margin-top: 0;
+}

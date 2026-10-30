@@ -75,7 +75,8 @@ public class CareerSkillsProfileService {
 		String ownerId = currentUserResolver.currentUserId();
 		for (StudyBlock block : blockRepository.findAllByOwnerIdOrderByUpdatedAtDesc(ownerId)) {
 			for (KnowledgeTopic topic : topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(block.getId())) {
-				if (topic.getTitle().trim().toLowerCase().equals(wanted)) {
+				// Sugestões ainda não validadas não contam como habilidade.
+				if (!topic.isPendingReview() && topic.getTitle().trim().toLowerCase().equals(wanted)) {
 					return Optional.of(topic);
 				}
 			}
@@ -114,6 +115,9 @@ public class CareerSkillsProfileService {
 			List<KnowledgeTopic> topics = topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(block.getId());
 
 			for (KnowledgeTopic topic : topics) {
+				if (topic.isPendingReview()) {
+					continue;
+				}
 				String name = topic.getTitle().trim();
 				if (seenSkills.contains(name.toLowerCase())) {
 					continue;

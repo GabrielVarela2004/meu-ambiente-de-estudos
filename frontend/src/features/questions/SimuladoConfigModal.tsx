@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../api/http'
+import { getTopicReview } from '../../api/topicReview'
 import type { KnowledgeTopic } from '../knowledge/TopicsPanel'
 
 export type QuestionDifficulty = 'EASY' | 'INTERMEDIATE' | 'HARD'
@@ -30,6 +31,7 @@ export function SimuladoConfigModal({
   const [topics, setTopics] = useState<KnowledgeTopic[]>([])
   const [loadingTopics, setLoadingTopics] = useState(false)
   const [extractingTopics, setExtractingTopics] = useState(false)
+  const [pendingSuggestions, setPendingSuggestions] = useState<number | null>(null)
   const [generating, setGenerating] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -70,6 +72,9 @@ export function SimuladoConfigModal({
         method: 'POST',
       })
       setTopics(extracted)
+      // Os tópicos encontrados viram sugestões: só entram aqui depois de validados no Mapeamento de Fontes.
+      const review = await getTopicReview(blockId)
+      setPendingSuggestions(review.summary.total)
     } catch (err) {
       setErrorMessage(
         err instanceof Error && err.message
@@ -206,15 +211,18 @@ export function SimuladoConfigModal({
               <div>
                 <strong>Nenhum tópico mapeado ainda para este bloco.</strong>
                 <p>
-                  {activeSourceCount > 0
-                    ? 'Você pode gerar questões sobre todo o conteúdo do bloco agora ou extrair automaticamente os assuntos e tópicos das fontes.'
-                    : 'Adicione fontes (arquivos, notas ou vídeos do YouTube) ao bloco para mapear tópicos e gerar simulados.'}
+                  {pendingSuggestions !== null && pendingSuggestions > 0
+                    ? `${pendingSuggestions} tópico(s) sugerido(s) aguardam sua validação na aba Mapeamento de Fontes. `
+                      + 'Até lá, as questões cobrem todo o conteúdo do bloco.'
+                    : activeSourceCount > 0
+                      ? 'Você pode gerar questões sobre todo o conteúdo do bloco agora ou extrair automaticamente os assuntos e tópicos das fontes.'
+                      : 'Adicione fontes (arquivos, notas ou vídeos do YouTube) ao bloco para mapear tópicos e gerar simulados.'}
                 </p>
               </div>
-              {activeSourceCount > 0 && (
+              {activeSourceCount > 0 && pendingSuggestions === null && (
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-secondary"
                   onClick={() => void handleExtractTopics()}
                   disabled={extractingTopics || generating}
                 >

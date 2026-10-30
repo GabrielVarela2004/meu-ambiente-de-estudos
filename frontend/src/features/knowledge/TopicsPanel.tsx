@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { request } from '../../api/http'
 import '../../styles/pages/learning-panels.css'
 import { useDeferredEffect } from '../../hooks/useDeferredEffect'
+import { TopicReviewPanel } from './TopicReviewPanel'
 
 export type LearningState = 'NOT_STUDIED' | 'INSUFFICIENT_DATA' | 'LEARNING' | 'NEEDS_REVIEW' | 'CONSISTENT'
 export type KnowledgeTopicOrigin = 'MANUAL' | 'AI_EXTRACTED'
@@ -20,7 +21,7 @@ export type KnowledgeTopic = {
   extractedAt: string | null
   title: string
   description: string | null
-  status: 'ACTIVE' | 'ARCHIVED'
+  status: 'ACTIVE' | 'ARCHIVED' | 'PENDING_REVIEW'
   questionIds: string[]
   learningState: LearningState
   stateReason: string
@@ -62,6 +63,7 @@ export function TopicsPanel({ blockId, questions, evidenceVersion, onTopicsChang
   const [parentTopicId, setParentTopicId] = useState('')
   const [prerequisiteTopicId, setPrerequisiteTopicId] = useState('')
   const [saving, setSaving] = useState(false)
+  const [reviewVersion, setReviewVersion] = useState(0)
 
   const loadTopics = useCallback(async () => {
     setLoading(true)
@@ -83,11 +85,13 @@ export function TopicsPanel({ blockId, questions, evidenceVersion, onTopicsChang
     setExtracting(true)
     setError(null)
     try {
+      // A extração devolve os tópicos oficiais; o que ela encontrou de novo vai para a validação manual.
       const extracted = await request<KnowledgeTopic[]>(`/api/study-blocks/${blockId}/topics/extract`, {
         method: 'POST',
       })
       setTopics(extracted)
       onTopicsChanged?.(extracted)
+      setReviewVersion((version) => version + 1)
     } catch (err) {
       setError(
         err instanceof Error && err.message
@@ -278,13 +282,15 @@ export function TopicsPanel({ blockId, questions, evidenceVersion, onTopicsChang
         <div>
           <h2>Tópicos e mapeamento de assuntos</h2>
           <p className="subtitle">
-            Os assuntos são extraídos automaticamente das fontes reais do bloco e também podem ser validados ou criados manualmente.
+            A IA sugere só tópicos técnicos das fontes, com relevância; você valida antes de virarem oficiais. Tópicos
+            também podem ser criados manualmente.
           </p>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => void extractTopicsFromSources()} disabled={extracting}>
           {extracting ? 'Analisando fontes...' : 'Atualizar mapeamento das fontes'}
         </button>
       </div>
+      <TopicReviewPanel blockId={blockId} reloadKey={reviewVersion + evidenceVersion} onPublished={() => void loadTopics()} />
       <details className="criteria">
         <summary>Como o estado é calculado</summary>
         <ul>
@@ -317,7 +323,9 @@ export function TopicsPanel({ blockId, questions, evidenceVersion, onTopicsChang
       </form>
       {error && <p className="error" role="alert">{error}</p>}
       {loading && topics.length === 0 ? <p className="empty">Carregando tópicos...</p> : topics.length === 0 ? (
-        <p className="empty">Nenhum tópico mapeado neste bloco. Adicione fontes ou clique em "Atualizar mapeamento das fontes".</p>
+        <p className="empty">
+          Nenhum tópico oficial neste bloco. Valide as sugestões acima ou clique em "Atualizar mapeamento das fontes".
+        </p>
       ) : (
         <div className="topic-list">
           {rootTopics.map((topic) => (
