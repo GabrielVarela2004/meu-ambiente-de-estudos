@@ -20,8 +20,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+import br.com.estudos.estudos_backend.ai.AiModelProvider;
+
 @Component
-public class OpenAiTutorProvider implements AiTutorProvider {
+public class OpenAiTutorProvider implements AiTutorProvider, AiModelProvider {
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private final HttpClient httpClient;
@@ -62,6 +64,26 @@ public class OpenAiTutorProvider implements AiTutorProvider {
 	}
 
 	@Override
+	public String id() {
+		return "openai";
+	}
+
+	@Override
+	public String displayName() {
+		return providerName();
+	}
+
+	@Override
+	public String defaultModel() {
+		return properties.getModel();
+	}
+
+	@Override
+	public List<String> suggestedModels() {
+		return List.of(properties.getModel(), "gpt-4o-mini", "gpt-4o", "gpt-4.1-mini").stream().distinct().toList();
+	}
+
+	@Override
 	public boolean isConfigured() {
 		return properties.isConfigured();
 	}
@@ -78,6 +100,13 @@ public class OpenAiTutorProvider implements AiTutorProvider {
 
 	@Override
 	public AiTutorReply generateReply(AiTutorRequest tutorRequest) {
+		AiModelResult result = generate(tutorRequest, properties.getModel());
+		return new AiTutorReply(result.text(), providerName(), result.model());
+	}
+
+	@Override
+	public AiModelResult generate(AiTutorRequest tutorRequest, String requestedModel) {
+		String model = requestedModel == null || requestedModel.isBlank() ? properties.getModel() : requestedModel.trim();
 		if (!properties.isEnabled()) {
 			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
 					"A integração com a OpenAI está desabilitada no ambiente.");
@@ -111,7 +140,7 @@ public class OpenAiTutorProvider implements AiTutorProvider {
 					: null;
 
 			String payload = objectMapper.writeValueAsString(new Payload(
-					properties.getModel(),
+					model,
 					messages.toArray(Message[]::new),
 					maxTokens,
 					responseFormat));
@@ -140,11 +169,14 @@ public class OpenAiTutorProvider implements AiTutorProvider {
 						"O provedor de IA retornou uma resposta vazia.");
 			}
 
-			String resolvedModel = root.path("model").asText(properties.getModel());
+			String resolvedModel = root.path("model").asText(model);
 			if (resolvedModel.isBlank()) {
-				resolvedModel = properties.getModel();
+				resolvedModel = model;
 			}
-			return new AiTutorReply(content, providerName(), resolvedModel);
+			JsonNode usage = root.path("usage");
+			Integer inputTokens = usage.has("prompt_tokens") ? usage.path("prompt_tokens").asInt() : null;
+			Integer outputTokens = usage.has("completion_tokens") ? usage.path("completion_tokens").asInt() : null;
+			return new AiModelResult(content, resolvedModel, inputTokens, outputTokens);
 		} catch (ResponseStatusException exception) {
 			throw exception;
 		} catch (HttpTimeoutException exception) {

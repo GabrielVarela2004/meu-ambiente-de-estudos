@@ -1,0 +1,58 @@
+/* ==========================================================================
+   CONFIGURAÇÕES — PROVEDORES DE IA
+   ========================================================================== */
+
+.ai-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.ai-provider-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+.ai-provider-card .form-field {
+  margin-bottom: 0;
+}
+.ai-provider-card .checkbox-row {
+  margin-bottom: 0;
+}
+.ai-provider-card .form-hint {
+  margin: 0;
+}
+.ai-provider-card code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent-soft-text);
+}
+.ai-provider-card .btn {
+  align-self: flex-start;
+}
+
+.ai-provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--color-text);
+}
+
+.ai-subheading {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text);
+  font-size: var(--text-md);
+}
+.table-responsive + .ai-subheading {
+  margin-top: var(--space-6);
+}
+
+.ai-inline-check {
+  margin-bottom: 0;
+}

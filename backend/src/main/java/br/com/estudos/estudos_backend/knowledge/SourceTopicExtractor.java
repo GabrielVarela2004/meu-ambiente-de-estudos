@@ -18,6 +18,8 @@ import br.com.estudos.estudos_backend.chat.AiTutorProvider;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialProcessingStatus;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
+import br.com.estudos.estudos_backend.ai.AiOperation;
+import br.com.estudos.estudos_backend.ai.AiOperationContext;
 
 @Component
 public class SourceTopicExtractor {
@@ -51,7 +53,8 @@ public class SourceTopicExtractor {
 			return List.of();
 		}
 
-		if (aiTutorProvider != null && aiTutorProvider.isConfigured()) {
+		if (aiTutorProvider != null
+				&& AiOperationContext.call(AiOperation.TOPIC_EXTRACTION, aiTutorProvider::isConfigured)) {
 			try {
 				List<ExtractedTopic> aiExtracted = extractViaAiProvider(block, completedMaterials);
 				if (!aiExtracted.isEmpty()) {
@@ -93,7 +96,9 @@ public class SourceTopicExtractor {
 		}
 		prompt.append("[FIM DAS FONTES]\n");
 
-		AiTutorProvider.AiTutorReply reply = aiTutorProvider.generateReply(SYSTEM_INSTRUCTION, prompt.toString());
+		String promptText = prompt.toString();
+		AiTutorProvider.AiTutorReply reply = AiOperationContext.call(AiOperation.TOPIC_EXTRACTION,
+				() -> aiTutorProvider.generateReply(SYSTEM_INSTRUCTION, promptText));
 		String cleaned = cleanJsonEnvelope(reply.answer());
 		JsonNode root = objectMapper.readTree(cleaned);
 		if (!root.isArray()) {

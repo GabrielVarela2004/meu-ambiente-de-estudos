@@ -18,11 +18,13 @@ de tópicos; preferências e busca manual de vagas.
 - O frontend chama **rotas ou formatos diferentes** dos expostos pelo backend em 11 ações: restaurar bloco, gerar
   simulado, ativar fonte no chat, upload de arquivo, responder e adiar na tela de revisão, enviar resposta de
   exercício prático, "buscar agora", status de vaga, avaliar competências e ativar fonte de vagas. Detalhes na tabela 4.2 da auditoria.
-- O agendamento automático de vagas não roda (falta `@EnableScheduling`).
+- O agendamento automático de vagas está ativo (`app.scheduling.enabled`, padrão `true`).
 - Não há autenticação; o frontend não envia `X-Study-User-Id` (todo uso cai em `default-user`).
 - Upload limitado a **1 MB** (padrão do Spring; nenhum limite configurado).
-- **Fórum** é apenas visual (dados fixos). **Metas** e **sessões** têm backend, mas não têm tela.
-- Padronização visual: a base global (Etapa 1) está pronta; o layout interno de cada página ainda não foi padronizado.
+- **Fórum** está oculto do menu (era apenas visual). **Metas e Sessões** têm tela própria na barra lateral.
+- **IA com vários provedores:** OpenAI, Anthropic (Claude) e Google Gemini. Em Configurações › Provedores de IA escolhe-se o provedor de cada operação (chat, questões, exercícios, tópicos), o fallback, o modelo e o limite diário; o consumo dos últimos 7 dias aparece na mesma tela. As chaves ficam só no `.env` (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
+- Plataforma de **uso individual** (sem login).
+- Padronização visual concluída: tokens em `styles/tokens.css`, componentes em `styles/components.css` e estilos por página em `styles/pages/`.
 
 ### Estrutura do repositório
 
@@ -87,7 +89,7 @@ A integração com a OpenAI segue rigorosamente os princípios de baixo acoplame
 - **Backend**: Java 21 LTS, Spring Boot 4, Spring Web, Spring Data JPA, Bean Validation, Apache PDFBox 3.0.3, Flyway Migration.
 - **Frontend**: React 19, TypeScript, Vite, oxlint, CSS com tokens de design (sem React Router e sem Tailwind).
 - **Banco de Dados**: PostgreSQL 17 (via Docker Compose, bancos `estudos` e `estudos_test`).
-- **Testes Automatizados**: JUnit 5, Mockito, Spring MockMvc (90 testes automatizados, 100% offline, sem custos de API). Os testes cobrem o backend; não há testes de contrato com o frontend.
+- **Testes Automatizados**: JUnit 5, Mockito, Spring MockMvc (108 testes automatizados, 100% offline, sem custos de API). `ContractEndpointsIntegrationTest` cobre as rotas usadas pelo frontend que foram criadas na Etapa A.
 
 ---
 
@@ -171,7 +173,7 @@ A interface abrirá em `http://localhost:5173`, com proxy reverso configurado pa
 
 A suíte de testes foi projetada para ser **100% offline e segura**, simulando o comportamento da OpenAI por meio de mocks sem realizar chamadas pagas à internet.
 
-### Executar todos os testes do backend (90 testes):
+### Executar todos os testes do backend (108 testes):
 
 > Os testes usam o banco `estudos_test` e **apagam as tabelas** dele. Crie-o uma única vez com:
 > `docker exec programa-estudos-ia-postgres psql -U estudos -d postgres -c "CREATE DATABASE estudos_test OWNER estudos;"`

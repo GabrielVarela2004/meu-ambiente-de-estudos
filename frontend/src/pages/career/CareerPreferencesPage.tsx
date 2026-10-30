@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../api/http'
+import '../../styles/pages/career.css'
 
 type PreferencesData = {
   id: string
@@ -89,7 +90,7 @@ export function CareerPreferencesPage({ onSaved }: Props) {
   }
 
   return (
-    <div className="page-wrapper" style={{ maxWidth: '900px' }}>
+    <div className="page-wrapper page-narrow">
       <div className="page-header-flex">
         <div>
           <h1 className="page-main-title">Preferências do Radar de Vagas</h1>
@@ -106,14 +107,14 @@ export function CareerPreferencesPage({ onSaved }: Props) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <form onSubmit={handleSubmit} className="career-form-stack">
         {/* Bloco 1: Cargo e Tecnologias */}
         <div className="card">
-          <h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+          <h3 className="career-card-title">
             1. Cargos Alvo e Tecnologias
           </h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div className="career-field-stack">
             <label className="form-label-block">
               <span className="form-label-text">Cargos Desejados (separados por vírgula)</span>
               <input
@@ -138,7 +139,7 @@ export function CareerPreferencesPage({ onSaved }: Props) {
               />
             </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-grid-2col">
               <label className="form-label-block">
                 <span className="form-label-text">Palavras-chave Obrigatórias</span>
                 <input
@@ -166,11 +167,11 @@ export function CareerPreferencesPage({ onSaved }: Props) {
 
         {/* Bloco 2: Localidade, Modalidade e Salário */}
         <div className="card">
-          <h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+          <h3 className="career-card-title">
             2. Modalidade, Localidade e Nível
           </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="form-grid-2col">
             <label className="form-label-block">
               <span className="form-label-text">Modalidade de Trabalho</span>
               <select
@@ -227,24 +228,23 @@ export function CareerPreferencesPage({ onSaved }: Props) {
 
         {/* Bloco 3: Configurações do Agente Autônomo */}
         <div className="card">
-          <h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+          <h3 className="career-card-title">
             3. Automação do Agente de Varredura
           </h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+          <div className="career-field-stack">
+            <label className="checkbox-row">
               <input
                 type="checkbox"
                 checked={preferences.agentEnabled}
                 onChange={(e) => setPreferences({ ...preferences, agentEnabled: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--primary-green)' }}
               />
-              <span style={{ fontSize: '0.95rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+              <span className="checkbox-text font-semibold">
                 Ativar agente autônomo para varreduras agendadas em segundo plano
               </span>
             </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+            <div className="career-grid-3col">
               <label className="form-label-block">
                 <span className="form-label-text">Dias da Semana</span>
                 <input
@@ -283,7 +283,7 @@ export function CareerPreferencesPage({ onSaved }: Props) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+        <div className="form-actions career-form-actions">
           <button type="submit" className="btn-primary" disabled={saving}>
             {saving ? 'Salvando preferências...' : 'Salvar Preferências'}
           </button>

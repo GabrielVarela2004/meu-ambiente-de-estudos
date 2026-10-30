@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { request } from '../../api/http'
+import '../../styles/pages/career.css'
 import { CodeIcon, FileTextIcon, LayersIcon, SparklesIcon } from '../../components/icons'
 
 type CompetencyItem = {
@@ -32,6 +33,7 @@ export function CareerSkillsPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const loadProfile = async () => {
     setLoading(true)
@@ -52,14 +54,18 @@ export function CareerSkillsPage() {
 
   const handleGenerateAssessment = async (skillName: string) => {
     setGenerating(true)
+    setError(null)
+    setNotice(null)
     try {
-      await request('/api/career/skills/assess', {
+      const res = await request<{ studyBlockTitle: string; exerciseTitle: string }>('/api/career/skills/assess', {
         method: 'POST',
         body: JSON.stringify({ skillName }),
       })
-      void loadProfile()
-    } catch {
-      alert('Erro ao gerar desafio prático de avaliação.')
+      setNotice(
+        `Desafio "${res.exerciseTitle}" criado no bloco "${res.studyBlockTitle}". Resolva-o em Exercícios Práticos para validar a competência.`,
+      )
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : 'Erro ao gerar desafio prático de avaliação.')
     } finally {
       setGenerating(false)
     }
@@ -91,6 +97,11 @@ export function CareerSkillsPage() {
       </div>
 
       {error && <div className="alert-error-banner mb-6">{error}</div>}
+      {notice && (
+        <div className="feedback-banner success mb-6" role="status">
+          {notice}
+        </div>
+      )}
 
       {/* Grid de KPIs */}
       <div className="stats-metric-grid mb-6">

@@ -3,6 +3,7 @@ import { request } from '../api/http'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, SparklesIcon } from '../components/icons'
 import { SimuladoConfigModal } from '../features/questions/SimuladoConfigModal'
 import type { StudyBlock } from './StudyBlocksPage'
+import '../styles/pages/exercises-questions.css'
 
 export type QuestionDifficulty = 'EASY' | 'INTERMEDIATE' | 'HARD'
 export type QuestionFormat = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'DISCURSIVE'

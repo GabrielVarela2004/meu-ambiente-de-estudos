@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { request } from '../../api/http'
+import '../../styles/pages/career.css'
 import { CheckCircleIcon, ClockIcon, SparklesIcon } from '../../components/icons'
 
 type AgentExecution = {
@@ -170,7 +171,7 @@ export function CareerAgentSchedulePage() {
       </div>
 
       {/* Card Informativo de Recuperação de Desligamento */}
-      <div className="card p-6 mb-6" style={{ background: '#121e2d', border: '1px solid #283e58' }}>
+      <div className="card p-6 mb-6 career-info-card">
         <h3 className="text-emerald-400 font-bold mb-2">
           🔄 Mecanismo de Recuperação Pós-Desligamento (Offline Catch-Up)
         </h3>

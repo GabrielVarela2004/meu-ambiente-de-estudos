@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { MessageSquareIcon, PlusCircleIcon, SearchIcon } from '../components/icons'
+import '../styles/pages/settings-forum.css'
 
 type ForumTopic = {
   id: string

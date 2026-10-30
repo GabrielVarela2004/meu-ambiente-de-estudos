@@ -21,6 +21,8 @@ import br.com.estudos.estudos_backend.material.StudyMaterialStatus;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockRepository;
+import br.com.estudos.estudos_backend.ai.AiOperation;
+import br.com.estudos.estudos_backend.ai.AiOperationContext;
 
 @Service
 public class OpenAiChatService {
@@ -136,7 +138,8 @@ public class OpenAiChatService {
 				false,
 				null);
 
-		AiTutorProvider.AiTutorReply reply = aiTutorProvider.generateReply(tutorRequest);
+		AiTutorProvider.AiTutorReply reply = AiOperationContext.call(AiOperation.CHAT,
+				() -> aiTutorProvider.generateReply(tutorRequest));
 
 		String referenced = context.referencedTitles().isEmpty()
 				? null

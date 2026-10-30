@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { request } from '../api/http'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, PlusCircleIcon, SparklesIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
+import '../styles/pages/add-content.css'
 
 type Props = {
   blocks: StudyBlock[]
@@ -71,7 +72,6 @@ export function AddContentPage({
   // Modo YouTube
   const [ytUrl, setYtUrl] = useState('')
   const [ytTitle, setYtTitle] = useState('')
-  const [ytLanguage, setYtLanguage] = useState('pt')
   const [ytEnabledForChat, setYtEnabledForChat] = useState(true)
 
   const [submitting, setSubmitting] = useState(false)
@@ -457,17 +457,10 @@ export function AddContentPage({
             </div>
 
             <div className="form-field-group">
-              <label htmlFor="yt-lang">Idioma Preferencial da Transcrição</label>
-              <select
-                id="yt-lang"
-                className="form-select"
-                value={ytLanguage}
-                onChange={(e) => setYtLanguage(e.target.value)}
-              >
-                <option value="pt">Português (pt)</option>
-                <option value="en">Inglês (en)</option>
-                <option value="es">Espanhol (es)</option>
-              </select>
+              <span className="form-label-text">Idioma da Transcrição</span>
+              <p className="form-hint">
+                Escolhido automaticamente entre as legendas do vídeo: português, depois inglês e espanhol.
+              </p>
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -60,6 +61,27 @@ public class CareerSkillsProfileService {
 			int totalSkillsCount,
 			int demonstratedSkillsCount
 	) {}
+
+	/**
+	 * Localiza o tópico que representa a competência (mesma ordem usada no perfil:
+	 * blocos mais recentes primeiro, tópicos por data de criação).
+	 */
+	@Transactional(readOnly = true)
+	public Optional<KnowledgeTopic> findTopicForSkill(String skillName) {
+		if (skillName == null || skillName.isBlank()) {
+			return Optional.empty();
+		}
+		String wanted = skillName.trim().toLowerCase();
+		String ownerId = currentUserResolver.currentUserId();
+		for (StudyBlock block : blockRepository.findAllByOwnerIdOrderByUpdatedAtDesc(ownerId)) {
+			for (KnowledgeTopic topic : topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(block.getId())) {
+				if (topic.getTitle().trim().toLowerCase().equals(wanted)) {
+					return Optional.of(topic);
+				}
+			}
+		}
+		return Optional.empty();
+	}
 
 	@Transactional(readOnly = true)
 	public UserCareerSkillsProfile getUserSkillsProfile() {

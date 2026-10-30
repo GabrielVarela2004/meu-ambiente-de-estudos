@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../api/http'
+import '../../styles/pages/learning-panels.css'
 
 export type LearningState = 'NOT_STUDIED' | 'INSUFFICIENT_DATA' | 'LEARNING' | 'NEEDS_REVIEW' | 'CONSISTENT'
 export type KnowledgeTopicOrigin = 'MANUAL' | 'AI_EXTRACTED'

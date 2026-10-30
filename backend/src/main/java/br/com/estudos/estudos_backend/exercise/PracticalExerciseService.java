@@ -24,6 +24,8 @@ import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockRepository;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockStatus;
+import br.com.estudos.estudos_backend.ai.AiOperation;
+import br.com.estudos.estudos_backend.ai.AiOperationContext;
 
 @Service
 public class PracticalExerciseService {
@@ -176,11 +178,13 @@ public class PracticalExerciseService {
 		PracticalExerciseType resolvedType = exerciseType == null ? PracticalExerciseType.PROBLEM_SOLVING : exerciseType;
 		String defaultExcerpt = extractDefaultExcerpt(targetMaterial);
 
-		if (aiTutorProvider != null && aiTutorProvider.isConfigured()) {
+		if (aiTutorProvider != null
+				&& AiOperationContext.call(AiOperation.EXERCISE_GENERATION, aiTutorProvider::isConfigured)) {
 			try {
 				String userPrompt = buildPracticalPrompt(targetMaterial, resolvedDifficulty, resolvedType);
-				AiTutorProvider.AiTutorReply reply = aiTutorProvider.generateReply(
-						AiTutorProvider.AiTutorRequest.ofJson(SYSTEM_PRACTICAL_INSTRUCTION, userPrompt));
+				AiTutorProvider.AiTutorReply reply = AiOperationContext.call(AiOperation.EXERCISE_GENERATION,
+						() -> aiTutorProvider.generateReply(
+								AiTutorProvider.AiTutorRequest.ofJson(SYSTEM_PRACTICAL_INSTRUCTION, userPrompt)));
 				if (reply != null && reply.answer() != null && !reply.answer().isBlank()) {
 					JsonNode node = objectMapper.readTree(cleanJsonEnvelope(reply.answer()));
 					String title = node.path("title").asText(targetMaterial.getTitle() + " - Exercício Prático").trim();

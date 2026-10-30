@@ -52,6 +52,11 @@ public class StudyBlockController {
 				service.update(id, request.title(), request.description(), request.learningObjective()));
 	}
 
+	@PostMapping("/{id}/unarchive")
+	public StudyBlockResponse unarchive(@PathVariable UUID id) {
+		return toResponse(service.unarchive(id));
+	}
+
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Void> archive(@PathVariable UUID id) {
 		service.archive(id);

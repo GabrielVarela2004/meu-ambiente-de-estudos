@@ -50,7 +50,7 @@ APIs externas: OpenAI (Chat Completions) · YouTube (transcrição) · Remotive 
 | Backend | Java 21, Spring Boot 4.1.2 (WebMVC, Data JPA, Validation, Actuator), Flyway, PDFBox 3.0.3, `HttpClient` nativo |
 | Frontend | React 19, TypeScript 7, Vite 8, oxlint, CSS próprio com tokens (sem Tailwind e sem React Router) |
 | Banco | PostgreSQL 17 via Docker Compose |
-| Testes | JUnit 5, Mockito, MockMvc — **90 testes, 0 falhas** (executados em 29/10/2026) |
+| Testes | JUnit 5, Mockito, MockMvc — **108 testes, 0 falhas** (executados em 29/10/2026) |
 
 ## 4. Estado das funcionalidades
 
@@ -70,20 +70,20 @@ Verificado lendo os controllers e testando contra o backend em execução.
 
 | # | Tela / ação | Frontend chamava | Backend expõe | Situação |
 |---|---|---|---|---|
-| 1 | Blocos › **Restaurar** bloco arquivado | `POST /study-blocks/{id}/unarchive` | não existe (não há desarquivamento) | ⏳ Requer backend novo |
-| 2 | Exercícios Teóricos › **Gerar simulado** | `POST …/questions/generate-simulado` | só `POST …/questions/generate` (1 questão); `generateSimulado()` existe no serviço, mas não está exposto | ⏳ Requer backend novo |
+| 1 | Blocos › **Restaurar** bloco arquivado | `POST /study-blocks/{id}/unarchive` | não existia → criado `POST /study-blocks/{id}/unarchive` | ✅ Corrigido (2026-10-29) |
+| 2 | Exercícios Teóricos › **Gerar simulado** | `POST …/questions/generate-simulado` | só `POST …/questions/generate` (1 questão); `generateSimulado()` agora exposto em `POST …/questions/generate-simulado` (1–10 questões) | ✅ Corrigido (2026-10-29) |
 | 3 | Área do bloco › **Ativar/desativar fonte no chat** | `PATCH …/materials/{id}/chat-toggle` | `PATCH …/materials/{id}/toggle-chat` | ✅ Corrigido (2026-10-29) |
 | 4 | Adicionar Conteúdo › **Upload de arquivo** | `POST …/materials/upload` | `POST …/materials/import` (multipart) | ✅ Corrigido (2026-10-29) |
 | 5 | Revisar Dificuldades › **Responder** questão | `POST …/questions/{id}/answer`, corpo `textAnswer` | `POST …/questions/{id}/answers`, corpo `discursiveAnswer` | ✅ Corrigido (2026-10-29) |
 | 6 | Revisar Dificuldades › **Adiar** revisão | `PATCH /study-blocks/{b}/questions/{q}/reschedule` | `POST /api/reviews/questions/{q}/reschedule?days=N` | ✅ Corrigido (2026-10-29) |
 | 7 | Exercícios Práticos › **Enviar resposta** | corpo `{ codeAnswer, selfRating }` | exige `{ answer, selfRating }` (`@NotBlank answer` → 400) | ✅ Corrigido (2026-10-29) |
 | 8 | Feed de Vagas › **Buscar agora** | `POST /career/agent/search-now` | `POST /career/agent/run` | ✅ Corrigido (2026-10-29) |
-| 9 | Feed de Vagas › **Mudar status** da vaga | `PATCH /career/jobs/{id}/status` | não existe; a entidade `CareerJob` não tem campo de status | ⏳ Requer backend novo |
-| 10 | Competências › **Avaliar** | `POST /career/skills/assess` | não existe | ⏳ Requer backend novo |
+| 9 | Feed de Vagas › **Mudar status** da vaga | `PATCH /career/jobs/{id}/status` | criado `PATCH /career/jobs/{id}/status` + coluna `application_status` (V22) | ✅ Corrigido (2026-10-29) |
+| 10 | Competências › **Avaliar** | `POST /career/skills/assess` | criado: gera exercício prático para o tópico da competência | ✅ Corrigido (2026-10-29) |
 | 11 | Fontes de Vagas › **Ativar/desativar** | `POST /career/sources/{id}/toggle` | `PATCH /career/sources/{id}/toggle` | ✅ Corrigido (2026-10-29) |
 | 12 | Adicionar Conteúdo › **YouTube** | corpo `{ youtubeUrl, … }` | exige `{ url }` (`@NotBlank` → 400) | ✅ Corrigido (2026-10-29) |
 
-**Atualização 2026-10-29 (Etapa A):** os itens 3–8, 11 e 12 foram corrigidos só no frontend e validados contra o backend em execução. Título personalizado e "incluir no chat" agora são aplicados após a criação (PUT e toggle-chat), pois as rotas de criação não recebem esses campos. O seletor de idioma do YouTube continua sem efeito (o backend não recebe idioma). Itens 1, 2, 9 e 10 dependem de backend novo.
+**Atualização 2026-10-29 (Etapa A):** os itens 3–8, 11 e 12 foram corrigidos só no frontend e validados contra o backend em execução. Título personalizado e "incluir no chat" agora são aplicados após a criação (PUT e toggle-chat), pois as rotas de criação não recebem esses campos. O seletor de idioma do YouTube (sem efeito) foi trocado por uma explicação: o backend escolhe a legenda (pt → en → es). Itens 1, 2, 9 e 10 ganharam rotas novas no backend, cobertas por `ContractEndpointsIntegrationTest`. Também foram alinhados `matchScore`/`postedAt` → `compatibilityPercent`/`publishedAt` e `?limit` → `?size` no Feed de Vagas.
 
 Consequência (antes da correção): a **revisão espaçada não registra respostas pela tela de revisão**, e **exercícios práticos não
 registram tentativas**. Por isso o histórico e o desempenho só são alimentados pela tela de Questões Teóricas.
@@ -102,7 +102,7 @@ registram tentativas**. Por isso o histórico e o desempenho só são alimentado
   por dificuldade no painel, tempo de realização nem análise de desempenho por IA.
 - **Carreira — compatibilidade:** pontuação **determinística por palavras-chave** (`CareerJobCompatibilityService`) contra um
   perfil derivado dos blocos e tópicos. Não há perfil profissional (formação, experiências, projetos) nem análise por IA.
-- **Carreira — agendamento automático:** `CareerAgentSchedulerService` usa `@Scheduled`, mas **não existe `@EnableScheduling`**
+- **Carreira — agendamento automático:** ✅ ativado em 2026-10-29 (`config/SchedulingConfig` com `@EnableScheduling`, desligável por `app.scheduling.enabled`; teste `SchedulingConfigTest`). Antes: `CareerAgentSchedulerService` usava `@Scheduled`, mas **não existia `@EnableScheduling`**
   no projeto, então a execução agendada nunca acontece. Só a execução manual funciona.
 - **Configurações:** o "ID de usuário" é salvo no `localStorage`, mas **nunca é enviado** ao backend (o cabeçalho
   `X-Study-User-Id` não é usado pelo `http.ts`). A "Meta diária" não é persistida.
@@ -112,7 +112,7 @@ registram tentativas**. Por isso o histórico e o desempenho só são alimentado
 - **Sugestões do chat universal:** textos fixos no frontend (as do chat por bloco vêm do backend).
 
 ### 4.5 Ausentes ⚪
-- **Metas** e **sessões de estudo**: o backend existe (`/goals`, `/sessions`), mas não há nenhuma tela.
+- ~~**Metas** e **sessões de estudo** sem tela~~ ✅ tela "Metas e Sessões" criada em 2026-10-29 (`pages/GoalsSessionsPage.tsx`).
 - Perfil profissional; estados de candidatura de vagas; recomendações profissionais por IA; ligação "vagas → criar blocos de estudo".
 - Autenticação e controle de acesso reais.
 - Outros provedores de IA (Anthropic, Gemini).
@@ -132,32 +132,32 @@ registram tentativas**. Por isso o histórico e o desempenho só são alimentado
 | Desempenho e histórico | Backend sólido e com snapshots imutáveis das tentativas. Alimentado na prática só pelas Questões Teóricas (veja 4.2, itens 5 e 7). |
 | Revisão inteligente | Algoritmo por dificuldade e sequência de acertos (EASY 4/9/20 dias; INTERMEDIATE 3/6/12; HARD 1/2/4; erro reinicia) testado no backend. **A tela de revisão não consegue responder nem adiar.** |
 | Vagas | Busca real (Remotive e Arbeitnow) e compatibilidade determinística. Feed corrigido nesta sessão. Status, avaliação, "buscar agora" e alternância de fontes estão quebrados. Agendamento inativo. |
-| Padronização visual | Etapa 1 concluída: tokens, design system, Sidebar, modais, drawer do Tutor e mobile. **O layout interno das páginas ainda não foi padronizado.** |
+| Padronização visual | Etapas 1 e 2 concluídas: tokens, design system e layout interno de todas as páginas (`styles/pages/*.css`), verificados no navegador em desktop e mobile. |
 
 ## 7. Problemas encontrados (prioridade)
 1. 🔴 **Críticos — contratos quebrados** (tabela 4.2): afetam revisão, exercícios, upload de arquivos, simulado e carreira.
 2. 🔴 **Corrigido nesta sessão:** o Feed de Vagas derrubava a aplicação inteira (o backend retorna `Page` `{content: []}` e o frontend esperava uma lista).
-3. 🟠 **Agendamento de vagas inativo** (falta `@EnableScheduling`).
+3. ✅ ~~**Agendamento de vagas inativo**~~ — corrigido em 2026-10-29.
 4. 🟠 **Isolamento por usuário só no papel:** sem autenticação e sem envio do cabeçalho; qualquer cliente pode se passar por outro usuário.
 5. 🟡 **Documentação divergente:** o `PROJECT_STATUS.md` afirmava "100% concluído", e o README citava React Router, V1–V20 e 85 testes.
-6. 🟡 **Código morto:** `AddSourceModal` (componente), `career.css` (nunca importado).
+6. 🟡 **Código morto:** `AddSourceModal` (componente). O `career.css` antigo foi removido em 2026-10-29.
 7. 🟡 **Avisos de lint:** 14 avisos `set-state-in-effect` (sem erros).
-8. 🟠 **Limite de upload inconsistente:** não há `spring.servlet.multipart.max-file-size` configurado, então vale o
+8. ✅ **Limite de upload** agora configurado em 20 MB (`UPLOAD_MAX_FILE_SIZE`). Situação anterior: não há `spring.servlet.multipart.max-file-size` configurado, então vale o
    padrão do Spring (**1 MB por arquivo**). O `AddSourceModal` diz "15 MB" e o README antigo dizia "5 MB para PDF/DOCX";
    nenhum dos dois valores existe no código. PDFs comuns acima de 1 MB serão recusados.
 
 ## 8. Plano recomendado
 Cada etapa deve ser pequena e validada (build, lint, testes do backend e verificação no navegador).
 
-1. **Etapa A — Corrigir contratos quebrados** (sem mudar regras de negócio): ajustar o frontend às rotas existentes
+1. ✅ **Etapa A — Corrigir contratos quebrados** (concluída em 2026-10-29) (sem mudar regras de negócio): ajustar o frontend às rotas existentes
    (itens 3, 4, 5, 6, 7, 8 e 11) e decidir com o usuário os que exigem backend novo (1 desarquivar, 2 expor o simulado,
    9 status de vaga, 10 avaliação de competências). Adicionar testes de contrato.
-2. **Etapa B — Ativar o agendamento** (`@EnableScheduling`) com teste.
-3. **Etapa C — Padronização visual por página** (Etapas 2+ do plano visual), usando `styles/components.css`.
-4. **Etapa D — Telas de Metas e Sessões** sobre o backend existente.
-5. **Etapa E — Identidade do usuário:** decidir entre autenticação real ou, no mínimo, enviar o cabeçalho de forma consistente. **Decisão arquitetural: requer autorização.**
-6. **Etapa F — IA multi-provedor:** registro de provedores, seleção por operação e controle de consumo. **Requer autorização.**
+2. ✅ **Etapa B — Ativar o agendamento** (concluída) (`@EnableScheduling`) com teste.
+3. ✅ **Etapa C — Padronização visual por página** (concluída) (Etapas 2+ do plano visual), usando `styles/components.css`.
+4. ✅ **Etapa D — Telas de Metas e Sessões** (concluída) sobre o backend existente.
+5. ✅ **Etapa E — decidido em 2026-10-29: manter uso individual, sem login.** A tela de Configurações deixou de oferecer a troca de usuário (que nunca era enviada ao backend). Texto original — **Identidade do usuário:** decidir entre autenticação real ou, no mínimo, enviar o cabeçalho de forma consistente. **Decisão arquitetural: requer autorização.**
+6. ✅ **Etapa F — concluída em 2026-10-29:** OpenAI, Anthropic (SDK oficial `anthropic-java`) e Google Gemini atrás de `AiProviderRouter`; provedor por operação com fallback, modelo e limite diário por provedor, registro de consumo (`ai_usage_records`, V23) e tela em Configurações › Provedores de IA. Texto original — **IA multi-provedor:** registro de provedores, seleção por operação e controle de consumo. **Requer autorização.**
 7. **Etapa G — Carreira:** perfil profissional, estados de candidatura, análise por IA e ligação vagas → blocos.
 8. **Etapa H — Materiais:** PPTX, páginas web e resumos.
 9. **Etapa I — Análises de desempenho por IA** (semanal/mensal, por dificuldade, recomendações sobre dados reais).
-10. **Etapa J — Fórum:** decidir entre implementar persistência ou remover/ocultar a tela. **Requer autorização.**
+10. ✅ **Etapa J — decidido em 2026-10-29: Fórum oculto do menu** até existir persistência real (`ForumPage.tsx` mantido no código). Texto original — **Fórum:** decidir entre implementar persistência ou remover/ocultar a tela. **Requer autorização.**

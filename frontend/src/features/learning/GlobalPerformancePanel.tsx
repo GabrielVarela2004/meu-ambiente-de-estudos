@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../../api/http'
+import '../../styles/pages/learning-panels.css'
 
 type OverallPerformanceSummary = {
   totalAttempts: number

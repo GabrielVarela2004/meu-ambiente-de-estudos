@@ -13,7 +13,7 @@ import { AddContentPage } from './pages/AddContentPage'
 import { PracticalExercisesPage } from './pages/PracticalExercisesPage'
 import { TheoreticalQuestionsPage } from './pages/TheoreticalQuestionsPage'
 import { BlockWorkspacePage } from './pages/BlockWorkspacePage'
-import { ForumPage } from './pages/ForumPage'
+import { GoalsSessionsPage } from './pages/GoalsSessionsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { CareerJobFeedPage } from './pages/career/CareerJobFeedPage'
 import { CareerPreferencesPage } from './pages/career/CareerPreferencesPage'
@@ -58,12 +58,12 @@ const pageTitles: Record<PageId, string> = {
   'theoretical-block': 'Exercícios Teóricos',
   'theoretical-global': 'Exercícios Teóricos',
   'source-mapping': 'Mapeamento de Fontes',
+  'goals-sessions': 'Metas e Sessões',
   'career-job-feed': 'Feed de Vagas',
   'career-preferences': 'Filtros de Busca',
   'career-skills': 'Minhas Competências',
   'career-sources': 'Fontes de Vagas',
   'career-agent-schedule': 'Agendamento do Agente',
-  forum: 'Fórum',
   settings: 'Configurações',
 }
 
@@ -117,9 +117,11 @@ function App() {
     try {
       const data = await request<StudyBlock[]>('/api/study-blocks?includeArchived=true')
       setBlocks(data)
-      if (data.length > 0 && !selectedBlockId) {
-        setSelectedBlockId(data[0].id)
-      }
+      // Mantém a seleção apenas se o bloco continuar ativo; senão, usa o primeiro bloco ativo.
+      const activeBlocks = data.filter((b) => b.status === 'ACTIVE')
+      setSelectedBlockId((current) =>
+        current && activeBlocks.some((b) => b.id === current) ? current : (activeBlocks[0]?.id ?? null),
+      )
       for (const b of data) {
         void loadBlockCounts(b.id)
       }
@@ -129,7 +131,7 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }, [loadBlockCounts, loadGlobalReviews, selectedBlockId])
+  }, [loadBlockCounts, loadGlobalReviews])
 
   useEffect(() => {
     void loadBlocks()
@@ -239,7 +241,7 @@ function App() {
             setIsSidebarCollapsed((prev) => !prev)
           }
         }}
-        blocks={blocks.map((b) => ({
+        blocks={blocks.filter((b) => b.status === 'ACTIVE').map((b) => ({
           id: b.id,
           title: b.title,
           sourceCount: materialsCountByBlock[b.id] ?? 0,
@@ -442,6 +444,14 @@ function App() {
               </div>
             )}
 
+            {currentPage === 'goals-sessions' && (
+              <GoalsSessionsPage
+                blocks={blocks}
+                selectedBlockId={selectedBlockId}
+                onSelectBlock={(id) => setSelectedBlockId(id)}
+              />
+            )}
+
             {/* Módulo Carreira */}
             {currentPage === 'career-job-feed' && (
               <CareerJobFeedPage onNavigateToPreferences={() => setCurrentPage('career-preferences')} />
@@ -451,8 +461,7 @@ function App() {
             {currentPage === 'career-sources' && <CareerSourcesPage />}
             {currentPage === 'career-agent-schedule' && <CareerAgentSchedulePage />}
 
-            {currentPage === 'forum' && <ForumPage />}
-            {currentPage === 'settings' && <SettingsPage />}
+            {currentPage === 'settings' && <SettingsPage onNavigateToGoals={() => setCurrentPage('goals-sessions')} />}
           </>
         )}
       </main>

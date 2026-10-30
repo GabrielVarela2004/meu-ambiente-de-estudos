@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { request } from '../../api/http'
+import '../../styles/pages/learning-panels.css'
 
 export type QuestionDifficulty = 'EASY' | 'INTERMEDIATE' | 'HARD'
 export type QuestionFormat = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'DISCURSIVE'
@@ -205,7 +206,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
   })
 
   if (loading && !summary) {
-    return <p className="empty">Carregando painel de revisão espaçada...</p>
+    return <p className="loading-state">Carregando painel de revisão espaçada...</p>
   }
 
   return (
@@ -218,7 +219,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
             acertos consistentes expandem o intervalo e erros reiniciam a sequência para garantir consolidação na memória.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="page-actions-group">
           {!batteryMode && questions.length > 0 && (
             <button type="button" className="primary" onClick={startBattery}>
               Iniciar Bateria de Revisão ({questions.length})
@@ -230,7 +231,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
         </div>
       </div>
 
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <div className="alert-error-banner mb-4" role="alert">{error}</div>}
 
       {/* Retention KPIs Cards */}
       {summary && (
@@ -279,8 +280,8 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                     <span>
                       Questão {currentIndex + 1} de {questions.length} · Bloco: <strong>{currentQ.studyBlockTitle}</strong>
                     </span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <span className={`badge difficulty-${currentQ.difficulty.toLowerCase()}`}>
+                    <div className="tags-row">
+                      <span className={`difficulty-badge ${currentQ.difficulty.toLowerCase()}`}>
                         {difficultyLabels[currentQ.difficulty]}
                       </span>
                       <span className={retentionLabels[retention].className}>
@@ -298,6 +299,8 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                   {currentQ.format === 'DISCURSIVE' ? (
                     <div className="discursive-battery-box">
                       <textarea
+                        className="form-textarea"
+                        aria-label="Sua resposta"
                         maxLength={10000}
                         rows={4}
                         placeholder="Escreva sua resposta para avaliação..."
@@ -338,7 +341,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                       <h4>{currentResult.correct ? '✔ Resposta Correta!' : '✖ Resposta Incorreta'}</h4>
                       <p>{currentResult.explanation}</p>
                       {feedbackMessage && <p className="streak-feedback">{feedbackMessage}</p>}
-                      <div style={{ marginTop: '12px' }}>
+                      <div className="mt-3">
                         <button type="button" className="primary" onClick={handleNextInBattery}>
                           {currentIndex < questions.length - 1 ? 'Próxima Questão →' : 'Finalizar Bateria'}
                         </button>
@@ -408,10 +411,11 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
       ) : (
         /* LIST / TABLE MODE */
         <div className="reviews-list-mode">
-          <div className="filters-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="reviews-filter-row">
+            <label className="reviews-filter-label">
               Filtrar por dificuldade:
               <select
+                className="form-select form-select-sm"
                 value={difficultyFilter}
                 onChange={(e) => setDifficultyFilter(e.target.value as 'ALL' | QuestionDifficulty)}
               >
@@ -421,7 +425,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                 <option value="EASY">Fáceis</option>
               </select>
             </label>
-            <span style={{ fontSize: '0.9rem', color: '#64748b' }}>
+            <span className="text-sm text-muted">
               Exibindo {filteredQuestions.length} de {questions.length} questão(ões)
             </span>
           </div>
@@ -438,29 +442,31 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                   <article className="card question-card" key={q.id}>
                     <div className="block-card-header">
                       <div>
-                        <h3 style={{ margin: '0 0 6px 0' }}>{q.prompt}</h3>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <h3 className="review-question-prompt">{q.prompt}</h3>
+                        <div className="tags-row">
                           <span className="badge">{q.studyBlockTitle}</span>
-                          <span className={`badge difficulty-${q.difficulty.toLowerCase()}`}>
+                          <span className={`difficulty-badge ${q.difficulty.toLowerCase()}`}>
                             {difficultyLabels[q.difficulty]}
                           </span>
                           <span className={retentionLabels[retention].className}>
                             {retentionLabels[retention].text}
                           </span>
-                          <small style={{ color: '#64748b' }}>
+                          <small className="text-xs text-muted">
                             Streak atual: {q.correctStreak} | Intervalo: {q.reviewIntervalDays}d
                           </small>
                         </div>
                       </div>
                     </div>
 
-                    <p className="review-detail" style={{ fontSize: '0.85rem', color: '#475569', margin: '8px 0' }}>
+                    <p className="review-detail">
                       <strong>Motivo da recomendação:</strong> {q.recommendationReason}
                     </p>
 
                     {q.format === 'DISCURSIVE' ? (
-                      <div className="discursive-answer-box" style={{ marginTop: '8px' }}>
+                      <div className="discursive-answer-box">
                         <textarea
+                          className="form-textarea"
+                          aria-label="Sua resposta discursiva"
                           maxLength={10000}
                           value={discursiveListAnswers[q.id] ?? ''}
                           onChange={(e) =>
@@ -478,7 +484,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                         </button>
                       </div>
                     ) : (
-                      <div className="answer-options" style={{ marginTop: '8px' }}>
+                      <div className="answer-options">
                         {q.options.map((opt) => (
                           <button
                             type="button"
@@ -493,12 +499,12 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                     )}
 
                     {res && (
-                      <p className={res.correct ? 'answer-correct' : 'answer-wrong'} style={{ marginTop: '8px' }}>
+                      <p className={res.correct ? 'answer-correct' : 'answer-wrong'}>
                         {res.correct ? '✔ Resposta correta!' : '✖ Resposta incorreta.'} {res.explanation}
                       </p>
                     )}
 
-                    <div className="card-actions" style={{ marginTop: '12px' }}>
+                    <div className="card-actions">
                       <button
                         type="button"
                         className="secondary"

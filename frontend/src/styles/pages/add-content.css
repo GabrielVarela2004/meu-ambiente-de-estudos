@@ -1,0 +1,36 @@
+/* ==========================================================================
+   PÁGINA — ADICIONAR CONTEÚDO
+   ========================================================================== */
+
+.source-form-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.source-form-card .form-field-group {
+  margin-bottom: 0;
+}
+.source-form-card .flex-between {
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.source-form-card .flex-between label {
+  margin: 0;
+}
+
+.char-word-pills {
+  display: flex;
+  gap: var(--space-2);
+}
+.char-word-pills span {
+  padding: 2px var(--space-2);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

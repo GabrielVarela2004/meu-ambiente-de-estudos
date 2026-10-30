@@ -10,8 +10,8 @@ import {
   FolderIcon,
   LayersIcon,
   LogoIcon,
-  MessageSquareIcon,
   NetworkIcon,
+  ClockIcon,
   PlusCircleIcon,
   SettingsIcon,
   TargetIcon,
@@ -27,12 +27,12 @@ export type PageId =
   | 'theoretical-block'
   | 'theoretical-global'
   | 'source-mapping'
+  | 'goals-sessions'
   | 'career-job-feed'
   | 'career-preferences'
   | 'career-skills'
   | 'career-sources'
   | 'career-agent-schedule'
-  | 'forum'
   | 'settings'
 
 export type BlockOption = {
@@ -322,6 +322,17 @@ export function Sidebar({
           {!isCollapsed && <span className="nav-item-text">Mapeamento de Fontes</span>}
         </button>
 
+        {/* Metas e Sessões de estudo (por bloco) */}
+        <button
+          type="button"
+          className={`nav-item ${currentPage === 'goals-sessions' ? 'active' : ''}`}
+          onClick={() => onSelectPage('goals-sessions')}
+          title={isCollapsed ? 'Metas e Sessões' : undefined}
+        >
+          <ClockIcon className="nav-item-icon" />
+          {!isCollapsed && <span className="nav-item-text">Metas e Sessões</span>}
+        </button>
+
         {/* Item 8: Módulo Carreira (Acordeão) */}
         <div className="accordion-group">
           <button
@@ -391,20 +402,10 @@ export function Sidebar({
           )}
         </div>
 
-        {/* 4. Divisor e Seção Secundária COMUNIDADE */}
+        {/* 4. Divisor e Seção Secundária SISTEMA (o Fórum fica oculto até ter persistência real) */}
         <div className="sidebar-divider" />
 
-        {!isCollapsed && <div className="category-header">COMUNIDADE</div>}
-
-        <button
-          type="button"
-          className={`nav-item ${currentPage === 'forum' ? 'active' : ''}`}
-          onClick={() => onSelectPage('forum')}
-          title={isCollapsed ? 'Fórum da Comunidade' : undefined}
-        >
-          <MessageSquareIcon className="nav-item-icon" />
-          {!isCollapsed && <span className="nav-item-text">Fórum</span>}
-        </button>
+        {!isCollapsed && <div className="category-header">SISTEMA</div>}
 
         <button
           type="button"

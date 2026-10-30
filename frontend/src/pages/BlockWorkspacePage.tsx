@@ -9,6 +9,7 @@ import {
   PlusCircleIcon,
 } from '../components/icons'
 import type { StudyMaterialItem } from '../features/sources/AddSourceModal'
+import '../styles/pages/block-workspace.css'
 import type { StudyBlock } from './StudyBlocksPage'
 
 type Props = {

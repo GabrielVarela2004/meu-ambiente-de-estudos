@@ -89,6 +89,11 @@ public class StudyBlock {
 		status = StudyBlockStatus.ARCHIVED;
 	}
 
+	public void unarchive() {
+		status = StudyBlockStatus.ACTIVE;
+		touch();
+	}
+
 	public UUID getId() {
 		return id;
 	}

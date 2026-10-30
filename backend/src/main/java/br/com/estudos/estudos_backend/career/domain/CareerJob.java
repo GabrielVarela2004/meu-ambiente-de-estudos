@@ -78,6 +78,10 @@ public class CareerJob {
 	@Column(nullable = false)
 	private boolean active;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "application_status", nullable = false, length = 30)
+	private JobApplicationStatus applicationStatus = JobApplicationStatus.DISCOVERED;
+
 	protected CareerJob() {
 	}
 
@@ -131,6 +135,14 @@ public class CareerJob {
 	}
 
 	// Getters and Setters
+	public JobApplicationStatus getApplicationStatus() {
+		return applicationStatus;
+	}
+
+	public void setApplicationStatus(JobApplicationStatus applicationStatus) {
+		this.applicationStatus = applicationStatus;
+	}
+
 	public UUID getId() {
 		return id;
 	}

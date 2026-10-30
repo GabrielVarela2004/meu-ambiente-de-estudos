@@ -82,4 +82,11 @@ public class StudyBlockService {
 		block.archive();
 		repository.save(block);
 	}
+
+	@Transactional
+	public StudyBlock unarchive(UUID id) {
+		StudyBlock block = get(id);
+		block.unarchive();
+		return repository.save(block);
+	}
 }

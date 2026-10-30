@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { request } from '../../api/http'
+import '../../styles/pages/career.css'
 
 type JobSource = {
   id: string
@@ -63,7 +64,7 @@ export function CareerSourcesPage() {
   }
 
   return (
-    <div className="page-wrapper" style={{ maxWidth: '900px' }}>
+    <div className="page-wrapper page-narrow">
       <div className="page-header-flex">
         <div>
           <h1 className="page-main-title">Fontes do Radar de Vagas</h1>
@@ -74,7 +75,7 @@ export function CareerSourcesPage() {
       </div>
 
       {feedback && (
-        <div className="info-banner" style={{ background: '#12372F', border: '1px solid #283342', color: '#45D6A0', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px' }}>
+        <div className="feedback-banner success mb-4" role="status">
           <span>{feedback}</span>
         </div>
       )}
@@ -89,38 +90,32 @@ export function CareerSourcesPage() {
           <p>O sistema vem com fontes padrões pré-configuradas. Execute a migração do banco para ativá-las.</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div className="career-source-list">
           {sources.map((src) => (
-            <article key={src.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <article key={src.id} className="card career-source-card">
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                <div className="career-source-heading">
+                  <h3 className="career-source-name">
                     {src.name}
                   </h3>
-                  <span
-                    className="badge"
-                    style={{
-                      background: src.enabled ? '#12372F' : '#2D1518',
-                      color: src.enabled ? '#45D6A0' : '#FF7575',
-                    }}
-                  >
+                  <span className={`badge ${src.enabled ? 'badge-success' : 'badge-danger'}`}>
                     {src.enabled ? 'Ativa' : 'Desativada'}
                   </span>
                 </div>
-                <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <p className="career-source-url">
                   {src.baseUrl} • Tipo: {src.integrationType}
                 </p>
                 {src.lastCheckedAt && (
-                  <small style={{ color: '#64748B' }}>
+                  <small className="text-xs text-muted">
                     Última verificação: {new Date(src.lastCheckedAt).toLocaleString('pt-BR')} (Status: {src.lastStatus})
                   </small>
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div className="career-source-actions">
                 <button
                   type="button"
-                  className="btn-secondary"
+                  className="btn btn-secondary btn-sm"
                   disabled={testingId === src.id}
                   onClick={() => void handleTest(src.id)}
                 >
@@ -128,7 +123,7 @@ export function CareerSourcesPage() {
                 </button>
                 <button
                   type="button"
-                  className={src.enabled ? 'btn-danger' : 'btn-primary'}
+                  className={`btn btn-sm ${src.enabled ? 'btn-ghost-danger' : 'btn-primary'}`}
                   onClick={() => void handleToggle(src.id, src.enabled)}
                 >
                   {src.enabled ? 'Desativar' : 'Ativar'}

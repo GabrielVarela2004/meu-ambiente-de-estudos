@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
 import { CodeIcon, FolderIcon, SparklesIcon, CheckCircleIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
+import '../styles/pages/exercises-questions.css'
+
+const difficultyLabels: Record<string, string> = {
+  EASY: 'Fácil',
+  INTERMEDIATE: 'Intermediária',
+  HARD: 'Difícil',
+}
 
 export type PracticalExercise = {
   id: string
@@ -257,7 +264,7 @@ export function PracticalExercisesPage({
                       <span className="badge badge-subtle">{ex.studyBlockTitle}</span>
                     )}
                     <span className={`difficulty-badge ${ex.difficulty?.toLowerCase() || 'intermediate'}`}>
-                      {ex.difficulty || 'INTERMEDIATE'}
+                      {difficultyLabels[ex.difficulty || 'INTERMEDIATE'] ?? ex.difficulty}
                     </span>
                   </div>
                 </div>

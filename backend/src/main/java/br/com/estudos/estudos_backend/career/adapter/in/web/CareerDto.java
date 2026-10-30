@@ -5,6 +5,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import jakarta.validation.constraints.NotNull;
+
 import br.com.estudos.estudos_backend.career.domain.AgentExecutionStatus;
 import br.com.estudos.estudos_backend.career.domain.AgentTriggerType;
 import br.com.estudos.estudos_backend.career.domain.CareerAgentExecution;
@@ -12,10 +14,13 @@ import br.com.estudos.estudos_backend.career.domain.CareerJob;
 import br.com.estudos.estudos_backend.career.domain.CareerJobSource;
 import br.com.estudos.estudos_backend.career.domain.CareerPreferences;
 import br.com.estudos.estudos_backend.career.domain.ExperienceLevel;
+import br.com.estudos.estudos_backend.career.domain.JobApplicationStatus;
 import br.com.estudos.estudos_backend.career.domain.JobModality;
 import br.com.estudos.estudos_backend.career.service.CareerJobCompatibilityService.JobMatchEvaluation;
 
 public class CareerDto {
+
+	public record JobStatusRequest(@NotNull JobApplicationStatus status) {}
 
 	public record JobItemResponse(
 			UUID id,
@@ -33,6 +38,7 @@ public class CareerDto {
 			String tags,
 			OffsetDateTime publishedAt,
 			OffsetDateTime discoveredAt,
+			JobApplicationStatus status,
 			int compatibilityPercent,
 			List<String> matchedRequirements,
 			List<String> partialRequirements,
@@ -57,6 +63,7 @@ public class CareerDto {
 					job.getTags(),
 					job.getPublishedAt(),
 					job.getDiscoveredAt(),
+					job.getApplicationStatus(),
 					eval.matchPercent(),
 					eval.matchedRequirements(),
 					eval.partialRequirements(),

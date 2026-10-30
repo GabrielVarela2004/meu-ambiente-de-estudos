@@ -931,6 +931,34 @@
   color: var(--color-text-muted);
 }
 
+/* Dificuldade: cor + texto (a cor nunca é o único indicador) */
+.difficulty-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.difficulty-badge.easy {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-accent-soft-text);
+}
+.difficulty-badge.intermediate {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning);
+}
+.difficulty-badge.hard {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+}
+
 .tags-row {
   display: flex;
   flex-wrap: wrap;
