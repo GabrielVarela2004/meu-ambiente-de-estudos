@@ -270,6 +270,10 @@ public class LearningHistoryService {
 				long tIncorrect = tEvalCount - tCorrect;
 				Integer tAcc = tEvalCount == 0 ? null : (int) Math.round(tCorrect * 100.0 / tEvalCount);
 				Integer tErr = tEvalCount == 0 ? null : (int) Math.round(tIncorrect * 100.0 / tEvalCount);
+				long tPartial = tEval.stream()
+						.filter(a -> a.getEvaluationStatus() == br.com.estudos.estudos_backend.question.QuestionEvaluationStatus.PARTIAL).count();
+				Integer tAvgScore = tEvalCount == 0 ? null
+						: (int) Math.round(tEval.stream().mapToInt(StudyQuestionAttempt::getScorePercent).average().orElse(0));
 
 				topicSummaries.add(new GlobalPerformanceDashboardResponse.TopicPerformanceSummary(
 						topic.getId(),
@@ -280,7 +284,9 @@ public class LearningHistoryService {
 						tCorrect,
 						tIncorrect,
 						tAcc,
-						tErr));
+						tErr,
+						tPartial,
+						tAvgScore));
 			}
 
 			blockSummaries.add(new GlobalPerformanceDashboardResponse.BlockPerformanceSummary(

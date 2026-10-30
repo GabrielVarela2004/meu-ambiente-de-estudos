@@ -40,7 +40,11 @@ public record GlobalPerformanceDashboardResponse(
 			long correctAttempts,
 			long incorrectAttempts,
 			Integer accuracyPercent,
-			Integer errorPercent) {}
+			Integer errorPercent,
+			/** Respostas PARCIAIS (contam como avaliadas, não como acerto). */
+			long partialAttempts,
+			/** Nota média (0–100) das tentativas corrigidas; pendentes ficam fora. */
+			Integer averageScorePercent) {}
 
 	public record TimelinePoint(
 			String date,

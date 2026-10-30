@@ -43,6 +43,9 @@ import br.com.estudos.estudos_backend.studysession.StudySessionRepository;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class Etapa7CompletePlatformE2EIntegrationTest {
+	/** Sem chave de IA nos testes: o corretor das questões abertas é simulado e considera a resposta correta. */
+	@org.springframework.test.context.bean.override.mockito.MockitoBean
+	private br.com.estudos.estudos_backend.question.DiscursiveAnswerEvaluator discursiveAnswerEvaluator;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -84,6 +87,11 @@ class Etapa7CompletePlatformE2EIntegrationTest {
 
 	@BeforeEach
 	void cleanDatabase() {
+		org.mockito.Mockito.when(discursiveAnswerEvaluator.evaluate(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+				.thenReturn(new br.com.estudos.estudos_backend.question.DiscursiveEvaluationRules.Result(
+						br.com.estudos.estudos_backend.question.QuestionEvaluationStatus.CORRECT, 92, java.util.Map.of(),
+						java.util.List.of("Explicou o conceito"), java.util.List.of(), java.util.List.of(), java.util.List.of(),
+						"", false));
 		chatConversationRepository.deleteAllInBatch();
 		exerciseAttemptRepository.deleteAllInBatch();
 		exerciseRepository.deleteAllInBatch();

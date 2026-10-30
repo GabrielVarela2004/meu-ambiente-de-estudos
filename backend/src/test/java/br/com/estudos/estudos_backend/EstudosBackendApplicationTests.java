@@ -365,7 +365,9 @@ class EstudosBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.difficulty").value("HARD"))
 				.andExpect(jsonPath("$.format").value("DISCURSIVE"))
-				.andExpect(jsonPath("$.expectedAnswer").value("Atomicidade Consistência Isolamento Durabilidade"))
+				// Questão aberta: a resposta esperada e a explicação não saem antes da resposta.
+				.andExpect(jsonPath("$.expectedAnswer").doesNotExist())
+				.andExpect(jsonPath("$.explanation").doesNotExist())
 				.andExpect(jsonPath("$.options", hasSize(0)))
 				.andReturn().getResponse().getContentAsString();
 		String discQuestionId = mapper.readTree(discResponse).get("id").asText();
@@ -374,8 +376,15 @@ class EstudosBackendApplicationTests {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"discursiveAnswer\":\"As propriedades são atomicidade, consistência, isolamento e durabilidade.\"}"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.correct").value(true))
-				.andExpect(jsonPath("$.explanation", containsString("Critérios/Gabarito esperado")));
+				// Sem IA configurada nos testes: a resposta fica pendente (nunca é corrigida por palavras-chave).
+				.andExpect(jsonPath("$.correct").value(false))
+				.andExpect(jsonPath("$.classification").value("PENDING_EVALUATION"))
+				.andExpect(jsonPath("$.feedback.pending").value(true))
+				.andExpect(jsonPath("$.feedback.modelAnswer").doesNotExist());
+
+		mockMvc.perform(get("/api/study-blocks/{blockId}/questions/{questionId}/attempts/pending", blockId, discQuestionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(1)));
 
 		// Discursiva sem expectedAnswer na criação deve falhar com 400
 		mockMvc.perform(post("/api/study-blocks/{blockId}/questions", blockId)

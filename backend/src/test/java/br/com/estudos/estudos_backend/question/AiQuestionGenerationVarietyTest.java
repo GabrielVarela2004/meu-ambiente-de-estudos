@@ -60,6 +60,14 @@ class AiQuestionGenerationVarietyTest {
 				.thenReturn(List.of(polymorphism, encapsulation));
 		when(questionService.recentPrompts(eq(blockId), isNull(), anyInt()))
 				.thenReturn(List.of("Explique o que é herança em Java."));
+		when(questionService.create(eq(blockId), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+				.thenAnswer(inv -> {
+					StudyQuestion question = new StudyQuestion(block, null, inv.getArgument(4), null,
+							inv.getArgument(6), inv.getArgument(7), inv.getArgument(8));
+					ReflectionTestUtils.setField(question, "id", UUID.randomUUID());
+					return question;
+				});
+		when(questionService.attachRubric(eq(blockId), any(), any(), any(), any())).thenAnswer(inv -> mock(StudyQuestion.class));
 	}
 
 	private static KnowledgeTopic topic(StudyBlock block, String title, String description) {
@@ -85,9 +93,10 @@ class AiQuestionGenerationVarietyTest {
 	@Test
 	void promptCarriesExistingQuestionsAndBlockTopics() {
 		generatorReplying("""
-				{"topic":"Encapsulamento","prompt":"Por que o encapsulamento protege o estado do objeto?",
-				 "explanation":"Expõe só métodos públicos.","sourceExcerpt":"Encapsulamento protege o estado interno",
-				 "options":[{"text":"Expõe só métodos públicos","correct":true},{"text":"Duplica atributos","correct":false}]}
+				{"topic":"Encapsulamento","prompt":"Explique como o encapsulamento protege o estado do objeto.",
+				 "modelAnswer":"Protegendo o estado interno e expondo apenas métodos públicos.",
+				 "rubric":{"essentialConcepts":["estado interno protegido"]},
+				 "sourceExcerpt":"Encapsulamento protege o estado interno expondo apenas métodos públicos"}
 				""").generateSimulado(blockId, 1, StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE, null);
 
 		assertTrue(capturedPrompt.contains("[PERGUNTAS JÁ EXISTENTES"));
@@ -100,13 +109,14 @@ class AiQuestionGenerationVarietyTest {
 	@Test
 	void generatedQuestionIsLinkedToTheTopicNamedByTheAi() {
 		generatorReplying("""
-				{"topic":"encapsulamento","prompt":"Por que o encapsulamento protege o estado do objeto?",
-				 "explanation":"Expõe só métodos públicos.","sourceExcerpt":"Encapsulamento protege o estado interno",
-				 "options":[{"text":"Expõe só métodos públicos","correct":true},{"text":"Duplica atributos","correct":false}]}
+				{"topic":"encapsulamento","prompt":"Explique como o encapsulamento protege o estado do objeto.",
+				 "modelAnswer":"Protegendo o estado interno e expondo apenas métodos públicos.",
+				 "rubric":{"essentialConcepts":["estado interno protegido"]},
+				 "sourceExcerpt":"Encapsulamento protege o estado interno expondo apenas métodos públicos"}
 				""").generateSimulado(blockId, 1, StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE, null);
 
 		verify(questionService).create(eq(blockId), any(), eq(encapsulation.getId()), any(), any(), any(),
-				eq(StudyQuestionDifficulty.INTERMEDIATE), eq(StudyQuestionFormat.MULTIPLE_CHOICE), any(), any());
+				eq(StudyQuestionDifficulty.INTERMEDIATE), eq(StudyQuestionFormat.DISCURSIVE), any(), any());
 	}
 
 	@Test
@@ -127,8 +137,9 @@ class AiQuestionGenerationVarietyTest {
 	@Test
 	void sourceContentGoesDelimitedAsUntrustedData() {
 		generatorReplying("""
-				{"topic":"Polimorfismo","prompt":"Explique o polimorfismo.","explanation":"x","sourceExcerpt":"Polimorfismo",
-				 "options":[{"text":"a","correct":true},{"text":"b","correct":false}]}
+				{"topic":"Polimorfismo","prompt":"Explique o polimorfismo com um exemplo.","modelAnswer":"Tratar subclasses como a superclasse.",
+				 "rubric":{"essentialConcepts":["subclasse tratada como superclasse"]},
+				 "sourceExcerpt":"Polimorfismo permite tratar objetos de subclasses como da superclasse"}
 				""").generateSimulado(blockId, 1, StudyQuestionDifficulty.EASY, StudyQuestionFormat.MULTIPLE_CHOICE, null);
 
 		assertTrue(capturedPrompt.contains("Polimorfismo permite tratar objetos de subclasses"));
