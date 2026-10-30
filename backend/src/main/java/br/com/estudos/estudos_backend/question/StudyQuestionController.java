@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
@@ -106,7 +108,7 @@ public class StudyQuestionController {
 			@Size(max = 6) List<@Valid OptionRequest> options) {}
 
 	public record SimuladoRequest(
-			Integer quantity,
+			@Min(1) @Max(10) Integer quantity,
 			StudyQuestionDifficulty difficulty,
 			StudyQuestionFormat format,
 			UUID topicId) {}
