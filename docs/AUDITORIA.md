@@ -142,7 +142,7 @@ registram tentativas**. Por isso o histórico e o desempenho só são alimentado
 5. 🟡 **Documentação divergente:** o `PROJECT_STATUS.md` afirmava "100% concluído", e o README citava React Router, V1–V20 e 85 testes.
 6. 🟡 **Código morto:** `AddSourceModal` (componente). O `career.css` antigo foi removido em 2026-10-29.
 7. 🟡 **Avisos de lint:** 14 avisos `set-state-in-effect` (sem erros).
-8. ✅ **Limite de upload** agora configurado em 10 MB (`UPLOAD_MAX_FILE_SIZE`; ajustado de 20 para 10 MB em 2026-10-30, Etapa 4 do plano novo), igual ao limite do `MaterialFileStorage`, com 413 e mensagem em português (`config/UploadExceptionHandler`). Situação anterior: não há `spring.servlet.multipart.max-file-size` configurado, então vale o
+8. ✅ **Limite de upload** agora configurado em 10 MB (`UPLOAD_MAX_FILE_SIZE`; ajustado de 20 para 10 MB em 2026-10-30, Etapa 4 do plano novo), igual ao limite do `MaterialFileStorage`, com 413 e mensagem em português (`common/exception/GlobalExceptionHandler`). Situação anterior: não há `spring.servlet.multipart.max-file-size` configurado, então vale o
    padrão do Spring (**1 MB por arquivo**). O `AddSourceModal` diz "15 MB" e o README antigo dizia "5 MB para PDF/DOCX";
    nenhum dos dois valores existe no código. PDFs comuns acima de 1 MB serão recusados.
 
