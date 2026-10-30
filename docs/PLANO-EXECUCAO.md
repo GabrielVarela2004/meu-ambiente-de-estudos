@@ -30,7 +30,8 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
 - [x] Etapa 9 — Limpeza: `.idea/` fora do Git e ignorada; `career.css` já tinha sido removido (29/10); tipos de fonte em
   `frontend/src/types/material.ts` e decisão D3 [!] (AddSourceModal sem uso); avisos set-state-in-effect corrigidos com
   `hooks/useDeferredEffect` (lint sem avisos).
-- [ ] Etapa 10 — Testes no frontend (Vitest)
+- [x] Etapa 10 — Testes no frontend: Vitest + React Testing Library (jsdom), scripts `test` e `test:run`; 32 testes
+  (http.ts, contrato das funções de API, player do YouTube, feedback da questão aberta, Button e utilitários).
 - [ ] Etapa 11 — CI no GitHub Actions
 - [ ] Etapa 12 — Telas de Metas e Sessões
 - [ ] Etapa 13 — Documentação
