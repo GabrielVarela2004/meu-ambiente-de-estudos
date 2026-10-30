@@ -27,7 +27,9 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
 - [x] Etapa 6 — Integração com o Gemini (plano e o que foi feito abaixo). Backend: 169 testes.
 - [x] Etapa 7 — Vídeos do YouTube como fonte (plano abaixo; playlist: D2 decidida — vários links de uma vez). Backend: 212 testes.
 - [x] Etapa 8 — Questões teóricas abertas com correção rigorosa (plano abaixo). Backend: 225 testes.
-- [ ] Etapa 9 — Limpeza
+- [x] Etapa 9 — Limpeza: `.idea/` fora do Git e ignorada; `career.css` já tinha sido removido (29/10); tipos de fonte em
+  `frontend/src/types/material.ts` e decisão D3 [!] (AddSourceModal sem uso); avisos set-state-in-effect corrigidos com
+  `hooks/useDeferredEffect` (lint sem avisos).
 - [ ] Etapa 10 — Testes no frontend (Vitest)
 - [ ] Etapa 11 — CI no GitHub Actions
 - [ ] Etapa 12 — Telas de Metas e Sessões
