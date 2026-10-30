@@ -9,7 +9,10 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
 
 - [x] Etapa 0 — Contexto (`CLAUDE.md` com "Regras de trabalho")
 - [x] Etapa 1 — Rotas quebradas no frontend + funções tipadas em `frontend/src/api/` (rotas já corrigidas na Etapa A da auditoria; criados `api/materials.ts`, `questions.ts`, `exercises.ts`, `career.ts`)
-- [ ] Etapa 2 — Rotas com backend novo (desarquivar, simulado; itens 9 e 10)
+- [x] Etapa 2 — Rotas com backend novo (rotas dos itens 1, 2, 9 e 10 já criadas na Etapa A da auditoria, com testes
+  em `ContractEndpointsIntegrationTest`; completado: desarquivar bloco já ativo retorna 409 e `SimuladoRequest`
+  valida `quantity` entre 1 e 10 com Bean Validation. Itens 9 e 10 já tinham sido decididos e implementados, sem
+  decisão pendente nova). Backend: 132 testes passando.
 - [ ] Etapa 3 — Agendamento de vagas
 - [ ] Etapa 4 — Limite de upload (10MB, 413)
 - [ ] Etapa 5 — Tratamento de erros padronizado
