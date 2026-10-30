@@ -97,7 +97,7 @@ transcrição. oEmbed devolve título, canal e miniatura (sem duração).
 9. Testes com Gemini, oEmbed e transcrição simulados: link com `?si=`, análise com sucesso, cota esgotada →
    transcrição, vídeo privado, JSON inválido, reprocessamento.
 10. Aviso na tela: limite de ~8 h de vídeo por dia no plano gratuito e só vídeos públicos.
-- Ponto de decisão: importar playlist inteira (exige YouTube Data API e outra chave) → `DECISOES-PENDENTES.md`.
+- [!] Ponto de decisão: importar playlist inteira (exige YouTube Data API e outra chave) → D2 em `DECISOES-PENDENTES.md`.
 
 **Retomar daqui (2026-10-30, sessão pausada pelo limite de uso):** backend da etapa pronto e testado
 (207 testes): itens 1, 2 (endpoint), 4, 5, 6 (backend, inclusive `POST …/{id}/reprocess`), 8 e 9 (testes de unidade
