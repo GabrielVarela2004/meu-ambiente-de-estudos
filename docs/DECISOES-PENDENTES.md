@@ -18,6 +18,8 @@ Cada item traz contexto, opções, prós e contras e uma recomendação. Nada aq
 
 **Decisão (2026-10-30): A — manter o hook como está.** O usuário escolheu manter o commit e o push automáticos
 ao fim de cada resposta. Os commits por etapa/subitem continuam sendo feitos manualmente; o push fica a cargo do hook.
+Em 2026-10-30 o hook foi corrigido: antes só fazia push quando havia arquivos não commitados (com a árvore limpa,
+os commits manuais nunca subiam); agora sempre envia os commits à frente do remoto e mostra o motivo se o push falhar.
 
 ## D2 — Importar uma playlist inteira do YouTube de uma vez (Etapa 7)
 
