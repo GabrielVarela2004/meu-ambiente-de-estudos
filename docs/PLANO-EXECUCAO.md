@@ -25,7 +25,7 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
   convertidos um pacote por commit e mensagens traduzidas. Erros de provedores externos (429/502/503/504) seguem
   como `ResponseStatusException`, no mesmo formato. `http.ts` já lia `message`. Backend: 145 testes.
 - [x] Etapa 6 — Integração com o Gemini (plano e o que foi feito abaixo). Backend: 169 testes.
-- [ ] Etapa 7 — Vídeos do YouTube como fonte
+- [ ] Etapa 7 — Vídeos do YouTube como fonte (em andamento; plano abaixo)
 - [ ] Etapa 8 — Questões teóricas abertas com correção rigorosa
 - [ ] Etapa 9 — Limpeza
 - [ ] Etapa 10 — Testes no frontend (Vitest)
@@ -65,6 +65,39 @@ do Pacífico).
 8. Testes com HTTP do Gemini simulado: sucesso, sem chave, cota esgotada, timeout e JSON inválido; mais testes de
    `app.ai.provider`, filtro de chat, perguntas existentes no prompt e vínculo com tópico.
 9. `.env.example` e README: como criar a chave gratuita no Google AI Studio e configurá-la no `.env` da raiz.
+
+## Plano da Etapa 7 — Vídeos do YouTube
+
+Hoje: `YoutubeUrlParser` já aceita youtu.be, watch, shorts, embed, live e m./www.; a importação
+(`POST …/materials/youtube`, `{url}`) baixa a transcrição de forma síncrona (`HttpYoutubeTranscriptExtractor`, sem
+marcações de tempo) e falha com 422 sem legendas. O frontend não tem prévia nem player.
+
+Documentação oficial conferida em 2026-10-30: vídeo do YouTube por URL é *preview*, só vídeos **públicos**,
+até 8 h de vídeo por dia no plano gratuito, ~100 tokens/s; o exemplo oficial usa a API `interactions`; no
+`generateContent` usamos a parte `fileData.fileUri` (padrão de arquivo por URI). Qualquer falha cai na
+transcrição. oEmbed devolve título, canal e miniatura (sem duração).
+
+1. Parser: testes para youtu.be com `?si=`, watch com `&t=`/`&list=`, shorts, embed, live e m.; parâmetros de
+   rastreamento ignorados (o vídeo é sempre salvo pela URL canônica).
+2. Prévia: `GET …/materials/youtube/preview?url=` no backend, via oEmbed público (`YoutubeOEmbedClient`, sem
+   chave) → id, título, canal, miniatura, URL do player e se já foi importado. Tela mostra antes de salvar.
+3. Player: componente com a YouTube IFrame Player API em `youtube-nocookie.com`, com `seekTo(segundos)`; fontes
+   YOUTUBE abrem o player na área do bloco.
+4. Análise por IA: `YoutubeVideoAnalyzer` envia a URL ao Gemini uma única vez (operação nova
+   `VIDEO_ANALYSIS`, registrada no consumo) pedindo JSON validado: resumo, tópicos e anotações com `MM:SS`,
+   incluindo código mostrado. O texto montado vira o conteúdo da fonte (chat, tópicos e questões usam).
+5. Plano B: Gemini indisponível, 429, vídeo privado/não listado, JSON inválido ou outra falha → transcrição
+   (agora com marcações `[MM:SS]` a cada ~30 s). Campo `analysis_method` = `ANALISE_IA` | `TRANSCRICAO`, exibido.
+6. Processamento assíncrono: a importação salva a fonte como `PROCESSING` e devolve na hora; um executor
+   processa e marca `COMPLETED` ou `FAILED` (com mensagem). A tela acompanha e oferece "Tentar novamente"
+   (`POST …/materials/{id}/reprocess`). No perfil de teste o executor é síncrono.
+7. Minutos clicáveis: no chat e nos trechos de questões, `MM:SS`/`H:MM:SS` viram link que abre o player no
+   ponto (vídeo da fonte citada; no chat, a fonte YouTube ativa).
+8. Migração V26: canal, miniatura, duração e método de análise (o id do vídeo já existe: `external_video_id`).
+9. Testes com Gemini, oEmbed e transcrição simulados: link com `?si=`, análise com sucesso, cota esgotada →
+   transcrição, vídeo privado, JSON inválido, reprocessamento.
+10. Aviso na tela: limite de ~8 h de vídeo por dia no plano gratuito e só vídeos públicos.
+- Ponto de decisão: importar playlist inteira (exige YouTube Data API e outra chave) → `DECISOES-PENDENTES.md`.
 
 ## Observações
 
