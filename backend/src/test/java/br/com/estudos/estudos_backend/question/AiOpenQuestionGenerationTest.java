@@ -38,6 +38,7 @@ class AiOpenQuestionGenerationTest {
 	private final StudyMaterialRepository materialRepository = mock(StudyMaterialRepository.class);
 	private final StudyQuestionService questionService = mock(StudyQuestionService.class);
 	private String capturedPrompt;
+	private Integer capturedMaxTokens;
 
 	@BeforeEach
 	void setUp() {
@@ -65,6 +66,12 @@ class AiOpenQuestionGenerationTest {
 				capturedPrompt = userPrompt;
 				return new AiTutorReply(json, "Fake", "fake-model");
 			}
+
+			@Override
+			public AiTutorReply generateReply(AiTutorRequest request) {
+				capturedMaxTokens = request.maxOutputTokens();
+				return generateReply(request.systemInstruction(), request.userPrompt());
+			}
 		};
 		return new AiQuestionGeneratorService(provider, blockService, materialRepository, questionService);
 	}
@@ -87,6 +94,10 @@ class AiOpenQuestionGenerationTest {
 				.generateSimulado(blockId, 1, StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE, null);
 
 		assertTrue(capturedPrompt.contains("Formato exigido: DISCURSIVE"));
+		// Limite de saída explícito: um padrão baixo no .env não pode cortar o JSON das questões.
+		assertEquals(AiQuestionGeneratorService.outputTokenBudget(1), capturedMaxTokens);
+		assertTrue(AiQuestionGeneratorService.outputTokenBudget(3) >= 4_500);
+		assertTrue(AiQuestionGeneratorService.outputTokenBudget(10) <= 16_000);
 		assertTrue(capturedPrompt.contains("Cada pergunta exige explicação"));
 		verify(questionService).create(eq(blockId), any(), any(),
 				eq("usa hashCode e equals para comparar os objetos antes de inserir"),

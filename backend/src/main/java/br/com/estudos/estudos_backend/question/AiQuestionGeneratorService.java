@@ -150,7 +150,8 @@ public class AiQuestionGeneratorService {
 			String userPrompt = buildGenerationPrompt(block, materials, selectedTopic, blockTopics, existingPrompts,
 					resolvedQuantity, resolvedDifficulty, resolvedFormat);
 			AiTutorProvider.AiTutorReply reply = AiOperationContext.call(AiOperation.QUESTION_GENERATION,
-					() -> aiTutorProvider.generateReply(AiTutorProvider.AiTutorRequest.ofJson(SYSTEM_INSTRUCTION, userPrompt)));
+					() -> aiTutorProvider.generateReply(AiTutorProvider.AiTutorRequest.ofJson(SYSTEM_INSTRUCTION, userPrompt)
+							.withMaxOutputTokens(outputTokenBudget(resolvedQuantity))));
 			return parseAndSaveQuestions(
 					studyBlockId,
 					primaryMaterial,
@@ -174,6 +175,14 @@ public class AiQuestionGeneratorService {
 				resolvedQuantity,
 				resolvedDifficulty,
 				resolvedFormat);
+	}
+
+	/**
+	 * Limite de saída proporcional à quantidade: cada questão aberta (resposta-modelo, explicação e rubrica) usa por
+	 * volta de 1.000 tokens. Sem isso, um limite padrão baixo no .env (ex.: 1200) corta o JSON no meio.
+	 */
+	static int outputTokenBudget(int quantity) {
+		return Math.min(16_000, 800 + 1_500 * quantity);
 	}
 
 	private StudyMaterial resolvePrimaryMaterial(List<StudyMaterial> materials, KnowledgeTopic selectedTopic) {

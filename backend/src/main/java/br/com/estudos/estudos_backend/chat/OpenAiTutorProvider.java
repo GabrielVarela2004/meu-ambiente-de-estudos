@@ -25,6 +25,9 @@ import br.com.estudos.estudos_backend.ai.AiModelProvider;
 @Component
 public class OpenAiTutorProvider implements AiTutorProvider, AiModelProvider {
 
+	/** Teto para limites pedidos explicitamente (mesmo teto de OPENAI_MAX_OUTPUT_TOKENS). */
+	private static final int MAX_REQUESTED_OUTPUT_TOKENS = 16_384;
+
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private final HttpClient httpClient;
 	private final OpenAiProperties properties;
@@ -131,8 +134,9 @@ public class OpenAiTutorProvider implements AiTutorProvider, AiModelProvider {
 			}
 			messages.add(new Message("user", tutorRequest.userPrompt()));
 
+			// Limite explícito do pedido vale acima do padrão (ex.: várias questões numa chamada), até o teto da API.
 			int maxTokens = tutorRequest.maxOutputTokens() != null && tutorRequest.maxOutputTokens() > 0
-					? Math.min(tutorRequest.maxOutputTokens(), properties.getMaxOutputTokens())
+					? Math.min(tutorRequest.maxOutputTokens(), MAX_REQUESTED_OUTPUT_TOKENS)
 					: properties.getMaxOutputTokens();
 
 			Map<String, String> responseFormat = tutorRequest.jsonObjectMode()

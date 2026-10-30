@@ -136,6 +136,28 @@ class GeminiModelProviderTest {
 	}
 
 	@Test
+	void jsonCutByTheTokenLimitHasClearMessage() throws Exception {
+		respond(200, """
+				{"candidates":[{"content":{"role":"model","parts":[{"text":"[{\\"prompt\\":\\"Explique"}]},"finishReason":"MAX_TOKENS"}],
+				 "usageMetadata":{"promptTokenCount":4000,"candidatesTokenCount":1196}}
+				""");
+
+		ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+				() -> provider("k").generate(AiTutorRequest.ofJson("s", "gere"), null));
+		assertEquals(502, ex.getStatusCode().value());
+		assertEquals(GeminiModelProvider.MAX_TOKENS_JSON_MESSAGE, ex.getReason());
+	}
+
+	@Test
+	void textCutByTheTokenLimitIsStillReturned() throws Exception {
+		respond(200, """
+				{"candidates":[{"content":{"role":"model","parts":[{"text":"Resposta parcial"}]},"finishReason":"MAX_TOKENS"}]}
+				""");
+
+		assertEquals("Resposta parcial", provider("k").generate(AiTutorRequest.ofText("s", "u"), null).text());
+	}
+
+	@Test
 	void keyNeverAppearsInToString() {
 		assertFalse(GeminiProperties.withKey("segredo-123").toString().contains("segredo-123"));
 	}

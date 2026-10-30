@@ -47,6 +47,9 @@ public class GeminiModelProvider implements AiModelProvider {
 			+ "minuto e tente novamente; se continuar, a cota diária acabou e é renovada à meia-noite do horário "
 			+ "do Pacífico (por volta das 4h ou 5h em Brasília).";
 
+	static final String MAX_TOKENS_JSON_MESSAGE = "A resposta do Gemini foi cortada pelo limite de tokens de saída "
+			+ "(GEMINI_MAX_OUTPUT_TOKENS). Peça menos itens de uma vez ou aumente o limite no .env.";
+
 	private static final int VIDEO_TIMEOUT_SECONDS = 300;
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
@@ -100,7 +103,7 @@ public class GeminiModelProvider implements AiModelProvider {
 					"A integração com o Gemini não está configurada (GEMINI_API_KEY ausente).");
 		}
 		String model = resolveModel(requestedModel);
-		return send(buildBody(request, null, model), model, properties.getRequestTimeoutSeconds());
+		return send(buildBody(request, null, model), model, properties.getRequestTimeoutSeconds(), request.jsonObjectMode());
 	}
 
 	/**
@@ -115,14 +118,14 @@ public class GeminiModelProvider implements AiModelProvider {
 		// Vídeos longos demoram mais para serem analisados que uma resposta de texto.
 		int timeoutSeconds = Math.max(properties.getRequestTimeoutSeconds(), VIDEO_TIMEOUT_SECONDS);
 		String model = resolveModel(requestedModel);
-		return send(buildBody(request, videoUrl, model), model, timeoutSeconds);
+		return send(buildBody(request, videoUrl, model), model, timeoutSeconds, request.jsonObjectMode());
 	}
 
 	private String resolveModel(String requestedModel) {
 		return requestedModel == null || requestedModel.isBlank() ? properties.getModel() : requestedModel.trim();
 	}
 
-	private AiModelResult send(ObjectNode body, String resolvedModel, int timeoutSeconds) {
+	private AiModelResult send(ObjectNode body, String resolvedModel, int timeoutSeconds, boolean jsonMode) {
 		checkLocalRateLimit();
 		try {
 			String url = properties.getBaseUrl() + URLEncoder.encode(resolvedModel, StandardCharsets.UTF_8)
@@ -135,7 +138,7 @@ public class GeminiModelProvider implements AiModelProvider {
 					.build();
 			HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 			handleHttpErrors(response.statusCode(), response.body(), resolvedModel);
-			return parseResponse(response.body(), resolvedModel);
+			return parseResponse(response.body(), resolvedModel, jsonMode);
 		} catch (ResponseStatusException e) {
 			throw e;
 		} catch (HttpTimeoutException e) {
@@ -187,7 +190,7 @@ public class GeminiModelProvider implements AiModelProvider {
 		return body;
 	}
 
-	private AiModelResult parseResponse(String responseBody, String resolvedModel) {
+	private AiModelResult parseResponse(String responseBody, String resolvedModel, boolean jsonMode) {
 		JsonNode root;
 		try {
 			root = objectMapper.readTree(responseBody);
@@ -213,6 +216,10 @@ public class GeminiModelProvider implements AiModelProvider {
 					? "O Gemini atingiu o limite de tokens antes de responder. Tente um pedido menor."
 					: "O Gemini retornou uma resposta vazia.";
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, reason);
+		}
+		// JSON cortado pelo limite de tokens não tem conserto: melhor dizer o motivo do que "resposta inválida".
+		if (jsonMode && "MAX_TOKENS".equals(finishReason)) {
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, MAX_TOKENS_JSON_MESSAGE);
 		}
 		JsonNode usage = root.path("usageMetadata");
 		Integer inputTokens = usage.has("promptTokenCount") ? usage.path("promptTokenCount").asInt() : null;

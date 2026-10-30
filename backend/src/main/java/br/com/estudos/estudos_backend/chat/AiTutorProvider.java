@@ -48,6 +48,11 @@ public interface AiTutorProvider {
 			this(systemInstruction, conversationHistory, userPrompt, jsonObjectMode, maxOutputTokens, null);
 		}
 
+		/** Mesmo pedido com limite de saída explícito (vale acima do padrão do .env; ex.: várias questões numa chamada). */
+		public AiTutorRequest withMaxOutputTokens(int tokens) {
+			return new AiTutorRequest(systemInstruction, conversationHistory, userPrompt, jsonObjectMode, tokens, temperature);
+		}
+
 		public static AiTutorRequest ofText(String systemInstruction, String userPrompt) {
 			return new AiTutorRequest(systemInstruction, List.of(), userPrompt, false, null);
 		}
