@@ -23,13 +23,30 @@ type JobItem = {
   sourceName: string
   description: string
   tags: string | null
-  status: 'DISCOVERED' | 'APPLIED' | 'DISCARDED' | 'INTERVIEWING'
+  status: 'DISCOVERED' | 'APPLIED' | 'INTERVIEWING' | 'OFFER' | 'REJECTED' | 'DISCARDED'
   compatibilityPercent: number
   compatibilityNote: string | null
   matchedRequirements?: string[]
   missingRequirements?: string[]
   publishedAt: string | null
   discoveredAt: string
+  applicationNotes: string | null
+  statusUpdatedAt: string | null
+  studyBlockId: string | null
+}
+
+type JobAnalysis = {
+  text: string
+  source: string
+  compatibilityPercent: number
+  generatedAt: string
+}
+
+type JobStudyBlock = {
+  studyBlockId: string
+  title: string
+  topics: string[]
+  created: boolean
 }
 
 type Props = {
@@ -77,20 +94,72 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
     }
   }
 
-  const handleUpdateStatus = async (jobId: string, newStatus: JobItem['status']) => {
+  const [notesDraft, setNotesDraft] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
+  const [analysis, setAnalysis] = useState<JobAnalysis | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [creatingBlock, setCreatingBlock] = useState(false)
+  const [blockMessage, setBlockMessage] = useState<string | null>(null)
+
+  const selectJob = (job: JobItem | null) => {
+    setSelectedJob(job)
+    setNotesDraft(job?.applicationNotes ?? '')
+    setAnalysis(null)
+    setBlockMessage(null)
+  }
+
+  // Substitui a vaga na lista e no painel pela versão devolvida pelo backend
+  const replaceJob = (updated: JobItem) => {
+    setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)))
+    setSelectedJob((prev) => (prev?.id === updated.id ? updated : prev))
+  }
+
+  // Sem "notes" no corpo, o backend mantém as anotações atuais
+  const handleUpdateStatus = async (jobId: string, newStatus: JobItem['status'], notes?: string) => {
     try {
-      await request(`/api/career/jobs/${jobId}/status`, {
+      replaceJob(await request<JobItem>(`/api/career/jobs/${jobId}/status`, {
         method: 'PATCH',
-        body: JSON.stringify({ status: newStatus }),
-      })
-      setJobs((prev) =>
-        prev.map((j) => (j.id === jobId ? { ...j, status: newStatus } : j))
-      )
-      if (selectedJob?.id === jobId) {
-        setSelectedJob((prev) => (prev ? { ...prev, status: newStatus } : null))
-      }
+        body: JSON.stringify(notes === undefined ? { status: newStatus } : { status: newStatus, notes }),
+      }))
     } catch {
       setError('Erro ao atualizar status da vaga.')
+    }
+  }
+
+  const handleSaveNotes = async () => {
+    if (!selectedJob) return
+    setSavingNotes(true)
+    await handleUpdateStatus(selectedJob.id, selectedJob.status, notesDraft)
+    setSavingNotes(false)
+  }
+
+  const handleAnalyze = async () => {
+    if (!selectedJob) return
+    setAnalyzing(true)
+    try {
+      setAnalysis(await request<JobAnalysis>(`/api/career/jobs/${selectedJob.id}/analysis`, { method: 'POST' }))
+    } catch {
+      setError('Não foi possível analisar a vaga.')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  const handleCreateBlock = async () => {
+    if (!selectedJob) return
+    setCreatingBlock(true)
+    try {
+      const block = await request<JobStudyBlock>(`/api/career/jobs/${selectedJob.id}/study-block`, { method: 'POST' })
+      replaceJob({ ...selectedJob, studyBlockId: block.studyBlockId })
+      setBlockMessage(
+        block.created
+          ? `Bloco "${block.title}" criado com ${block.topics.length} tópico(s).`
+          : `Esta vaga já tem o bloco "${block.title}".`,
+      )
+    } catch {
+      setError('Não foi possível criar o bloco de estudo da vaga.')
+    } finally {
+      setCreatingBlock(false)
     }
   }
 
@@ -117,6 +186,8 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
     DISCOVERED: { label: 'Nova', className: 'badge-subtle' },
     APPLIED: { label: 'Candidatado', className: 'badge-success' },
     INTERVIEWING: { label: 'Em entrevista', className: 'badge-info' },
+    OFFER: { label: 'Oferta', className: 'badge-success' },
+    REJECTED: { label: 'Recusada', className: 'badge-warning' },
     DISCARDED: { label: 'Descartada', className: 'badge-danger' },
   }
 
@@ -197,6 +268,8 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
               <option value="DISCOVERED">Novas</option>
               <option value="APPLIED">Candidatado</option>
               <option value="INTERVIEWING">Em entrevista</option>
+              <option value="OFFER">Oferta</option>
+              <option value="REJECTED">Recusadas</option>
               <option value="DISCARDED">Descartadas</option>
             </select>
             <ChevronDownIcon className="filter-select-arrow" />
@@ -234,7 +307,7 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
                       type="button"
                       className="job-card-open"
                       aria-pressed={isSelected}
-                      onClick={() => setSelectedJob(job)}
+                      onClick={() => selectJob(job)}
                     >
                       <div className="job-card-top">
                         <div className="job-card-heading">
@@ -289,7 +362,7 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
                 <h2>{selectedJob.title}</h2>
                 <p className="job-detail-company">{selectedJob.company}</p>
               </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedJob(null)}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => selectJob(null)}>
                 ✕ Fechar
               </button>
             </div>
@@ -364,6 +437,68 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
                   </button>
                 ))}
               </div>
+              {selectedJob.statusUpdatedAt && (
+                <p className="text-xs text-muted">
+                  Atualizado em {new Date(selectedJob.statusUpdatedAt).toLocaleDateString('pt-BR')}
+                </p>
+              )}
+              <label className="form-label-block">
+                <span className="form-label-text">Anotações da candidatura</span>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  maxLength={5000}
+                  placeholder="Datas de entrevista, contatos, feedback recebido..."
+                  value={notesDraft}
+                  onChange={(e) => setNotesDraft(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={savingNotes || notesDraft === (selectedJob.applicationNotes ?? '')}
+                onClick={() => void handleSaveNotes()}
+              >
+                {savingNotes ? 'Salvando...' : 'Salvar anotações'}
+              </button>
+            </div>
+
+            <div className="job-detail-section">
+              <h4>Análise da vaga</h4>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={analyzing}
+                onClick={() => void handleAnalyze()}
+              >
+                <SparklesIcon className="w-4 h-4" />
+                {analyzing ? 'Analisando...' : analysis ? 'Analisar novamente' : 'Analisar vaga com meu perfil'}
+              </button>
+              {analysis && (
+                <>
+                  <p className="text-xs text-muted">
+                    {analysis.source} · compatibilidade {analysis.compatibilityPercent}%
+                  </p>
+                  <div className="job-detail-description">{analysis.text}</div>
+                </>
+              )}
+            </div>
+
+            <div className="job-detail-section">
+              <h4>Estudar para esta vaga</h4>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={creatingBlock}
+                onClick={() => void handleCreateBlock()}
+              >
+                {creatingBlock
+                  ? 'Criando bloco...'
+                  : selectedJob.studyBlockId
+                    ? 'Ver bloco criado para a vaga'
+                    : 'Criar bloco de estudo com os requisitos'}
+              </button>
+              {blockMessage && <p className="text-xs text-muted">{blockMessage}</p>}
             </div>
 
             {selectedJob.url && (

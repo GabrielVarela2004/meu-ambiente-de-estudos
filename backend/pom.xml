@@ -108,6 +108,18 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!-- Limita a memória dos testes: a máquina de desenvolvimento tem pouca RAM livre
+			     e a JVM sem teto chegou a cair por falta de memória. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<argLine>-Xms128m -Xmx768m -XX:+UseSerialGC -XX:MaxMetaspaceSize=256m</argLine>
+					<systemPropertyVariables>
+						<spring.test.context.cache.maxSize>3</spring.test.context.cache.maxSize>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 

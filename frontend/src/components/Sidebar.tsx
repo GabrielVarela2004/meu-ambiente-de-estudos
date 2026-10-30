@@ -29,6 +29,7 @@ export type PageId =
   | 'source-mapping'
   | 'goals-sessions'
   | 'career-job-feed'
+  | 'career-profile'
   | 'career-preferences'
   | 'career-skills'
   | 'career-sources'
@@ -365,6 +366,14 @@ export function Sidebar({
               >
                 <span className="submenu-bullet" />
                 <span>Feed de Vagas</span>
+              </button>
+              <button
+                type="button"
+                className={`submenu-item ${currentPage === 'career-profile' ? 'active' : ''}`}
+                onClick={() => onSelectPage('career-profile')}
+              >
+                <span className="submenu-bullet" />
+                <span>Perfil Profissional</span>
               </button>
               <button
                 type="button"

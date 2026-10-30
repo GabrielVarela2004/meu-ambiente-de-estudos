@@ -16,6 +16,7 @@ import { BlockWorkspacePage } from './pages/BlockWorkspacePage'
 import { GoalsSessionsPage } from './pages/GoalsSessionsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { CareerJobFeedPage } from './pages/career/CareerJobFeedPage'
+import { CareerProfilePage } from './pages/career/CareerProfilePage'
 import { CareerPreferencesPage } from './pages/career/CareerPreferencesPage'
 import { CareerSkillsPage } from './pages/career/CareerSkillsPage'
 import { CareerSourcesPage } from './pages/career/CareerSourcesPage'
@@ -60,6 +61,7 @@ const pageTitles: Record<PageId, string> = {
   'source-mapping': 'Mapeamento de Fontes',
   'goals-sessions': 'Metas e Sessões',
   'career-job-feed': 'Feed de Vagas',
+  'career-profile': 'Perfil Profissional',
   'career-preferences': 'Filtros de Busca',
   'career-skills': 'Minhas Competências',
   'career-sources': 'Fontes de Vagas',
@@ -456,6 +458,7 @@ function App() {
             {currentPage === 'career-job-feed' && (
               <CareerJobFeedPage onNavigateToPreferences={() => setCurrentPage('career-preferences')} />
             )}
+            {currentPage === 'career-profile' && <CareerProfilePage />}
             {currentPage === 'career-preferences' && <CareerPreferencesPage />}
             {currentPage === 'career-skills' && <CareerSkillsPage />}
             {currentPage === 'career-sources' && <CareerSourcesPage />}
