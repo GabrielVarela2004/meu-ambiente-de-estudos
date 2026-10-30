@@ -14,7 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
  */
 @SpringBootTest(properties = "app.scheduling.enabled=true")
 @ActiveProfiles("test")
-class SchedulingConfigTest {
+class SchedulingConfigurationTest {
 
 	@Autowired
 	private ScheduledTaskHolder scheduledTaskHolder;

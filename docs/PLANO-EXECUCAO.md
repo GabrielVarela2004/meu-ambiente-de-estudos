@@ -13,7 +13,9 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
   em `ContractEndpointsIntegrationTest`; completado: desarquivar bloco já ativo retorna 409 e `SimuladoRequest`
   valida `quantity` entre 1 e 10 com Bean Validation. Itens 9 e 10 já tinham sido decididos e implementados, sem
   decisão pendente nova). Backend: 132 testes passando.
-- [ ] Etapa 3 — Agendamento de vagas
+- [x] Etapa 3 — Agendamento de vagas (já ativado na Etapa B da auditoria; renomeado para `config/SchedulingConfiguration`
+  e criado `SchedulingConfigurationConditionTest`: ativo por padrão e desligado com `app.scheduling.enabled=false`,
+  valor do perfil de teste)
 - [ ] Etapa 4 — Limite de upload (10MB, 413)
 - [ ] Etapa 5 — Tratamento de erros padronizado
 - [ ] Etapa 6 — Integração com o Gemini

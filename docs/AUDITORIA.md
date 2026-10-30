@@ -102,7 +102,7 @@ registram tentativas**. Por isso o histórico e o desempenho só são alimentado
   por dificuldade no painel, tempo de realização nem análise de desempenho por IA.
 - **Carreira — compatibilidade:** pontuação **determinística por palavras-chave** (`CareerJobCompatibilityService`) contra um
   perfil derivado dos blocos e tópicos. Não há perfil profissional (formação, experiências, projetos) nem análise por IA.
-- **Carreira — agendamento automático:** ✅ ativado em 2026-10-29 (`config/SchedulingConfig` com `@EnableScheduling`, desligável por `app.scheduling.enabled`; teste `SchedulingConfigTest`). Antes: `CareerAgentSchedulerService` usava `@Scheduled`, mas **não existia `@EnableScheduling`**
+- **Carreira — agendamento automático:** ✅ ativado em 2026-10-29 (`config/SchedulingConfiguration` com `@EnableScheduling`, desligável por `app.scheduling.enabled`; testes `SchedulingConfigurationTest` e `SchedulingConfigurationConditionTest`). Antes: `CareerAgentSchedulerService` usava `@Scheduled`, mas **não existia `@EnableScheduling`**
   no projeto, então a execução agendada nunca acontece. Só a execução manual funciona.
 - **Configurações:** o "ID de usuário" é salvo no `localStorage`, mas **nunca é enviado** ao backend (o cabeçalho
   `X-Study-User-Id` não é usado pelo `http.ts`). A "Meta diária" não é persistida.

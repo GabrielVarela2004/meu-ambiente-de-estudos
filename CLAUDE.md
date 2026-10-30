@@ -56,7 +56,7 @@ mudança de schema sempre em migração nova.
   YouTube e páginas web; só fontes com chat ativo entram no contexto da IA.
 - **Desempenho:** percentuais, notas e médias são calculados no backend (`learning/`, `question/`); a IA só gera
   conteúdo e avalia/interpreta.
-- **Carreira:** agente agendado (`@EnableScheduling` via `config/SchedulingConfig`, `app.scheduling.enabled`)
+- **Carreira:** agente agendado (`@EnableScheduling` via `config/SchedulingConfiguration`, `app.scheduling.enabled`)
   busca vagas em Remotive/Arbeitnow e calcula compatibilidade de forma determinística contra os blocos de estudo.
 
 **Testes:** integração com `@SpringBootTest` + `@AutoConfigureMockMvc` + `@ActiveProfiles("test")` contra o
