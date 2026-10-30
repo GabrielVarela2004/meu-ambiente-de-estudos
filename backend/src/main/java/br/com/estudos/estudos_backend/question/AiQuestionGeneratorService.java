@@ -1,6 +1,7 @@
 package br.com.estudos.estudos_backend.question;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,6 +21,7 @@ import br.com.estudos.estudos_backend.chat.SourceContextSelector;
 import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
 import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicStatus;
+import br.com.estudos.estudos_backend.knowledge.SourceTopicExtractor;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialProcessingStatus;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
@@ -34,6 +36,9 @@ import br.com.estudos.estudos_backend.ai.AiOperationContext;
 public class AiQuestionGeneratorService {
 	private static final int MAX_CONTEXT_CHARACTERS = 20_000;
 	private static final int MIN_CHARS_PER_QUESTION_WHEN_MULTIPLE = 40;
+	/** Enunciados já existentes enviados à IA para evitar repetição. */
+	private static final int MAX_EXISTING_PROMPTS = 30;
+	private static final int MAX_LISTED_TOPICS = 40;
 	private static final String SYSTEM_INSTRUCTION = "Você é um gerador especialista de questões de estudo em português. "
 			+ "Gere exclusivamente questões baseadas nos materiais de referência fornecidos para o bloco de estudo atual. "
 			+ "Não utilize conhecimentos externos fora das fontes fornecidas. "
@@ -135,16 +140,21 @@ public class AiQuestionGeneratorService {
 		StudyQuestionFormat resolvedFormat = format == null ? StudyQuestionFormat.MULTIPLE_CHOICE : format;
 
 		StudyMaterial primaryMaterial = resolvePrimaryMaterial(materials, selectedTopic);
+		// Sem tópico escolhido, cada questão é vinculada a um dos tópicos ativos do bloco.
+		List<KnowledgeTopic> blockTopics = selectedTopic == null ? activeTopics(studyBlockId) : List.of();
 
 		if (aiTutorProvider != null
 				&& AiOperationContext.call(AiOperation.QUESTION_GENERATION, aiTutorProvider::isConfigured)) {
-			String userPrompt = buildGenerationPrompt(block, materials, selectedTopic, resolvedQuantity, resolvedDifficulty, resolvedFormat);
+			List<String> existingPrompts = studyQuestionService.recentPrompts(studyBlockId, topicId, MAX_EXISTING_PROMPTS);
+			String userPrompt = buildGenerationPrompt(block, materials, selectedTopic, blockTopics, existingPrompts,
+					resolvedQuantity, resolvedDifficulty, resolvedFormat);
 			AiTutorProvider.AiTutorReply reply = AiOperationContext.call(AiOperation.QUESTION_GENERATION,
 					() -> aiTutorProvider.generateReply(AiTutorProvider.AiTutorRequest.ofJson(SYSTEM_INSTRUCTION, userPrompt)));
 			return parseAndSaveQuestions(
 					studyBlockId,
 					primaryMaterial,
 					selectedTopic,
+					blockTopics,
 					resolvedQuantity,
 					resolvedDifficulty,
 					resolvedFormat,
@@ -158,6 +168,7 @@ public class AiQuestionGeneratorService {
 				materials,
 				primaryMaterial,
 				selectedTopic,
+				blockTopics,
 				resolvedQuantity,
 				resolvedDifficulty,
 				resolvedFormat);
@@ -175,7 +186,7 @@ public class AiQuestionGeneratorService {
 	}
 
 	private String buildGenerationPrompt(StudyBlock block, List<StudyMaterial> materials,
-			KnowledgeTopic selectedTopic, int quantity,
+			KnowledgeTopic selectedTopic, List<KnowledgeTopic> blockTopics, List<String> existingPrompts, int quantity,
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Gere ").append(quantity).append(" questão(ões) de estudo para o bloco \"")
@@ -192,6 +203,16 @@ public class AiQuestionGeneratorService {
 		} else {
 			sb.append("Abranja os conceitos mais relevantes disponíveis nas fontes do bloco.\n");
 		}
+		if (!blockTopics.isEmpty()) {
+			sb.append("Tópicos do bloco (vincule cada questão a exatamente um deles, copiando o título no campo \"topic\"):\n");
+			blockTopics.stream().limit(MAX_LISTED_TOPICS)
+					.forEach(topic -> sb.append("- ").append(topic.getTitle()).append("\n"));
+		}
+		if (!existingPrompts.isEmpty()) {
+			sb.append("\n[PERGUNTAS JÁ EXISTENTES — DADOS: não repita nem reformule; cubra outros aspectos do conteúdo]\n");
+			existingPrompts.forEach(prompt -> sb.append("- ").append(abbreviate(prompt, 200)).append("\n"));
+			sb.append("[FIM DAS PERGUNTAS JÁ EXISTENTES]\n\n");
+		}
 
 		String itemSchema;
 		if (format == StudyQuestionFormat.DISCURSIVE) {
@@ -202,6 +223,9 @@ public class AiQuestionGeneratorService {
 			itemSchema = "{\"prompt\":\"...\",\"explanation\":\"...\",\"sourceExcerpt\":\"trecho literal da fonte\",\"options\":[{\"text\":\"...\",\"correct\":true},{\"text\":\"...\",\"correct\":false},{\"text\":\"...\",\"correct\":false},{\"text\":\"...\",\"correct\":false}]} (exatamente 1 correta)";
 		}
 
+		if (!blockTopics.isEmpty()) {
+			itemSchema = itemSchema.replaceFirst("^\\{", "{\"topic\":\"título exato de um dos tópicos listados\",");
+		}
 		if (quantity == 1) {
 			sb.append("Estrutura JSON obrigatória: ").append(itemSchema).append("\n");
 		} else {
@@ -240,7 +264,7 @@ public class AiQuestionGeneratorService {
 	}
 
 	private List<StudyQuestion> parseAndSaveQuestions(UUID studyBlockId, StudyMaterial primaryMaterial,
-			KnowledgeTopic selectedTopic, int expectedQuantity,
+			KnowledgeTopic selectedTopic, List<KnowledgeTopic> blockTopics, int expectedQuantity,
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String rawReply) {
 		try {
 			if (rawReply == null || rawReply.isBlank()) {
@@ -262,7 +286,6 @@ public class AiQuestionGeneratorService {
 			}
 
 			UUID materialId = primaryMaterial == null ? null : primaryMaterial.getId();
-			UUID topicId = selectedTopic == null ? null : selectedTopic.getId();
 			String defaultExcerpt = selectedTopic != null && selectedTopic.getSupportingExcerpt() != null
 					? selectedTopic.getSupportingExcerpt()
 					: extractDefaultExcerpt(primaryMaterial);
@@ -270,6 +293,10 @@ public class AiQuestionGeneratorService {
 			List<StudyQuestion> savedQuestions = new ArrayList<>();
 			for (int i = 0; i < Math.min(expectedQuantity, items.size()); i++) {
 				JsonNode node = items.get(i);
+				UUID topicId = selectedTopic != null
+						? selectedTopic.getId()
+						: resolveTopicId(node.path("topic").asText(""),
+								node.path("prompt").asText("") + " " + node.path("sourceExcerpt").asText(""), blockTopics);
 				savedQuestions.add(parseSingleQuestionNode(
 						studyBlockId, materialId, topicId, defaultExcerpt, difficulty, format, node));
 			}
@@ -353,6 +380,7 @@ public class AiQuestionGeneratorService {
 			List<StudyMaterial> materials,
 			StudyMaterial primaryMaterial,
 			KnowledgeTopic selectedTopic,
+			List<KnowledgeTopic> blockTopics,
 			int quantity,
 			StudyQuestionDifficulty difficulty,
 			StudyQuestionFormat format) {
@@ -365,7 +393,7 @@ public class AiQuestionGeneratorService {
 		List<StudyQuestion> created = new ArrayList<>();
 		for (int i = 0; i < quantity; i++) {
 			SourceFact fact = facts.get(i % facts.size());
-			UUID topicId = selectedTopic != null ? selectedTopic.getId() : null;
+			UUID topicId = selectedTopic != null ? selectedTopic.getId() : resolveTopicId("", fact.statement(), blockTopics);
 			String subjectLabel = selectedTopic != null ? selectedTopic.getTitle() : fact.materialTitle();
 			String promptPrefix = switch (difficulty) {
 				case EASY -> "[Conceito Fundamental — " + subjectLabel + "] ";
@@ -570,6 +598,61 @@ public class AiQuestionGeneratorService {
 			}
 		}
 		return trimmed.trim();
+	}
+
+	private List<KnowledgeTopic> activeTopics(UUID studyBlockId) {
+		if (knowledgeTopicRepository == null) {
+			return List.of();
+		}
+		return knowledgeTopicRepository.findAllByStudyBlockIdAndStatusOrderByCreatedAtAsc(studyBlockId,
+				KnowledgeTopicStatus.ACTIVE);
+	}
+
+	/**
+	 * Tópico indicado pela IA (título igual, ignorando acentos e caixa); se não bater, o tópico com mais palavras
+	 * em comum com o texto da questão (subtópico vence empate, por ser mais específico). Sem tópicos, null.
+	 */
+	static UUID resolveTopicId(String aiTopic, String questionText, List<KnowledgeTopic> topics) {
+		if (topics == null || topics.isEmpty()) {
+			return null;
+		}
+		String key = SourceTopicExtractor.normalizeKey(aiTopic == null ? "" : aiTopic);
+		if (!key.isBlank()) {
+			for (KnowledgeTopic topic : topics) {
+				if (SourceTopicExtractor.normalizeKey(topic.getTitle()).equals(key)) {
+					return topic.getId();
+				}
+			}
+		}
+		Set<String> questionWords = significantWords(questionText + " " + (aiTopic == null ? "" : aiTopic));
+		KnowledgeTopic best = null;
+		long bestScore = 0;
+		for (KnowledgeTopic topic : topics) {
+			long score = significantWords(topic.getTitle() + " "
+					+ (topic.getDescription() == null ? "" : topic.getDescription()))
+					.stream().filter(questionWords::contains).count();
+			boolean moreSpecificTie = score == bestScore && best != null && topic.isSubtopic() && !best.isSubtopic();
+			if (score > bestScore || (score > 0 && moreSpecificTie)) {
+				best = topic;
+				bestScore = score;
+			}
+		}
+		return best == null ? null : best.getId();
+	}
+
+	private static Set<String> significantWords(String text) {
+		Set<String> words = new HashSet<>();
+		for (String word : SourceTopicExtractor.normalizeKey(text == null ? "" : text).split(" ")) {
+			if (word.length() >= 4) {
+				words.add(word);
+			}
+		}
+		return words;
+	}
+
+	private static String abbreviate(String text, int maxChars) {
+		String singleLine = text.replaceAll("\\s+", " ").trim();
+		return singleLine.length() <= maxChars ? singleLine : singleLine.substring(0, maxChars - 1) + "…";
 	}
 
 	private record SourceFact(UUID materialId, String materialTitle, String statement) {}
