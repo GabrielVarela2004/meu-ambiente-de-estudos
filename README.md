@@ -116,6 +116,20 @@ docker compose up -d postgres
 
 O container inicializará na porta `5432` com usuário `estudos` e senha `estudos-dev-only`.
 
+### 4.1.1. Construir o avaliador de exercícios práticos (Docker)
+
+Os exercícios em Java são corrigidos automaticamente: o código roda num contêiner descartável, sem rede e com limites de memória, CPU e tempo, contra os testes JUnit gerados com o exercício. O avaliador também verifica a aplicação do conceito (ex.: `@Override`) e regras de boas práticas. Construa a imagem uma vez:
+
+```powershell
+docker build -t estudos-java-runner:1 runner/java
+```
+
+Sem a imagem (ou com o Docker parado), os exercícios continuam funcionando com autoavaliação. Para desativar a correção automática, use `RUNNER_ENABLED=false`.
+
+A IA gera os testes e a solução de referência junto com o exercício, e a solução é executada antes de liberar a correção automática. O Gemini (gratuito) já tem limite de resposta suficiente; com a OpenAI, aumente `OPENAI_MAX_OUTPUT_TOKENS` para ~4000.
+
+Nota de cada tentativa prática: corretude pelos testes (50%), conceito (25%) e boas práticas (25%), multiplicada pela autonomia, que cai conforme as ajudas pedidas à tutora no chat do exercício. O desempenho de um tópico é 70% prática + 30% teoria.
+
 ### 4.2. Configurar Variáveis de Ambiente
 
 Copie o arquivo de exemplo na raiz do projeto:

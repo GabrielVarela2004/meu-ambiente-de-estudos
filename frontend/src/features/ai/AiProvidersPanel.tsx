@@ -4,7 +4,7 @@ import { SparklesIcon } from '../../components/icons'
 import '../../styles/pages/ai-providers.css'
 import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
-type AiOperation = 'CHAT' | 'QUESTION_GENERATION' | 'EXERCISE_GENERATION' | 'TOPIC_EXTRACTION' | 'MATERIAL_SUMMARY'
+type AiOperation = 'CHAT' | 'QUESTION_GENERATION' | 'EXERCISE_GENERATION' | 'EXERCISE_TUTOR' | 'TOPIC_EXTRACTION' | 'MATERIAL_SUMMARY'
 
 type Provider = {
   id: string
@@ -49,6 +49,7 @@ const operationLabel: Record<AiOperation, string> = {
   CHAT: 'Tutor IA',
   QUESTION_GENERATION: 'Questões',
   EXERCISE_GENERATION: 'Exercícios',
+  EXERCISE_TUTOR: 'Tutoria nos exercícios',
   TOPIC_EXTRACTION: 'Tópicos',
   MATERIAL_SUMMARY: 'Resumos',
 }

@@ -114,7 +114,8 @@ public class LearningInsightsService {
 			}
 			String difficulty = attempt.getExercise() != null && attempt.getExercise().getDifficulty() != null
 					? attempt.getExercise().getDifficulty().name() : "INTERMEDIATE";
-			boolean passed = attempt.getScorePercent() >= 70 || attempt.getSelfRating() >= 4;
+			// A nota já inclui o desconto da autonomia; solução revelada nunca conta como acerto.
+			boolean passed = attempt.getScorePercent() >= 70 && !attempt.isSolutionRevealed();
 			activities.add(new Activity(attempt.getCreatedAt().atZoneSameInstant(zone).toLocalDate(), true, passed,
 					difficulty, null));
 		}
