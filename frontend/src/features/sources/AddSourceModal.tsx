@@ -15,6 +15,9 @@ export type SourceType =
   | 'YOUTUBE'
 export type ProcessingStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 
+/** Como o conteúdo de um vídeo do YouTube foi obtido (análise do vídeo pela IA ou transcrição). */
+export type VideoAnalysisMethod = 'ANALISE_IA' | 'TRANSCRICAO'
+
 export type StudyMaterialItem = {
   id: string
   studyBlockId: string
@@ -28,6 +31,10 @@ export type StudyMaterialItem = {
   errorMessage: string | null
   metadataJson?: string | null
   enabledForChat?: boolean
+  videoChannel?: string | null
+  videoThumbnailUrl?: string | null
+  videoDurationSeconds?: number | null
+  analysisMethod?: VideoAnalysisMethod | null
   wordCount?: number
   charCount?: number
   status: 'ACTIVE' | 'ARCHIVED'

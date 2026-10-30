@@ -52,7 +52,8 @@ public class StudyMaterialController {
 	public ResponseEntity<StudyMaterialResponse> importYoutube(
 			@PathVariable UUID studyBlockId, @Valid @RequestBody YoutubeMaterialRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(StudyMaterialResponse.from(youtubeImportService.importVideo(studyBlockId, request.url())));
+				.body(StudyMaterialResponse.from(youtubeImportService.importVideo(studyBlockId, request.url(), request.title(),
+						request.enabledForChat() == null || request.enabledForChat())));
 	}
 
 	/** Prévia do vídeo antes de salvar (oEmbed público, sem chave). */
@@ -115,8 +116,11 @@ public class StudyMaterialController {
 			@NotBlank @Size(max = 1000) String url) {
 	}
 
+	/** {@code title} e {@code enabledForChat} são opcionais: definidos já na criação, antes do processamento. */
 	public record YoutubeMaterialRequest(
-			@NotBlank @Size(max = 1000) String url) {
+			@NotBlank @Size(max = 1000) String url,
+			@Size(max = 160) String title,
+			Boolean enabledForChat) {
 	}
 
 	public record StudyMaterialResponse(

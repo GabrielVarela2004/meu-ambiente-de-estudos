@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { request } from '../api/http'
-import { importMaterialFile, toggleMaterialChat } from '../api/materials'
+import { importMaterialFile, importYoutubeVideo, previewYoutube, toggleMaterialChat } from '../api/materials'
+import type { YoutubePreview } from '../api/materials'
+import '../styles/pages/video.css'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, PlusCircleIcon, SearchIcon, SparklesIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/add-content.css'
@@ -74,6 +76,11 @@ export function AddContentPage({
   const [ytUrl, setYtUrl] = useState('')
   const [ytTitle, setYtTitle] = useState('')
   const [ytEnabledForChat, setYtEnabledForChat] = useState(true)
+  const [ytPreview, setYtPreview] = useState<YoutubePreview | null>(null)
+  const [ytPreviewError, setYtPreviewError] = useState<string | null>(null)
+  const [ytPreviewLoading, setYtPreviewLoading] = useState(false)
+  const ytPreviewTimer = useRef<number | null>(null)
+  const ytPreviewRequest = useRef(0)
 
   // Modo Página Web
   const [webUrl, setWebUrl] = useState('')
@@ -202,6 +209,33 @@ export function AddContentPage({
     }
   }
 
+  /** Busca a prévia (miniatura, título e canal) pouco depois que o link é colado ou digitado. */
+  const handleYoutubeUrlChange = (value: string) => {
+    setYtUrl(value)
+    setYtPreview(null)
+    setYtPreviewError(null)
+    if (ytPreviewTimer.current !== null) window.clearTimeout(ytPreviewTimer.current)
+    const url = value.trim()
+    if (!url || !targetBlockId) {
+      setYtPreviewLoading(false)
+      return
+    }
+    setYtPreviewLoading(true)
+    const requestId = ++ytPreviewRequest.current
+    ytPreviewTimer.current = window.setTimeout(async () => {
+      try {
+        const preview = await previewYoutube(targetBlockId, url)
+        if (requestId === ytPreviewRequest.current) setYtPreview(preview)
+      } catch (err) {
+        if (requestId === ytPreviewRequest.current) {
+          setYtPreviewError(err instanceof Error && err.message ? err.message : 'Não foi possível ler este link.')
+        }
+      } finally {
+        if (requestId === ytPreviewRequest.current) setYtPreviewLoading(false)
+      }
+    }, 500)
+  }
+
   const handleSubmitYoutube = async (e: FormEvent) => {
     e.preventDefault()
     if (!targetBlockId) {
@@ -216,22 +250,25 @@ export function AddContentPage({
     setSubmitting(true)
     setFeedback(null)
     try {
-      const created = await request<CreatedMaterial>(`/api/study-blocks/${targetBlockId}/materials/youtube`, {
-        method: 'POST',
-        body: JSON.stringify({ url: ytUrl.trim() }),
+      // Título e chat vão na própria importação: o conteúdo é gerado em segundo plano e não pode ser sobrescrito.
+      await importYoutubeVideo<CreatedMaterial>(targetBlockId, {
+        url: ytUrl.trim(),
+        title: ytTitle.trim() || undefined,
+        enabledForChat: ytEnabledForChat,
       })
-      await applySourceOptions(targetBlockId, created, { title: ytTitle, enabledForChat: ytEnabledForChat })
       setFeedback({
         type: 'success',
-        message: 'Vídeo do YouTube importado! As legendas/transcrição estão disponíveis como fonte.',
+        message:
+          'Vídeo adicionado! Ele está sendo processado (análise pela IA ou transcrição); acompanhe na área do bloco.',
       })
       setYtUrl('')
       setYtTitle('')
+      setYtPreview(null)
       onSourceAdded(targetBlockId)
-    } catch {
+    } catch (err) {
       setFeedback({
         type: 'error',
-        message: 'Não foi possível extrair a transcrição do vídeo. Certifique-se de que o vídeo possui legendas ativas.',
+        message: err instanceof Error && err.message ? err.message : 'Não foi possível adicionar o vídeo.',
       })
     } finally {
       setSubmitting(false)
@@ -529,12 +566,40 @@ export function AddContentPage({
               id="yt-url"
               type="url"
               className="form-input"
-              placeholder="https://www.youtube.com/watch?v=... ou https://youtu.be/..."
+              placeholder="Cole o link do botão Compartilhar (https://youtu.be/...) ou da barra de endereço"
               value={ytUrl}
-              onChange={(e) => setYtUrl(e.target.value)}
+              onChange={(e) => handleYoutubeUrlChange(e.target.value)}
               required
             />
           </div>
+
+          {ytPreviewLoading && <p className="form-hint">Buscando informações do vídeo…</p>}
+          {ytPreviewError && <p className="error-text" role="alert">{ytPreviewError}</p>}
+          {ytPreview && (
+            <div className="youtube-preview-card">
+              {ytPreview.thumbnailUrl && (
+                <img className="youtube-preview-thumb" src={ytPreview.thumbnailUrl} alt="" loading="lazy" />
+              )}
+              <div className="youtube-preview-info">
+                <span className="youtube-preview-title">{ytPreview.title ?? 'Vídeo do YouTube'}</span>
+                {ytPreview.channel && <span className="youtube-preview-channel">{ytPreview.channel}</span>}
+                {ytPreview.alreadyImported ? (
+                  <span className="badge badge-warning">Este vídeo já é uma fonte deste bloco</span>
+                ) : ytPreview.aiAnalysisAvailable ? (
+                  <span className="badge badge-success">Será analisado pela IA (Gemini)</span>
+                ) : (
+                  <span className="badge badge-subtle">Sem Gemini configurado: será usada a transcrição</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <p className="youtube-notice">
+            O vídeo é analisado uma única vez pelo Gemini (resumo, tópicos e anotações com o minuto de cada trecho,
+            incluindo o código mostrado na tela). O plano gratuito do Gemini permite cerca de 8 horas de vídeo por dia
+            e só vídeos <strong>públicos</strong> podem ser analisados; nos demais casos, ou sem Gemini configurado, a
+            transcrição (legendas) é usada.
+          </p>
 
           <div className="form-grid-2col">
             <div className="form-field-group">
@@ -565,7 +630,7 @@ export function AddContentPage({
                 onChange={(e) => setYtEnabledForChat(e.target.checked)}
               />
               <span className="checkbox-text">
-                Habilitar a transcrição deste vídeo para o Chat do Bloco
+                Habilitar este vídeo para o Chat do Bloco
               </span>
             </label>
           </div>
@@ -574,9 +639,9 @@ export function AddContentPage({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={submitting || !ytUrl.trim() || !blocks.length}
+              disabled={submitting || !ytUrl.trim() || !blocks.length || ytPreview?.alreadyImported === true}
             >
-              {submitting ? 'Buscando Legendas e Transcrevendo...' : 'Importar Transcrição do YouTube'}
+              {submitting ? 'Adicionando…' : 'Adicionar vídeo como fonte'}
             </button>
           </div>
         </form>

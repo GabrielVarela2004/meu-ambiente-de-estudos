@@ -26,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class YoutubeImportService {
 
 	private static final Logger log = LoggerFactory.getLogger(YoutubeImportService.class);
+	private static final String PLACEHOLDER_TITLE_PREFIX = "Vídeo do YouTube (";
 	static final String NO_CONTENT_MESSAGE = "Não foi possível obter o conteúdo deste vídeo: a análise por IA não "
 			+ "estava disponível ou falhou, e o vídeo não tem legendas. Só vídeos públicos podem ser analisados.";
 
@@ -69,16 +70,25 @@ public class YoutubeImportService {
 	 * (no perfil de teste o executor é síncrono e a fonte já volta concluída).
 	 */
 	public StudyMaterial importVideo(UUID studyBlockId, String rawUrl) {
+		return importVideo(studyBlockId, rawUrl, null, true);
+	}
+
+	/**
+	 * Com título personalizado, ele é mantido (a análise não o troca); {@code enabledForChat} vale desde a criação,
+	 * sem edição posterior que poderia sobrescrever o conteúdo gerado em segundo plano.
+	 */
+	public StudyMaterial importVideo(UUID studyBlockId, String rawUrl, String customTitle, boolean enabledForChat) {
 		StudyBlock block = activeBlock(studyBlockId);
 		String videoId = YoutubeUrlParser.extractVideoId(rawUrl);
 		if (repository.existsByStudyBlockIdAndExternalVideoIdAndStatus(studyBlockId, videoId, StudyMaterialStatus.ACTIVE)) {
 			throw new BusinessRuleException("Este vídeo do YouTube já foi importado neste bloco de estudo.");
 		}
 		YoutubeOEmbedClient.VideoInfo info = metadataOrNull(videoId);
-		String title = info != null && info.title() != null ? info.title() : "Vídeo do YouTube (" + videoId + ")";
+		String title = customTitle != null && !customTitle.isBlank() ? customTitle.strip()
+				: info != null && info.title() != null ? info.title() : PLACEHOLDER_TITLE_PREFIX + videoId + ")";
 		StudyMaterial material = new StudyMaterial(block, title.length() <= 160 ? title : title.substring(0, 160), "",
 				StudyMaterialSourceType.YOUTUBE, YoutubeUrlParser.canonicalUrl(videoId), videoId, null,
-				StudyMaterialProcessingStatus.PROCESSING, null);
+				StudyMaterialProcessingStatus.PROCESSING, null, null, enabledForChat);
 		if (info != null) {
 			material.applyVideoMetadata(info.channel(), info.thumbnailUrl());
 		}
@@ -171,7 +181,7 @@ public class YoutubeImportService {
 			repository.save(fresh);
 			return;
 		}
-		String title = fresh.getTitle().startsWith("Vídeo do YouTube (") ? outcome.title() : null;
+		String title = fresh.getTitle().startsWith(PLACEHOLDER_TITLE_PREFIX) ? outcome.title() : null;
 		fresh.completeVideoProcessing(title, outcome.content(), outcome.language(), outcome.method(),
 				outcome.durationSeconds());
 		repository.save(fresh);

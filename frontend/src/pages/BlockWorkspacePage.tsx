@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { request } from '../api/http'
-import { toggleMaterialChat } from '../api/materials'
+import { reprocessMaterial, toggleMaterialChat } from '../api/materials'
+import { TimestampText } from '../components/video/TimestampText'
+import { YouTubePlayer } from '../components/video/YouTubePlayer'
+import type { YouTubePlayerHandle } from '../components/video/YouTubePlayer'
 import {
   BookOpenIcon,
   ChevronLeftIcon,
@@ -11,6 +14,7 @@ import {
 } from '../components/icons'
 import type { StudyMaterialItem } from '../features/sources/AddSourceModal'
 import '../styles/pages/block-workspace.css'
+import '../styles/pages/video.css'
 import type { StudyBlock } from './StudyBlocksPage'
 
 type Props = {
@@ -34,6 +38,22 @@ const sourceTypeLabels: Record<string, string> = {
   YOUTUBE: 'Vídeo YouTube',
 }
 
+const analysisMethodLabels: Record<string, { label: string; className: string; hint: string }> = {
+  ANALISE_IA: {
+    label: 'Análise do vídeo por IA',
+    className: 'is-ai',
+    hint: 'O Gemini assistiu ao vídeo e gerou resumo, tópicos e anotações com marcação de tempo.',
+  },
+  TRANSCRICAO: {
+    label: 'Transcrição (plano B)',
+    className: 'is-transcript',
+    hint: 'Conteúdo obtido das legendas do vídeo. Com o Gemini configurado, use "Analisar com IA" para gerar anotações.',
+  },
+}
+
+/** Intervalo da atualização automática enquanto há vídeo em processamento. */
+const PROCESSING_POLL_MS = 5000
+
 export function BlockWorkspacePage({
   block,
   onBack,
@@ -48,9 +68,12 @@ export function BlockWorkspacePage({
   const [togglingChatId, setTogglingChatId] = useState<string | null>(null)
   const [summarizingId, setSummarizingId] = useState<string | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null)
+  const [reprocessError, setReprocessError] = useState<string | null>(null)
+  const playerRef = useRef<YouTubePlayerHandle>(null)
 
-  const loadMaterials = useCallback(async () => {
-    setLoading(true)
+  const loadMaterials = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const data = await request<StudyMaterialItem[]>(
         `/api/study-blocks/${block.id}/materials?includeArchived=false`
@@ -62,13 +85,34 @@ export function BlockWorkspacePage({
     } catch {
       // Ignora erro de carregamento
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [block.id, selectedMaterialId])
 
   useEffect(() => {
     void loadMaterials()
   }, [loadMaterials])
+
+  // Vídeos são processados em segundo plano: enquanto houver algum "processando", a lista se atualiza sozinha.
+  const hasProcessing = materials.some((m) => m.processingStatus === 'PROCESSING')
+  useEffect(() => {
+    if (!hasProcessing) return
+    const timer = window.setTimeout(() => void loadMaterials(true), PROCESSING_POLL_MS)
+    return () => window.clearTimeout(timer)
+  }, [hasProcessing, materials, loadMaterials])
+
+  const handleReprocess = async (mat: StudyMaterialItem) => {
+    setReprocessingId(mat.id)
+    setReprocessError(null)
+    try {
+      const updated = await reprocessMaterial<StudyMaterialItem>(block.id, mat.id)
+      setMaterials((prev) => prev.map((m) => (m.id === mat.id ? { ...m, ...updated } : m)))
+    } catch (err) {
+      setReprocessError(err instanceof Error && err.message ? err.message : 'Não foi possível processar o vídeo de novo.')
+    } finally {
+      setReprocessingId(null)
+    }
+  }
 
   const handleGenerateSummary = async (mat: StudyMaterialItem) => {
     setSummarizingId(mat.id)
@@ -220,9 +264,17 @@ export function BlockWorkspacePage({
                     <h4 className="source-item-title">{mat.title}</h4>
 
                     <div className="source-item-meta">
-                      <span>{mat.wordCount ?? 0} palavras</span>
-                      <span>•</span>
-                      <span>{mat.charCount ?? 0} chars</span>
+                      {mat.processingStatus === 'PROCESSING' ? (
+                        <span className="badge badge-subtle">Processando…</span>
+                      ) : mat.processingStatus === 'FAILED' ? (
+                        <span className="badge badge-danger">Falhou</span>
+                      ) : (
+                        <>
+                          <span>{mat.wordCount ?? 0} palavras</span>
+                          <span>•</span>
+                          <span>{mat.charCount ?? 0} chars</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 )
@@ -241,6 +293,17 @@ export function BlockWorkspacePage({
                     {sourceTypeLabels[selectedMaterial.sourceType || 'TEXT'] || selectedMaterial.sourceType}
                   </span>
                   <h2 className="text-xl font-bold">{selectedMaterial.title}</h2>
+                  {selectedMaterial.videoChannel && (
+                    <p className="text-secondary text-sm">Canal: {selectedMaterial.videoChannel}</p>
+                  )}
+                  {selectedMaterial.analysisMethod && analysisMethodLabels[selectedMaterial.analysisMethod] && (
+                    <span
+                      className={`badge video-method-badge ${analysisMethodLabels[selectedMaterial.analysisMethod].className}`}
+                      title={analysisMethodLabels[selectedMaterial.analysisMethod].hint}
+                    >
+                      {analysisMethodLabels[selectedMaterial.analysisMethod].label}
+                    </span>
+                  )}
                 </div>
                 <div className="reader-stats">
                   <span>{selectedMaterial.wordCount ?? 0} palavras</span>
@@ -258,6 +321,56 @@ export function BlockWorkspacePage({
                   Abrir fonte original ↗
                 </a>
               )}
+
+              {selectedMaterial.sourceType === 'YOUTUBE' && selectedMaterial.externalVideoId && (
+                <YouTubePlayer
+                  key={selectedMaterial.externalVideoId}
+                  ref={playerRef}
+                  videoId={selectedMaterial.externalVideoId}
+                  title={selectedMaterial.title}
+                />
+              )}
+
+              {selectedMaterial.processingStatus === 'PROCESSING' && (
+                <div className="video-status-banner is-processing" role="status">
+                  <span>
+                    Processando o vídeo: análise pela IA ou, como plano B, a transcrição. Esta tela se atualiza
+                    sozinha quando terminar.
+                  </span>
+                </div>
+              )}
+              {selectedMaterial.processingStatus === 'FAILED' && (
+                <div className="video-status-banner is-failed" role="alert">
+                  <span>{selectedMaterial.errorMessage || 'Não foi possível processar esta fonte.'}</span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={reprocessingId === selectedMaterial.id}
+                    onClick={() => void handleReprocess(selectedMaterial)}
+                  >
+                    {reprocessingId === selectedMaterial.id ? 'Enviando…' : 'Tentar novamente'}
+                  </button>
+                </div>
+              )}
+              {selectedMaterial.sourceType === 'YOUTUBE' &&
+                selectedMaterial.processingStatus === 'COMPLETED' &&
+                selectedMaterial.analysisMethod === 'TRANSCRICAO' && (
+                  <div className="video-status-banner is-processing">
+                    <span>
+                      Este vídeo usa a transcrição. Com o Gemini configurado, a análise do vídeo gera resumo e
+                      anotações com o código mostrado na tela.
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={reprocessingId === selectedMaterial.id}
+                      onClick={() => void handleReprocess(selectedMaterial)}
+                    >
+                      {reprocessingId === selectedMaterial.id ? 'Enviando…' : 'Analisar com IA'}
+                    </button>
+                  </div>
+                )}
+              {reprocessError && reprocessingId === null && <p className="error-text">{reprocessError}</p>}
 
               <section className="reader-summary" aria-label="Resumo do material">
                 <div className="reader-summary-header">
@@ -295,7 +408,14 @@ export function BlockWorkspacePage({
 
               <div className="reader-content-body">
                 <pre className={`content-pre-wrap ${selectedMaterial.sourceType === 'FILE_CODE' ? 'is-code' : ''}`}>
-                  {selectedMaterial.content}
+                  {selectedMaterial.sourceType === 'YOUTUBE' ? (
+                    <TimestampText
+                      text={selectedMaterial.content}
+                      onSeek={(seconds) => playerRef.current?.seekTo(seconds)}
+                    />
+                  ) : (
+                    selectedMaterial.content
+                  )}
                 </pre>
               </div>
             </div>
