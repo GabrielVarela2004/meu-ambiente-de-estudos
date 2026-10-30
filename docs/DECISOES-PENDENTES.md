@@ -36,3 +36,19 @@ analisadas por IA.
 **Recomendação:** C agora (resolve o caso comum sem nova dependência) e B depois, se as playlists forem frequentes.
 
 **Decisão (2026-10-30): C — colar vários links de uma vez**, implementada antes da Etapa 8.
+
+## D3 — `AddSourceModal` sem uso em nenhuma tela (Etapa 9)
+
+**Contexto:** `frontend/src/features/sources/AddSourceModal.tsx` (~380 linhas) é um modal de adicionar fonte
+(texto, arquivo e YouTube) que nenhuma tela abre; os tipos que outras telas importavam dele foram movidos para
+`frontend/src/types/material.ts`. A página **Adicionar Conteúdo** já faz tudo isso e mais (página web, prévia do
+vídeo, vários vídeos de uma vez, título e chat na importação), e o modal ficou desatualizado em relação a ela.
+
+| Opção | Esforço | Prós | Contras |
+|---|---|---|---|
+| A. Apagar o modal | mínimo | Menos código morto para manter; uma só forma de adicionar fontes | Perde um atalho que nunca foi ligado |
+| B. Integrar na área do bloco ("+ Adicionar" abre o modal sem sair da tela) | médio (atualizar para paridade com Adicionar Conteúdo) | Adicionar fonte sem trocar de página | Duas implementações do mesmo fluxo para manter em sincronia |
+| C. Manter como está | nenhum | Nada muda | Código morto que já está divergindo |
+
+**Recomendação:** A — a página Adicionar Conteúdo cobre todos os casos; se o atalho fizer falta, o botão da área
+do bloco pode abrir essa página já com o bloco selecionado (como faz hoje).

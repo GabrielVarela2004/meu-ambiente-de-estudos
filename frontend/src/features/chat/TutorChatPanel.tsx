@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../api/http'
-import type { SourceType, StudyMaterialItem } from '../sources/AddSourceModal'
+import type { SourceType, StudyMaterialItem } from '../../types/material'
 import { TimestampText } from '../../components/video/TimestampText'
 import { useVideoPlayer } from '../video/videoPlayer'
 

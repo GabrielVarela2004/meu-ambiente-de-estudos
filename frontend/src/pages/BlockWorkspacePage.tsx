@@ -12,7 +12,7 @@ import {
   NetworkIcon,
   PlusCircleIcon,
 } from '../components/icons'
-import type { StudyMaterialItem } from '../features/sources/AddSourceModal'
+import type { StudyMaterialItem } from '../types/material'
 import '../styles/pages/block-workspace.css'
 import '../styles/pages/video.css'
 import type { StudyBlock } from './StudyBlocksPage'
