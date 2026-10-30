@@ -66,6 +66,17 @@ public class StudyQuestionService {
 		this.currentUserResolver = currentUserResolver == null ? new CurrentUserResolver() : currentUserResolver;
 	}
 
+	/** Enunciados mais recentes do bloco (só do tópico, se informado), enviados à IA para ela não repetir perguntas. */
+	@Transactional(readOnly = true)
+	public List<String> recentPrompts(UUID blockId, UUID topicId, int limit) {
+		return repository.findAllByStudyBlockIdAndStatusOrderByUpdatedAtDesc(blockId, StudyQuestionStatus.ACTIVE).stream()
+				.filter(question -> topicId == null || topicId.equals(question.getTopicId()))
+				.map(StudyQuestion::getPrompt)
+				.filter(prompt -> prompt != null && !prompt.isBlank())
+				.limit(limit)
+				.toList();
+	}
+
 	@Transactional
 	public StudyQuestion create(UUID blockId, UUID materialId, String prompt, String explanation,
 			List<StudyQuestionController.OptionRequest> options) {

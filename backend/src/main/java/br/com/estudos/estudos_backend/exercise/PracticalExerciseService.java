@@ -1,7 +1,10 @@
 package br.com.estudos.estudos_backend.exercise;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
 import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
@@ -180,7 +183,7 @@ public class PracticalExerciseService {
 		}
 
 		StudyQuestionDifficulty resolvedDifficulty = difficulty == null ? StudyQuestionDifficulty.INTERMEDIATE : difficulty;
-		PracticalExerciseType resolvedType = exerciseType == null ? PracticalExerciseType.PROBLEM_SOLVING : exerciseType;
+		PracticalExerciseType resolvedType = exerciseType == null ? leastUsedType(blockId) : exerciseType;
 		String defaultExcerpt = extractDefaultExcerpt(targetMaterial);
 
 		if (aiTutorProvider != null
@@ -343,6 +346,24 @@ public class PracticalExerciseService {
 		return exerciseRepository.findById(exerciseId)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
 				.orElseThrow(() -> new NotFoundException("Exercício prático não encontrado."));
+	}
+
+	/** Formatos genéricos o bastante para qualquer fonte; SQL, feature e integração ficam para escolha explícita. */
+	private static final List<PracticalExerciseType> VARIED_TYPES = List.of(
+			PracticalExerciseType.PROBLEM_SOLVING,
+			PracticalExerciseType.METHOD_IMPLEMENTATION,
+			PracticalExerciseType.CODE_FIX,
+			PracticalExerciseType.CODE_ANALYSIS,
+			PracticalExerciseType.SMALL_SOLUTION);
+
+	/** Sem tipo escolhido, usa o formato menos praticado no bloco, para variar os exercícios gerados. */
+	PracticalExerciseType leastUsedType(UUID blockId) {
+		Map<PracticalExerciseType, Long> usage = exerciseRepository.findAllByStudyBlockIdOrderByUpdatedAtDesc(blockId)
+				.stream()
+				.collect(Collectors.groupingBy(PracticalExercise::getExerciseType, Collectors.counting()));
+		return VARIED_TYPES.stream()
+				.min(Comparator.comparingLong(type -> usage.getOrDefault(type, 0L)))
+				.orElse(PracticalExerciseType.PROBLEM_SOLVING);
 	}
 
 	private StudyBlock activeBlock(UUID id) {
