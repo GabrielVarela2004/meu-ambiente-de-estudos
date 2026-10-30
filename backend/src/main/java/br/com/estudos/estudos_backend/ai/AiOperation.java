@@ -7,7 +7,8 @@ public enum AiOperation {
 	EXERCISE_GENERATION("Geração de exercícios práticos"),
 	TOPIC_EXTRACTION("Extração de tópicos das fontes"),
 	MATERIAL_SUMMARY("Resumo de materiais"),
-	PERFORMANCE_ANALYSIS("Análise de desempenho");
+	PERFORMANCE_ANALYSIS("Análise de desempenho"),
+	CAREER_ANALYSIS("Análise de vagas");
 
 	private final String label;
 

@@ -82,6 +82,16 @@ public class CareerJob {
 	@Column(name = "application_status", nullable = false, length = 30)
 	private JobApplicationStatus applicationStatus = JobApplicationStatus.DISCOVERED;
 
+	@Column(name = "application_notes", columnDefinition = "TEXT")
+	private String applicationNotes;
+
+	@Column(name = "status_updated_at")
+	private OffsetDateTime statusUpdatedAt;
+
+	/** Bloco de estudo criado a partir desta vaga (Etapa G). */
+	@Column(name = "study_block_id")
+	private UUID studyBlockId;
+
 	protected CareerJob() {
 	}
 
@@ -140,7 +150,30 @@ public class CareerJob {
 	}
 
 	public void setApplicationStatus(JobApplicationStatus applicationStatus) {
+		if (this.applicationStatus != applicationStatus) {
+			this.statusUpdatedAt = OffsetDateTime.now();
+		}
 		this.applicationStatus = applicationStatus;
+	}
+
+	public String getApplicationNotes() {
+		return applicationNotes;
+	}
+
+	public void setApplicationNotes(String applicationNotes) {
+		this.applicationNotes = applicationNotes;
+	}
+
+	public OffsetDateTime getStatusUpdatedAt() {
+		return statusUpdatedAt;
+	}
+
+	public UUID getStudyBlockId() {
+		return studyBlockId;
+	}
+
+	public void setStudyBlockId(UUID studyBlockId) {
+		this.studyBlockId = studyBlockId;
 	}
 
 	public UUID getId() {

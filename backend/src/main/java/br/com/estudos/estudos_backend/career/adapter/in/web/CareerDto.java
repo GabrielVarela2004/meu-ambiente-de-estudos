@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import br.com.estudos.estudos_backend.career.domain.AgentExecutionStatus;
 import br.com.estudos.estudos_backend.career.domain.AgentTriggerType;
@@ -13,6 +14,7 @@ import br.com.estudos.estudos_backend.career.domain.CareerAgentExecution;
 import br.com.estudos.estudos_backend.career.domain.CareerJob;
 import br.com.estudos.estudos_backend.career.domain.CareerJobSource;
 import br.com.estudos.estudos_backend.career.domain.CareerPreferences;
+import br.com.estudos.estudos_backend.career.domain.CareerProfile;
 import br.com.estudos.estudos_backend.career.domain.ExperienceLevel;
 import br.com.estudos.estudos_backend.career.domain.JobApplicationStatus;
 import br.com.estudos.estudos_backend.career.domain.JobModality;
@@ -20,7 +22,38 @@ import br.com.estudos.estudos_backend.career.service.CareerJobCompatibilityServi
 
 public class CareerDto {
 
-	public record JobStatusRequest(@NotNull JobApplicationStatus status) {}
+	/** {@code notes} é opcional: quando ausente, as anotações atuais da candidatura são mantidas. */
+	public record JobStatusRequest(@NotNull JobApplicationStatus status, @Size(max = 5000) String notes) {}
+
+	public record ProfileRequest(
+			@Size(max = 200) String headline,
+			@Size(max = 5000) String summary,
+			@Size(max = 10000) String education,
+			@Size(max = 20000) String experience,
+			@Size(max = 20000) String projects,
+			@Size(max = 5000) String certifications,
+			@Size(max = 2000) String languages,
+			@Size(max = 2000) String links
+	) {}
+
+	public record ProfileResponse(
+			String headline,
+			String summary,
+			String education,
+			String experience,
+			String projects,
+			String certifications,
+			String languages,
+			String links,
+			OffsetDateTime updatedAt
+	) {
+		public static ProfileResponse from(CareerProfile p) {
+			return new ProfileResponse(p.getHeadline(), p.getSummary(), p.getEducation(), p.getExperience(),
+					p.getProjects(), p.getCertifications(), p.getLanguages(), p.getLinks(), p.getUpdatedAt());
+		}
+	}
+
+	public record JobStudyBlockResponse(UUID studyBlockId, String title, List<String> topics, boolean created) {}
 
 	public record JobItemResponse(
 			UUID id,
@@ -44,7 +77,10 @@ public class CareerDto {
 			List<String> partialRequirements,
 			List<String> missingRequirements,
 			List<String> recommendedSkillsToDevelop,
-			String compatibilityNote
+			String compatibilityNote,
+			String applicationNotes,
+			OffsetDateTime statusUpdatedAt,
+			UUID studyBlockId
 	) {
 		public static JobItemResponse from(CareerJob job, JobMatchEvaluation eval) {
 			return new JobItemResponse(
@@ -69,7 +105,10 @@ public class CareerDto {
 					eval.partialRequirements(),
 					eval.missingRequirements(),
 					eval.recommendedSkillsToDevelop(),
-					eval.summaryNote()
+					eval.summaryNote(),
+					job.getApplicationNotes(),
+					job.getStatusUpdatedAt(),
+					job.getStudyBlockId()
 			);
 		}
 	}
