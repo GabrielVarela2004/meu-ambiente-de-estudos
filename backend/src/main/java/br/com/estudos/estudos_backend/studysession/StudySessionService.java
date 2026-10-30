@@ -3,11 +3,11 @@ package br.com.estudos.estudos_backend.studysession;
 import java.util.List;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
@@ -52,7 +52,7 @@ public class StudySessionService {
 		try {
 			session.start();
 		} catch (IllegalStateException exception) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage());
+			throw new BusinessRuleException(exception.getMessage());
 		}
 		return session;
 	}
@@ -63,7 +63,7 @@ public class StudySessionService {
 		try {
 			session.complete();
 		} catch (IllegalStateException exception) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage());
+			throw new BusinessRuleException(exception.getMessage());
 		}
 		return session;
 	}
@@ -74,7 +74,7 @@ public class StudySessionService {
 		try {
 			session.cancel();
 		} catch (IllegalStateException exception) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage());
+			throw new BusinessRuleException(exception.getMessage());
 		}
 		return session;
 	}
@@ -83,7 +83,7 @@ public class StudySessionService {
 		activeBlock(blockId);
 		StudySession session = sessionRepository.findById(sessionId)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study session not found"));
+				.orElseThrow(() -> new NotFoundException("Sessão de estudo não encontrada."));
 		return session;
 	}
 
@@ -91,6 +91,6 @@ public class StudySessionService {
 		String ownerId = currentUserResolver.currentUserId();
 		return blockRepository.findByIdAndOwnerId(blockId, ownerId)
 				.filter(block -> block.getStatus() == StudyBlockStatus.ACTIVE)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found"));
+				.orElseThrow(() -> new NotFoundException("Bloco de estudo não encontrado."));
 	}
 }
