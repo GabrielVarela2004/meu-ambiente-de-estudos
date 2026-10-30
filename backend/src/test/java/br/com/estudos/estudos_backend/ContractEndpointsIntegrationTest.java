@@ -79,6 +79,13 @@ class ContractEndpointsIntegrationTest {
 	}
 
 	@Test
+	void unarchiveOfActiveBlockIsConflict() throws Exception {
+		String blockId = createBlock("Bloco já ativo");
+		mockMvc.perform(post("/api/study-blocks/" + blockId + "/unarchive").header(CurrentUserResolver.USER_HEADER, userId))
+				.andExpect(status().isConflict());
+	}
+
+	@Test
 	void unarchiveOfAnotherUsersBlockIsNotFound() throws Exception {
 		String blockId = createBlock("Bloco de outro usuário");
 		mockMvc.perform(post("/api/study-blocks/" + blockId + "/unarchive")

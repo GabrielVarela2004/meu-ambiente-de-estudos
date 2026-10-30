@@ -86,6 +86,9 @@ public class StudyBlockService {
 	@Transactional
 	public StudyBlock unarchive(UUID id) {
 		StudyBlock block = get(id);
+		if (block.getStatus() == StudyBlockStatus.ACTIVE) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "O bloco de estudo já está ativo.");
+		}
 		block.unarchive();
 		return repository.save(block);
 	}
