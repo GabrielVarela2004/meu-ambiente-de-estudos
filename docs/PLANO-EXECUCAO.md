@@ -16,7 +16,9 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
 - [x] Etapa 3 — Agendamento de vagas (já ativado na Etapa B da auditoria; renomeado para `config/SchedulingConfiguration`
   e criado `SchedulingConfigurationConditionTest`: ativo por padrão e desligado com `app.scheduling.enabled=false`,
   valor do perfil de teste)
-- [ ] Etapa 4 — Limite de upload (10MB, 413)
+- [x] Etapa 4 — Limite de upload: multipart em 10MB (`UPLOAD_MAX_FILE_SIZE`/`UPLOAD_MAX_REQUEST_SIZE`), `MaterialFileStorage`
+  usa o mesmo valor para PDF/DOCX/PPTX (texto segue em 2 MB), `UploadExceptionHandler` devolve 413 em português,
+  textos do frontend e README corrigidos. Backend: 138 testes passando.
 - [ ] Etapa 5 — Tratamento de erros padronizado
 - [ ] Etapa 6 — Integração com o Gemini
 - [ ] Etapa 7 — Vídeos do YouTube como fonte

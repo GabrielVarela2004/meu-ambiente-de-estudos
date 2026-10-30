@@ -97,9 +97,9 @@ export function AddSourceModal({
       return
     }
 
-    const maxBytes = 15 * 1024 * 1024 // 15 MB
+    const maxBytes = 10 * 1024 * 1024 // 10 MB (mesmo limite do backend)
     if (selectedFile.size > maxBytes) {
-      setErrorMessage('O arquivo excede o tamanho máximo de 15 MB.')
+      setErrorMessage('O arquivo excede o tamanho máximo de 10 MB.')
       return
     }
 
@@ -259,7 +259,7 @@ export function AddSourceModal({
                   <span className="file-drop-icon">📁</span>
                   <strong>Escolha ou arraste um arquivo</strong>
                   <span className="file-drop-hint">
-                    Suporta PDF, DOCX, TXT e Markdown (máx. 15 MB)
+                    Suporta PDF, DOCX, TXT e Markdown (máx. 10 MB)
                   </span>
                   <input
                     type="file"

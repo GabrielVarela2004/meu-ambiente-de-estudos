@@ -22,9 +22,11 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.w3c.dom.Document;
@@ -39,7 +41,6 @@ public class MaterialFileStorage {
 	private static final int MAX_PPTX_PART_BYTES = 5_000_000;
 	private static final long MAX_PPTX_TOTAL_BYTES = 50_000_000L;
 	private static final int MAX_PPTX_ENTRIES = 5_000;
-	private static final long MAX_BINARY_FILE_BYTES = 20_000_000L;
 	private static final long MAX_TEXT_FILE_BYTES = 2_000_000L;
 
 	private static final Pattern SLIDE_ENTRY = Pattern.compile("ppt/slides/slide(\\d+)\\.xml");
@@ -55,9 +56,21 @@ public class MaterialFileStorage {
 			"Formatos suportados: .txt, .md, .pdf, .docx, .pptx e arquivos de código (.java, .py, .ts, .sql…)";
 
 	private final Path storageDirectory;
+	/** Limite de PDF/DOCX/PPTX: o mesmo do multipart do Spring, para os dois nunca divergirem. */
+	private final long maxBinaryFileBytes;
+	/** Arquivos de texto têm limite próprio, nunca maior que o do multipart. */
+	private final long maxTextFileBytes;
 
-	public MaterialFileStorage(@Value("${STUDY_FILE_STORAGE_DIR:${user.home}/.estudos/uploads}") String storageDirectory) {
+	public MaterialFileStorage(String storageDirectory) {
+		this(storageDirectory, DataSize.ofMegabytes(10));
+	}
+
+	@Autowired
+	public MaterialFileStorage(@Value("${STUDY_FILE_STORAGE_DIR:${user.home}/.estudos/uploads}") String storageDirectory,
+			@Value("${spring.servlet.multipart.max-file-size:10MB}") DataSize maxFileSize) {
 		this.storageDirectory = Paths.get(storageDirectory).toAbsolutePath().normalize();
+		this.maxBinaryFileBytes = maxFileSize.toBytes();
+		this.maxTextFileBytes = Math.min(MAX_TEXT_FILE_BYTES, maxBinaryFileBytes);
 	}
 
 	public String readAndStore(MultipartFile file) {
@@ -70,10 +83,10 @@ public class MaterialFileStorage {
 		if (ext == null) {
 			throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, SUPPORTED_MESSAGE);
 		}
-		long maxBytes = isBinary(ext) ? MAX_BINARY_FILE_BYTES : MAX_TEXT_FILE_BYTES;
+		long maxBytes = isBinary(ext) ? maxBinaryFileBytes : maxTextFileBytes;
 		if (file.getSize() > maxBytes) {
 			throw new ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE,
-					"File size exceeds the maximum allowed limit");
+					"O arquivo excede o tamanho máximo de " + formatMegabytes(maxBytes) + " para este formato.");
 		}
 		try {
 			Files.createDirectories(storageDirectory);
@@ -155,6 +168,10 @@ public class MaterialFileStorage {
 				.replace("\r", "\n")
 				.replaceAll("\\n{4,}", "\n\n\n")
 				.strip();
+	}
+
+	private static String formatMegabytes(long bytes) {
+		return Math.max(1, Math.round(bytes / (1024.0 * 1024.0))) + " MB";
 	}
 
 	private static String readUtf8(byte[] bytes) {

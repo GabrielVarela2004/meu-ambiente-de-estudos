@@ -20,7 +20,7 @@ de tópicos; preferências e busca manual de vagas.
   exercício prático, "buscar agora", status de vaga, avaliar competências e ativar fonte de vagas. Detalhes na tabela 4.2 da auditoria.
 - O agendamento automático de vagas está ativo (`app.scheduling.enabled`, padrão `true`).
 - Não há autenticação; o frontend não envia `X-Study-User-Id` (todo uso cai em `default-user`).
-- Upload limitado a **1 MB** (padrão do Spring; nenhum limite configurado).
+- Upload limitado a **10 MB** para PDF, DOCX e PPTX e **2 MB** para texto e código-fonte (`UPLOAD_MAX_FILE_SIZE` / `UPLOAD_MAX_REQUEST_SIZE`).
 - **Fórum** está oculto do menu (era apenas visual). **Metas e Sessões** têm tela própria na barra lateral.
 - **IA com vários provedores:** OpenAI, Anthropic (Claude) e Google Gemini. Em Configurações › Provedores de IA escolhe-se o provedor de cada operação (chat, questões, exercícios, tópicos), o fallback, o modelo e o limite diário; o consumo dos últimos 7 dias aparece na mesma tela. As chaves ficam só no `.env` (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
 - Plataforma de **uso individual** (sem login).
@@ -248,7 +248,7 @@ curl -X POST http://localhost:8080/api/chat \
 | **502 Bad Gateway** | Resposta da OpenAI malformada ou instabilidade no serviço da OpenAI. | Tente novamente em instantes. O backend descarta respostas corrompidas para não persistir dados inválidos. |
 | **504 Gateway Timeout** | A OpenAI demorou mais do que o tempo limite configurado (padrão 45s). | Reduza o tamanho do texto enviado ou divida o material em fontes menores. |
 | **400 Bad Request** | Arquivo corrompido, encriptado ou mensagem excedeu o limite máximo (40.000 caracteres). | Envie um arquivo legível e não protegido por senha. |
-| **413 Content Too Large** | Arquivo maior que o limite de upload (atualmente o padrão do Spring, **1 MB**, pois não há limite configurado). | Divida o arquivo ou configure `spring.servlet.multipart.max-file-size`. |
+| **413 Content Too Large** | Arquivo maior que o limite de upload (**10 MB** por padrão; 2 MB para texto e código-fonte). A resposta traz a mensagem em português. | Divida o arquivo ou ajuste `UPLOAD_MAX_FILE_SIZE` e `UPLOAD_MAX_REQUEST_SIZE` no `.env`. |
 | **415 Unsupported Media Type** | Extensão não suportada. | Utilize apenas `.txt`, `.md`, `.pdf` ou `.docx`. |
 | **422 Unprocessable Entity** | Bloco sem materiais cadastrados para gerar questões com IA ou vídeo YouTube sem legendas. | Adicione materiais com conteúdo de texto ao bloco antes de solicitar a geração. |
 

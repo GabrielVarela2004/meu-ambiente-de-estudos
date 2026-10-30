@@ -425,7 +425,7 @@ export function AddContentPage({
                 ) : (
                   <div>
                     <strong>Clique para escolher ou arraste o arquivo aqui</strong>
-                    <p className="text-xs text-muted">PDF, DOCX e PPTX (até 20 MB), Markdown, TXT e código-fonte (.java, .py, .ts, .sql…, até 2 MB)</p>
+                    <p className="text-xs text-muted">PDF, DOCX e PPTX (até 10 MB), Markdown, TXT e código-fonte (.java, .py, .ts, .sql…, até 2 MB)</p>
                   </div>
                 )}
               </div>
