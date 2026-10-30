@@ -8,10 +8,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.http.HttpStatus;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Configurações da camada de IA: preferências por provedor, rota por operação e disponibilidade
@@ -47,7 +46,7 @@ public class AiSettingsService {
 
 	public AiModelProvider provider(String id) {
 		return providers.stream().filter(p -> p.id().equals(id)).findFirst()
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provedor de IA desconhecido: " + id));
+				.orElseThrow(() -> new InvalidInputException("Provedor de IA desconhecido: " + id));
 	}
 
 	@Transactional(readOnly = true)
@@ -110,7 +109,7 @@ public class AiSettingsService {
 	public AiProviderSettings updateProvider(String providerId, boolean enabled, String model, Integer dailyRequestLimit) {
 		provider(providerId);
 		if (model != null && model.length() > 120) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome de modelo muito longo.");
+			throw new InvalidInputException("Nome de modelo muito longo.");
 		}
 		AiProviderSettings settings = settingsRepository.findById(providerId).orElseGet(() -> new AiProviderSettings(providerId));
 		settings.update(enabled, model, dailyRequestLimit);
