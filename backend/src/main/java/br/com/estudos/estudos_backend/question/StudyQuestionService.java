@@ -8,11 +8,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
 import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
@@ -93,14 +94,14 @@ public class StudyQuestionService {
 			List<StudyQuestionController.OptionRequest> options) {
 		StudyBlock block = blockService.get(blockId);
 		if (block.getStatus() == StudyBlockStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study blocks cannot receive questions");
+			throw new BusinessRuleException("Blocos de estudo arquivados não podem receber questões.");
 		}
 		StudyMaterial material = null;
 		if (materialId != null) {
 			material = materialRepository.findById(materialId)
 					.filter(item -> item.getStudyBlock().getId().equals(blockId))
 					.filter(item -> item.getStatus() == StudyMaterialStatus.ACTIVE)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid study material"));
+					.orElseThrow(() -> new InvalidInputException("Material de estudo inválido."));
 		}
 
 		StudyQuestionDifficulty resolvedDifficulty = difficulty == null ? StudyQuestionDifficulty.INTERMEDIATE : difficulty;
@@ -191,8 +192,8 @@ public class StudyQuestionService {
 
 		if (question.getFormat() == StudyQuestionFormat.DISCURSIVE) {
 			if (discursiveAnswer == null || discursiveAnswer.isBlank()) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-						"Discursive questions require a non-blank discursiveAnswer");
+				throw new InvalidInputException(
+						"Questões discursivas exigem uma resposta preenchida.");
 			}
 			String cleanAnswer = discursiveAnswer.trim();
 			boolean correct = evaluateDiscursiveCriteria(cleanAnswer, question.getExpectedAnswer());
@@ -238,12 +239,12 @@ public class StudyQuestionService {
 		}
 
 		if (optionId == null) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Objective questions require an optionId");
+			throw new InvalidInputException("Questões objetivas exigem a escolha de uma alternativa.");
 		}
 		StudyQuestionOption option = question.getOptions().stream()
 				.filter(item -> item.getId().equals(optionId))
 				.findFirst()
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Option does not belong to question"));
+				.orElseThrow(() -> new InvalidInputException("A alternativa não pertence a esta questão."));
 		boolean correct = option.isCorrect();
 		question.scheduleNextReview(correct);
 		repository.save(question);
@@ -343,14 +344,14 @@ public class StudyQuestionService {
 	@Transactional
 	public StudyQuestion rescheduleReview(UUID questionId, int days) {
 		if (days < 1 || days > 365) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 1 and 365");
+			throw new InvalidInputException("O número de dias deve estar entre 1 e 365.");
 		}
 		String ownerId = currentUserResolver.currentUserId();
 		StudyQuestion question = repository.findById(questionId)
 				.filter(item -> item.getStudyBlock().getOwnerId().equals(ownerId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study question not found"));
+				.orElseThrow(() -> new NotFoundException("Questão não encontrada."));
 		if (question.getStatus() == StudyQuestionStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study questions cannot be rescheduled");
+			throw new BusinessRuleException("Questões arquivadas não podem ser reagendadas.");
 		}
 		question.rescheduleManual(days);
 		return repository.save(question);
@@ -386,9 +387,9 @@ public class StudyQuestionService {
 		blockService.get(blockId);
 		StudyQuestion question = repository.findById(id)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study question not found"));
+				.orElseThrow(() -> new NotFoundException("Questão não encontrada."));
 		if (question.getStatus() == StudyQuestionStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study questions cannot be answered");
+			throw new BusinessRuleException("Questões arquivadas não podem ser respondidas.");
 		}
 		return question;
 	}
@@ -397,8 +398,8 @@ public class StudyQuestionService {
 			List<StudyQuestionController.OptionRequest> options) {
 		if (format == StudyQuestionFormat.DISCURSIVE) {
 			if (expectedAnswer == null || expectedAnswer.isBlank()) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-						"Discursive questions require a non-blank expectedAnswer with evaluation criteria");
+				throw new InvalidInputException(
+						"Questões discursivas exigem uma resposta esperada com critérios de avaliação.");
 			}
 			return;
 		}
@@ -407,8 +408,8 @@ public class StudyQuestionService {
 			if (options == null || options.size() != 2
 					|| options.stream().filter(StudyQuestionController.OptionRequest::correct).count() != 1
 					|| options.stream().anyMatch(option -> option.text() == null || option.text().isBlank())) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-						"True/False questions require exactly 2 options and 1 correct option");
+				throw new InvalidInputException(
+						"Questões de verdadeiro ou falso exigem exatamente 2 alternativas e 1 correta.");
 			}
 			return;
 		}
@@ -416,8 +417,8 @@ public class StudyQuestionService {
 		if (options == null || options.size() < 2 || options.size() > 6
 				|| options.stream().filter(StudyQuestionController.OptionRequest::correct).count() != 1
 				|| options.stream().anyMatch(option -> option.text() == null || option.text().isBlank())) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Questions require 2 to 6 options and exactly one correct option");
+			throw new InvalidInputException(
+					"Questões objetivas exigem de 2 a 6 alternativas e exatamente uma correta.");
 		}
 	}
 

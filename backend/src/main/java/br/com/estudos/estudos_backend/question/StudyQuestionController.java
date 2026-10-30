@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -75,8 +76,7 @@ public class StudyQuestionController {
 			@RequestParam(required = false) Integer days) {
 		if (days == null) return service.stats(studyBlockId);
 		if (days < 1 || days > 365) {
-			throw new org.springframework.web.server.ResponseStatusException(
-					HttpStatus.BAD_REQUEST, "days must be between 1 and 365");
+			throw new InvalidInputException("O número de dias deve estar entre 1 e 365.");
 		}
 		return service.stats(studyBlockId, days);
 	}

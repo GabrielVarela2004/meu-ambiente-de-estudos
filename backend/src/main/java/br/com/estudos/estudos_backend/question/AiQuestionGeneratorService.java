@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,13 +85,13 @@ public class AiQuestionGeneratorService {
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, UUID topicId) {
 		int resolvedQuantity = quantity == null ? 1 : quantity;
 		if (resolvedQuantity < 1 || resolvedQuantity > 10) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+			throw new InvalidInputException(
 					"A quantidade de questões do simulado deve estar entre 1 e 10.");
 		}
 
 		StudyBlock block = studyBlockService.get(studyBlockId);
 		if (block.getStatus() == StudyBlockStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study blocks cannot receive questions");
+			throw new BusinessRuleException("Blocos de estudo arquivados não podem receber questões.");
 		}
 
 		List<StudyMaterial> materials = studyMaterialRepository
@@ -108,12 +110,12 @@ public class AiQuestionGeneratorService {
 		KnowledgeTopic selectedTopic = null;
 		if (topicId != null) {
 			if (knowledgeTopicRepository == null) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Topic repository not available");
+				throw new InvalidInputException("Repositório de tópicos indisponível.");
 			}
 			selectedTopic = knowledgeTopicRepository.findById(topicId)
 					.filter(topic -> topic.getStudyBlock().getId().equals(studyBlockId))
 					.filter(topic -> topic.getStatus() == KnowledgeTopicStatus.ACTIVE)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					.orElseThrow(() -> new InvalidInputException(
 							"O tópico selecionado não pertence a este bloco de estudo ou está arquivado."));
 		}
 
