@@ -100,11 +100,13 @@ public class AiQuestionGeneratorService {
 				.filter(m -> m.getProcessingStatus() == null
 						|| m.getProcessingStatus() == StudyMaterialProcessingStatus.COMPLETED)
 				.filter(m -> m.getContent() != null && !m.getContent().isBlank())
+				// A IA só usa as fontes ativas no chat do bloco.
+				.filter(StudyMaterial::isEnabledForChat)
 				.toList();
 
 		if (materials.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.valueOf(422),
-					"Adicione ao menos uma fonte ativa ao bloco antes de gerar questões.");
+					"Adicione uma fonte concluída ao bloco e deixe-a ativa no chat antes de gerar questões.");
 		}
 
 		KnowledgeTopic selectedTopic = null;

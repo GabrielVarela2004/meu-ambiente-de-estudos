@@ -159,11 +159,13 @@ public class PracticalExerciseService {
 				.filter(m -> m.getProcessingStatus() == null
 						|| m.getProcessingStatus() == StudyMaterialProcessingStatus.COMPLETED)
 				.filter(m -> m.getContent() != null && !m.getContent().isBlank())
+				// A IA só usa as fontes ativas no chat do bloco.
+				.filter(StudyMaterial::isEnabledForChat)
 				.toList();
 
 		if (materials.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.valueOf(422),
-					"Adicione ao menos uma fonte ativa ao bloco antes de gerar exercícios práticos.");
+					"Adicione uma fonte concluída ao bloco e deixe-a ativa no chat antes de gerar exercícios práticos.");
 		}
 
 		StudyMaterial targetMaterial = null;
@@ -172,7 +174,7 @@ public class PracticalExerciseService {
 					.filter(m -> m.getId().equals(materialId))
 					.findFirst()
 					.orElseThrow(() -> new InvalidInputException(
-							"O material selecionado não pertence a este bloco ou está inativo."));
+							"O material selecionado não pertence a este bloco, está inativo ou está desativado no chat."));
 		} else {
 			targetMaterial = materials.get(0);
 		}

@@ -140,15 +140,19 @@ public class KnowledgeTopicService {
 			}
 		}
 
-		if (activeMaterials.isEmpty()) {
+		// A extração usa só as fontes ativas no chat; a limpeza acima considera todas as ativas, para que
+		// desligar uma fonte no chat não arquive os tópicos dela.
+		List<StudyMaterial> chatMaterials = activeMaterials.stream().filter(StudyMaterial::isEnabledForChat).toList();
+		if (chatMaterials.isEmpty()) {
 			if (requireSources) {
-				throw new InvalidInputException(
-						"Adicione ao menos uma fonte concluída ao bloco antes de extrair assuntos e tópicos.");
+				throw new InvalidInputException(activeMaterials.isEmpty()
+						? "Adicione ao menos uma fonte concluída ao bloco antes de extrair assuntos e tópicos."
+						: "Ative no chat ao menos uma fonte do bloco antes de extrair assuntos e tópicos.");
 			}
 			return list(blockId, false);
 		}
 
-		List<SourceTopicExtractor.ExtractedTopic> extractedTopics = sourceTopicExtractor.extractFromMaterials(block, activeMaterials);
+		List<SourceTopicExtractor.ExtractedTopic> extractedTopics = sourceTopicExtractor.extractFromMaterials(block, chatMaterials);
 		OffsetDateTime now = OffsetDateTime.now();
 
 		Map<String, KnowledgeTopic> existingMainByNormTitle = new LinkedHashMap<>();
