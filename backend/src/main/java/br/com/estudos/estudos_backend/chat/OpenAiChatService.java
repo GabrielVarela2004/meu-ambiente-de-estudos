@@ -8,11 +8,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.learning.ActivityOriginType;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
@@ -113,11 +113,11 @@ public class OpenAiChatService {
 	 */
 	public ChatResponse ask(String message, UUID studyBlockId, List<UUID> studyBlockIds, List<UUID> sourceIds) {
 		if (message == null || message.trim().isBlank()) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A mensagem de consulta não pode ser vazia.");
+			throw new InvalidInputException("A mensagem de consulta não pode ser vazia.");
 		}
 		int maxChars = openAiProperties != null ? openAiProperties.getMaxInputChars() : OpenAiProperties.DEFAULT_MAX_INPUT_CHARS;
 		if (message.length() > maxChars) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+			throw new InvalidInputException(
 					"A mensagem excede o limite máximo permitido de caracteres (" + maxChars + ").");
 		}
 
@@ -165,7 +165,7 @@ public class OpenAiChatService {
 	public List<ChatConversationEntry> listHistory(UUID studyBlockId) {
 		String ownerId = currentUserResolver.currentUserId();
 		if (!isBlockAccessible(studyBlockId, ownerId)) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found");
+			throw new NotFoundException("Bloco de estudo não encontrado.");
 		}
 		return conversationRepository.findAllByStudyBlockIdOrderByCreatedAtDesc(studyBlockId);
 	}
@@ -180,7 +180,7 @@ public class OpenAiChatService {
 	public List<SuggestedQuestion> suggestQuestions(UUID studyBlockId) {
 		String ownerId = currentUserResolver.currentUserId();
 		if (!isBlockAccessible(studyBlockId, ownerId)) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found");
+			throw new NotFoundException("Bloco de estudo não encontrado.");
 		}
 		List<StudyMaterial> materials = studyMaterialRepository
 				.findAllByStudyBlockIdAndStatusOrderByUpdatedAtDesc(studyBlockId, StudyMaterialStatus.ACTIVE)
@@ -283,7 +283,7 @@ public class OpenAiChatService {
 			return new PromptContext(message, List.of(), List.of());
 		}
 		if (!isBlockAccessible(studyBlockId, ownerId)) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found");
+			throw new NotFoundException("Bloco de estudo não encontrado.");
 		}
 		List<StudyMaterial> allBlockMaterials = studyMaterialRepository
 				.findAllByStudyBlockIdAndStatusOrderByUpdatedAtDesc(studyBlockId, StudyMaterialStatus.ACTIVE);
@@ -294,7 +294,7 @@ public class OpenAiChatService {
 					.collect(Collectors.toSet());
 			for (UUID requestedId : sourceIds) {
 				if (!activeBlockMaterialIds.contains(requestedId)) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					throw new InvalidInputException(
 							"A fonte informada (" + requestedId + ") não pertence a este bloco de estudo ou está inativa/arquivada.");
 				}
 			}
@@ -337,7 +337,7 @@ public class OpenAiChatService {
 		List<StudyBlock> validBlocks = new ArrayList<>();
 		for (UUID bId : studyBlockIds) {
 			if (!isBlockAccessible(bId, ownerId)) {
-				throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found or inaccessible: " + bId);
+				throw new NotFoundException("Bloco de estudo não encontrado ou inacessível: " + bId);
 			}
 			studyBlockRepository.findById(bId).ifPresent(validBlocks::add);
 		}
@@ -356,7 +356,7 @@ public class OpenAiChatService {
 			Set<UUID> activeMaterialIds = allMaterials.stream().map(StudyMaterial::getId).collect(Collectors.toSet());
 			for (UUID requestedId : sourceIds) {
 				if (!activeMaterialIds.contains(requestedId)) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					throw new InvalidInputException(
 							"A fonte informada (" + requestedId + ") não pertence aos blocos selecionados ou está inativa/arquivada.");
 				}
 			}
