@@ -106,10 +106,10 @@ public class GlobalReviewController {
 					question.getStudyBlock().getId(),
 					question.getStudyBlock().getTitle(),
 					question.getPrompt(),
-					question.getExplanation(),
+					StudyQuestionVisibility.explanationBeforeAnswer(question),
 					question.getDifficulty(),
 					question.getFormat(),
-					question.getExpectedAnswer(),
+					StudyQuestionVisibility.expectedAnswerBeforeAnswer(question),
 					question.getOptions().stream()
 							.map(o -> new StudyQuestionController.OptionResponse(o.getId(), o.getText(), o.getOrder()))
 							.toList(),

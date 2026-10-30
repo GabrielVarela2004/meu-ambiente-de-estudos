@@ -59,6 +59,18 @@ public class StudyQuestion {
 	@Column(name = "expected_answer", length = 4000)
 	private String expectedAnswer;
 
+	/** Resposta-modelo fundamentada só no material (questões abertas). Nunca exposta antes da resposta. */
+	@Column(name = "model_answer", columnDefinition = "TEXT")
+	private String modelAnswer;
+
+	/** Rubrica em JSON: conceitos essenciais/complementares, termos do material e erros comuns. */
+	@Column(name = "rubric_json", columnDefinition = "TEXT")
+	private String rubricJson;
+
+	/** Minuto do trecho quando a fonte é vídeo (MM:SS ou H:MM:SS). */
+	@Column(name = "source_timestamp", length = 12)
+	private String sourceTimestamp;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	private StudyQuestionStatus status;
@@ -185,6 +197,31 @@ public class StudyQuestion {
 		nextReviewAt = OffsetDateTime.now().plusDays(reviewIntervalDays);
 	}
 
+	/**
+	 * Revisão espaçada pela classificação da questão aberta: CORRETA avança (como acerto), INCORRETA reinicia
+	 * (como erro) e PARCIAL mantém um intervalo curto sem zerar a sequência. Pendentes não mexem na agenda.
+	 */
+	public void scheduleNextReview(QuestionEvaluationStatus classification) {
+		switch (classification) {
+			case CORRECT -> scheduleNextReview(true);
+			case INCORRECT -> scheduleNextReview(false);
+			case PARTIAL -> {
+				reviewIntervalDays = difficulty == StudyQuestionDifficulty.HARD ? 1 : 2;
+				nextReviewAt = OffsetDateTime.now().plusDays(reviewIntervalDays);
+			}
+			default -> {
+				// PENDING_EVALUATION e UNGRADABLE: a agenda só muda quando houver correção.
+			}
+		}
+	}
+
+	/** Resposta-modelo, rubrica e minuto do trecho, gravados na geração antes de a questão ser exibida. */
+	public void applyRubric(String modelAnswer, String rubricJson, String sourceTimestamp) {
+		this.modelAnswer = modelAnswer;
+		this.rubricJson = rubricJson;
+		this.sourceTimestamp = sourceTimestamp;
+	}
+
 	public void rescheduleManual(int days) {
 		this.reviewIntervalDays = days;
 		this.nextReviewAt = OffsetDateTime.now().plusDays(days);
@@ -206,6 +243,9 @@ public class StudyQuestion {
 	public StudyQuestionDifficulty getDifficulty() { return difficulty; }
 	public StudyQuestionFormat getFormat() { return format; }
 	public String getExpectedAnswer() { return expectedAnswer; }
+	public String getModelAnswer() { return modelAnswer; }
+	public String getRubricJson() { return rubricJson; }
+	public String getSourceTimestamp() { return sourceTimestamp; }
 	public StudyQuestionStatus getStatus() { return status; }
 	public List<StudyQuestionOption> getOptions() { return options; }
 	public OffsetDateTime getCreatedAt() { return createdAt; }

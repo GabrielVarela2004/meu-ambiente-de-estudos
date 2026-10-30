@@ -143,7 +143,8 @@ public class OpenAiTutorProvider implements AiTutorProvider, AiModelProvider {
 					model,
 					messages.toArray(Message[]::new),
 					maxTokens,
-					responseFormat));
+					responseFormat,
+					supportsTemperature(model) ? tutorRequest.temperature() : null));
 
 			HttpRequest request = HttpRequest.newBuilder(URI.create(properties.getBaseUrl()))
 					.timeout(Duration.ofSeconds(properties.getRequestTimeoutSeconds()))
@@ -204,6 +205,11 @@ public class OpenAiTutorProvider implements AiTutorProvider, AiModelProvider {
 		}
 	}
 
+	/** Modelos de raciocínio (o1/o3/o4, gpt-5…) recusam temperatura; a família gpt-4 aceita. */
+	static boolean supportsTemperature(String model) {
+		return model != null && model.toLowerCase(java.util.Locale.ROOT).startsWith("gpt-4");
+	}
+
 	private void checkLocalRateLimit() {
 		int maxRpm = properties.getMaxRequestsPerMinute();
 		if (maxRpm <= 0) {
@@ -248,7 +254,8 @@ public class OpenAiTutorProvider implements AiTutorProvider, AiModelProvider {
 			String model,
 			Message[] messages,
 			int max_completion_tokens,
-			Map<String, String> response_format) {}
+			Map<String, String> response_format,
+			Double temperature) {}
 
 	private record Message(String role, String content) {}
 }

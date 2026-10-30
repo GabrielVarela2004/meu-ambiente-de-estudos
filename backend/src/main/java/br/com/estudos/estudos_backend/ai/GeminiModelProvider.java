@@ -95,7 +95,8 @@ public class GeminiModelProvider implements AiModelProvider {
 			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
 					"A integração com o Gemini não está configurada (GEMINI_API_KEY ausente).");
 		}
-		return send(buildBody(request, null), resolveModel(requestedModel), properties.getRequestTimeoutSeconds());
+		String model = resolveModel(requestedModel);
+		return send(buildBody(request, null, model), model, properties.getRequestTimeoutSeconds());
 	}
 
 	/**
@@ -109,7 +110,8 @@ public class GeminiModelProvider implements AiModelProvider {
 		}
 		// Vídeos longos demoram mais para serem analisados que uma resposta de texto.
 		int timeoutSeconds = Math.max(properties.getRequestTimeoutSeconds(), VIDEO_TIMEOUT_SECONDS);
-		return send(buildBody(request, videoUrl), resolveModel(requestedModel), timeoutSeconds);
+		String model = resolveModel(requestedModel);
+		return send(buildBody(request, videoUrl, model), model, timeoutSeconds);
 	}
 
 	private String resolveModel(String requestedModel) {
@@ -142,7 +144,7 @@ public class GeminiModelProvider implements AiModelProvider {
 		}
 	}
 
-	private ObjectNode buildBody(AiTutorRequest request, String youtubeVideoUrl) {
+	private ObjectNode buildBody(AiTutorRequest request, String youtubeVideoUrl, String model) {
 		ObjectNode body = objectMapper.createObjectNode();
 		if (request.systemInstruction() != null && !request.systemInstruction().isBlank()) {
 			body.putObject("systemInstruction").putArray("parts").addObject().put("text", request.systemInstruction());
@@ -169,6 +171,10 @@ public class GeminiModelProvider implements AiModelProvider {
 				? properties.getMaxOutputTokens()
 				: request.maxOutputTokens();
 		generationConfig.put("maxOutputTokens", maxTokens);
+		// Gemini 3.6+ ignora temperature (e passará a recusar); só os 2.x recebem o valor pedido.
+		if (request.temperature() != null && model.startsWith("gemini-2")) {
+			generationConfig.put("temperature", request.temperature());
+		}
 		if (request.jsonObjectMode()) {
 			generationConfig.put("responseMimeType", "application/json");
 		}

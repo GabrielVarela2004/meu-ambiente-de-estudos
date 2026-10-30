@@ -26,8 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class StudyQuestionController {
 	private final StudyQuestionService service;
 	private final AiQuestionGeneratorService aiGeneratorService;
+	private final DiscursiveAnswerService discursiveAnswerService;
 
-	public StudyQuestionController(StudyQuestionService service, AiQuestionGeneratorService aiGeneratorService) {
+	public StudyQuestionController(StudyQuestionService service, AiQuestionGeneratorService aiGeneratorService,
+			DiscursiveAnswerService discursiveAnswerService) {
+		this.discursiveAnswerService = discursiveAnswerService;
 		this.service = service;
 		this.aiGeneratorService = aiGeneratorService;
 	}
@@ -89,8 +92,25 @@ public class StudyQuestionController {
 	@PostMapping("/{id}/answers")
 	public StudyQuestionService.StudyQuestionAnswer answer(@PathVariable UUID studyBlockId, @PathVariable UUID id,
 			@Valid @RequestBody AnswerRequest request) {
-		return service.answer(studyBlockId, id, request.optionId(), request.discursiveAnswer());
+		return discursiveAnswerService.answer(studyBlockId, id, request.optionId(), request.discursiveAnswer());
 	}
+
+	/** Tentativas desta questão que aguardam correção (IA estava indisponível). */
+	@GetMapping("/{id}/attempts/pending")
+	public List<PendingAttemptResponse> pendingAttempts(@PathVariable UUID studyBlockId, @PathVariable UUID id) {
+		return service.pendingAttempts(studyBlockId, id).stream()
+				.map(a -> new PendingAttemptResponse(a.getId(), a.getUserAnswerText(), a.getAnsweredAt()))
+				.toList();
+	}
+
+	/** Reavalia uma tentativa pendente quando a IA volta. */
+	@PostMapping("/{id}/attempts/{attemptId}/evaluate")
+	public StudyQuestionService.StudyQuestionAnswer reevaluate(@PathVariable UUID studyBlockId, @PathVariable UUID id,
+			@PathVariable UUID attemptId) {
+		return discursiveAnswerService.reevaluate(studyBlockId, id, attemptId);
+	}
+
+	public record PendingAttemptResponse(UUID attemptId, String answer, OffsetDateTime answeredAt) {}
 
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Void> archive(@PathVariable UUID studyBlockId, @PathVariable UUID id) {
@@ -146,10 +166,10 @@ public class StudyQuestionController {
 					question.getStudyMaterial() == null ? null : question.getStudyMaterial().getTitle(),
 					question.getSourceExcerpt(),
 					question.getPrompt(),
-					question.getExplanation(),
+					StudyQuestionVisibility.explanationBeforeAnswer(question),
 					question.getDifficulty(),
 					question.getFormat(),
-					question.getExpectedAnswer(),
+					StudyQuestionVisibility.expectedAnswerBeforeAnswer(question),
 					question.getStatus(),
 					question.getOptions().stream().map(option -> new OptionResponse(
 							option.getId(), option.getText(), option.getOrder())).toList(),

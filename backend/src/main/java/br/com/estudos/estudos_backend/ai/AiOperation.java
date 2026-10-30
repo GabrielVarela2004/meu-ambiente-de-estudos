@@ -10,7 +10,8 @@ public enum AiOperation {
 	PERFORMANCE_ANALYSIS("Análise de desempenho"),
 	CAREER_ANALYSIS("Análise de vagas"),
 	/** Só o Gemini aceita vídeo do YouTube por URL: não tem rota configurável, mas entra no consumo. */
-	VIDEO_ANALYSIS("Análise de vídeos do YouTube", false);
+	VIDEO_ANALYSIS("Análise de vídeos do YouTube", false),
+	ANSWER_EVALUATION("Correção de respostas abertas");
 
 	private final String label;
 	private final boolean routable;

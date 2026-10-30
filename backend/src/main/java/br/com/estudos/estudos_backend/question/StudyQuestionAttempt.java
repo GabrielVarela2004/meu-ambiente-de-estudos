@@ -86,6 +86,21 @@ public class StudyQuestionAttempt {
 	@Column(name = "explanation_snapshot", columnDefinition = "TEXT")
 	private String explanationSnapshot;
 
+	/** Notas 0–100 por critério (JSON), calculadas na correção da questão aberta. */
+	@Column(name = "criteria_scores_json", columnDefinition = "TEXT")
+	private String criteriaScoresJson;
+
+	/** Feedback detalhado (JSON): acertos, essenciais faltando, termos, erros e orientação. */
+	@Column(name = "evaluation_details_json", columnDefinition = "TEXT")
+	private String evaluationDetailsJson;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "rigor_level", length = 20)
+	private EvaluationRigor rigorLevel;
+
+	@Column(name = "evaluated_at")
+	private OffsetDateTime evaluatedAt;
+
 	@Column(name = "study_block_title_snapshot")
 	private String studyBlockTitleSnapshot;
 
@@ -196,6 +211,25 @@ public class StudyQuestionAttempt {
 		this.sourceExcerptSnapshot = sourceExcerptSnapshot;
 	}
 
+	/**
+	 * Grava a correção da questão aberta. Só tentativas novas ou pendentes recebem avaliação: uma tentativa já
+	 * corrigida é um registro imutável (responder de novo cria outra tentativa).
+	 */
+	public void applyEvaluation(QuestionEvaluationStatus status, int scorePercent, String criteriaScoresJson,
+			String evaluationDetailsJson, EvaluationRigor rigorLevel, String feedbackText) {
+		if (evaluatedAt != null && this.evaluationStatus != QuestionEvaluationStatus.PENDING_EVALUATION) {
+			throw new IllegalStateException("Tentativa já avaliada não pode ser alterada.");
+		}
+		this.evaluationStatus = status;
+		this.correct = status == QuestionEvaluationStatus.CORRECT;
+		this.scorePercent = Math.max(0, Math.min(100, scorePercent));
+		this.criteriaScoresJson = criteriaScoresJson;
+		this.evaluationDetailsJson = evaluationDetailsJson;
+		this.rigorLevel = rigorLevel;
+		this.evaluatorFeedback = feedbackText;
+		this.evaluatedAt = status == QuestionEvaluationStatus.PENDING_EVALUATION ? null : OffsetDateTime.now();
+	}
+
 	@PrePersist
 	void onCreate() {
 		if (id == null) id = UUID.randomUUID();
@@ -227,6 +261,10 @@ public class StudyQuestionAttempt {
 	public AssistanceLevel getHelpLevel() { return helpLevel; }
 	public int getHintsUsedCount() { return hintsUsedCount; }
 	public String getEvaluatorFeedback() { return evaluatorFeedback; }
+	public String getCriteriaScoresJson() { return criteriaScoresJson; }
+	public String getEvaluationDetailsJson() { return evaluationDetailsJson; }
+	public EvaluationRigor getRigorLevel() { return rigorLevel; }
+	public OffsetDateTime getEvaluatedAt() { return evaluatedAt; }
 	public String getPromptSnapshot() { return promptSnapshot; }
 	public String getUserAnswerText() { return userAnswerText; }
 	public String getExpectedAnswerSnapshot() { return expectedAnswerSnapshot; }

@@ -1,10 +1,8 @@
 package br.com.estudos.estudos_backend.question;
 
 import java.time.OffsetDateTime;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -21,6 +19,7 @@ import br.com.estudos.estudos_backend.learning.ActivityOriginType;
 import br.com.estudos.estudos_backend.learning.AssistanceLevel;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
+import br.com.estudos.estudos_backend.material.StudyMaterialSourceType;
 import br.com.estudos.estudos_backend.material.StudyMaterialStatus;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
@@ -202,51 +201,11 @@ public class StudyQuestionService {
 		String formatName = question.getFormat().name();
 
 		if (question.getFormat() == StudyQuestionFormat.DISCURSIVE) {
-			if (discursiveAnswer == null || discursiveAnswer.isBlank()) {
-				throw new InvalidInputException(
-						"Questões discursivas exigem uma resposta preenchida.");
-			}
-			String cleanAnswer = discursiveAnswer.trim();
-			boolean correct = evaluateDiscursiveCriteria(cleanAnswer, question.getExpectedAnswer());
-			question.scheduleNextReview(correct);
-			repository.save(question);
-
-			String baseExplanation = question.getExplanation() == null || question.getExplanation().isBlank()
-					? ""
-					: question.getExplanation() + " ";
-			String criteriaFeedback = (baseExplanation + "[Critérios/Gabarito esperado: " + question.getExpectedAnswer() + "]").trim();
-
-			StudyQuestionAttempt attempt = new StudyQuestionAttempt(
-					ownerId,
-					blockId,
-					id,
-					topicId,
-					studySessionId,
-					sourceMaterialId,
-					null,
-					cleanAnswer,
-					correct,
-					resolvedOrigin,
-					correct ? QuestionEvaluationStatus.CORRECT : QuestionEvaluationStatus.INCORRECT,
-					correct ? 100 : 0,
-					timeSpentSeconds,
-					attemptNumber,
-					resolvedHelp,
-					0,
-					criteriaFeedback);
-			attempt.populateSnapshots(
-					question.getPrompt(),
-					cleanAnswer,
-					question.getExpectedAnswer(),
-					question.getExplanation(),
-					blockTitle,
-					topicTitle,
-					difficultyName,
-					formatName,
-					sourceTitle,
-					sourceExcerpt);
-			attemptRepository.save(attempt);
-			return new StudyQuestionAnswer(correct, criteriaFeedback);
+			// Questões abertas são corrigidas pela IA (DiscursiveAnswerService, fora de transação). Chamado direto
+			// aqui, sem correção, a tentativa fica pendente: nunca se corrige por palavras-chave.
+			StudyQuestionAttempt attempt = recordDiscursiveAttempt(blockId, id, discursiveAnswer, null,
+					EvaluationPreferenceService.DEFAULT_RIGOR, studySessionId, resolvedOrigin, timeSpentSeconds, resolvedHelp);
+			return StudyQuestionAnswer.pending(attempt.getId(), PENDING_MESSAGE);
 		}
 
 		if (optionId == null) {
@@ -373,7 +332,7 @@ public class StudyQuestionService {
 		blockService.get(blockId);
 		List<StudyQuestionAttempt> attempts = attemptRepository.findAllByStudyBlockIdOrderByAnsweredAtDesc(blockId)
 				.stream()
-				.filter(attempt -> attempt.getEvaluationStatus() != QuestionEvaluationStatus.UNGRADABLE)
+				.filter(attempt -> attempt.getEvaluationStatus() == null || attempt.getEvaluationStatus().isGraded())
 				.toList();
 		long correct = attempts.stream().filter(StudyQuestionAttempt::isCorrect).count();
 		return new StudyQuestionStats(attempts.size(), correct,
@@ -387,7 +346,7 @@ public class StudyQuestionService {
 		List<StudyQuestionAttempt> attempts = attemptRepository
 				.findAllByStudyBlockIdAndAnsweredAtGreaterThanEqualOrderByAnsweredAtDesc(blockId, since)
 				.stream()
-				.filter(attempt -> attempt.getEvaluationStatus() != QuestionEvaluationStatus.UNGRADABLE)
+				.filter(attempt -> attempt.getEvaluationStatus() == null || attempt.getEvaluationStatus().isGraded())
 				.toList();
 		long correct = attempts.stream().filter(StudyQuestionAttempt::isCorrect).count();
 		return new StudyQuestionStats(attempts.size(), correct,
@@ -433,28 +392,175 @@ public class StudyQuestionService {
 		}
 	}
 
-	private boolean evaluateDiscursiveCriteria(String userAnswer, String expectedAnswer) {
-		if (expectedAnswer == null || expectedAnswer.isBlank()) {
-			return false;
-		}
-		String normalizedUser = userAnswer.toLowerCase(Locale.ROOT);
-		String normalizedExpected = expectedAnswer.toLowerCase(Locale.ROOT);
-		if (normalizedUser.contains(normalizedExpected)) {
-			return true;
-		}
-		List<String> keyTerms = Arrays.stream(normalizedExpected.split("[^\\p{L}\\p{N}]+"))
-				.filter(term -> term.length() >= 4)
-				.distinct()
-				.toList();
-		if (keyTerms.isEmpty()) {
-			return normalizedUser.equals(normalizedExpected);
-		}
-		long matched = keyTerms.stream().filter(normalizedUser::contains).count();
-		long required = Math.max(1L, Math.round(Math.ceil(keyTerms.size() * 0.6)));
-		return matched >= required;
+	/** Grava a resposta-modelo, a rubrica e o minuto do trecho de uma questão aberta recém-gerada. */
+	@Transactional
+	public StudyQuestion attachRubric(UUID blockId, UUID questionId, String modelAnswer, String rubricJson,
+			String sourceTimestamp) {
+		StudyQuestion question = getOwned(blockId, questionId);
+		question.applyRubric(modelAnswer, rubricJson, sourceTimestamp);
+		return repository.save(question);
 	}
 
-	public record StudyQuestionAnswer(boolean correct, String explanation) {}
+	/** Dados de uma questão aberta para a correção (lidos numa transação curta, antes da chamada à IA). */
+	@Transactional(readOnly = true)
+	public AnswerContext answerContext(UUID blockId, UUID questionId) {
+		StudyQuestion question = getOwned(blockId, questionId);
+		StudyMaterial material = question.getStudyMaterial();
+		String modelAnswer = question.getModelAnswer() != null && !question.getModelAnswer().isBlank()
+				? question.getModelAnswer() : question.getExpectedAnswer();
+		return new AnswerContext(
+				question.getId(),
+				question.getFormat(),
+				question.getStatus(),
+				question.getPrompt(),
+				modelAnswer,
+				QuestionRubric.parse(question.getRubricJson()),
+				question.getSourceExcerpt(),
+				question.getSourceTimestamp(),
+				material == null ? null : material.getId(),
+				material == null ? null : material.getTitle(),
+				material == null || material.getSourceType() != StudyMaterialSourceType.YOUTUBE ? null : material.getExternalVideoId());
+	}
+
+	/**
+	 * Grava a tentativa de uma questão aberta. Com {@code result}, a tentativa já sai corrigida e a revisão espaçada
+	 * é atualizada pela classificação; sem ele, fica PENDENTE (fora das estatísticas e sem mexer na agenda).
+	 */
+	@Transactional
+	public StudyQuestionAttempt recordDiscursiveAttempt(UUID blockId, UUID questionId, String answerText,
+			DiscursiveEvaluationRules.Result result, EvaluationRigor rigor, UUID studySessionId,
+			ActivityOriginType originType, Integer timeSpentSeconds, AssistanceLevel helpLevel) {
+		StudyQuestion question = getOwned(blockId, questionId);
+		if (question.getStatus() == StudyQuestionStatus.ARCHIVED) {
+			throw new BusinessRuleException("Questões arquivadas não podem ser respondidas.");
+		}
+		if (answerText == null || answerText.isBlank()) {
+			throw new InvalidInputException("Questões discursivas exigem uma resposta preenchida.");
+		}
+		String cleanAnswer = answerText.strip();
+		String ownerId = currentUserResolver.currentUserId();
+		int attemptNumber = (int) attemptRepository.countByOwnerIdAndQuestionId(ownerId, questionId) + 1;
+		StudyMaterial material = question.getStudyMaterial();
+		String topicTitle = question.getTopicId() == null || knowledgeTopicRepository == null ? null
+				: knowledgeTopicRepository.findById(question.getTopicId()).map(KnowledgeTopic::getTitle).orElse(null);
+		String modelAnswer = question.getModelAnswer() != null && !question.getModelAnswer().isBlank()
+				? question.getModelAnswer() : question.getExpectedAnswer();
+
+		StudyQuestionAttempt attempt = new StudyQuestionAttempt(ownerId, blockId, questionId, question.getTopicId(),
+				studySessionId, material == null ? null : material.getId(), null, cleanAnswer, false,
+				originType == null ? ActivityOriginType.BLOCK : originType, QuestionEvaluationStatus.PENDING_EVALUATION,
+				0, timeSpentSeconds, attemptNumber, helpLevel == null ? AssistanceLevel.NONE : helpLevel, 0,
+				PENDING_MESSAGE);
+		attempt.populateSnapshots(question.getPrompt(), cleanAnswer, modelAnswer, question.getExplanation(),
+				question.getStudyBlock().getTitle(), topicTitle, question.getDifficulty().name(),
+				question.getFormat().name(), material == null ? null : material.getTitle(), question.getSourceExcerpt());
+		if (result != null) {
+			applyResult(attempt, result, rigor);
+			question.scheduleNextReview(result.classification());
+			repository.save(question);
+		}
+		return attemptRepository.save(attempt);
+	}
+
+	/** Tentativa pendente do usuário atual, para reavaliar quando a IA voltar. */
+	@Transactional(readOnly = true)
+	public StudyQuestionAttempt pendingAttempt(UUID blockId, UUID questionId, UUID attemptId) {
+		getOwned(blockId, questionId);
+		StudyQuestionAttempt attempt = attemptRepository.findById(attemptId)
+				.filter(a -> questionId.equals(a.getQuestionId()))
+				.filter(a -> a.getOwnerId().equals(currentUserResolver.currentUserId()))
+				.orElseThrow(() -> new NotFoundException("Tentativa não encontrada."));
+		if (attempt.getEvaluationStatus() != QuestionEvaluationStatus.PENDING_EVALUATION) {
+			throw new BusinessRuleException("Esta tentativa já foi corrigida.");
+		}
+		return attempt;
+	}
+
+	/** Aplica a correção a uma tentativa pendente e atualiza a revisão espaçada. */
+	@Transactional
+	public StudyQuestionAttempt completePendingAttempt(UUID blockId, UUID questionId, UUID attemptId,
+			DiscursiveEvaluationRules.Result result, EvaluationRigor rigor) {
+		StudyQuestionAttempt attempt = pendingAttempt(blockId, questionId, attemptId);
+		StudyQuestion question = getOwned(blockId, questionId);
+		applyResult(attempt, result, rigor);
+		question.scheduleNextReview(result.classification());
+		repository.save(question);
+		return attemptRepository.save(attempt);
+	}
+
+	/** Tentativas pendentes de uma questão (para o botão "Reavaliar"). */
+	@Transactional(readOnly = true)
+	public List<StudyQuestionAttempt> pendingAttempts(UUID blockId, UUID questionId) {
+		getOwned(blockId, questionId);
+		return attemptRepository.findAllByOwnerIdAndQuestionIdAndEvaluationStatusOrderByAnsweredAtDesc(
+				currentUserResolver.currentUserId(), questionId, QuestionEvaluationStatus.PENDING_EVALUATION);
+	}
+
+	private void applyResult(StudyQuestionAttempt attempt, DiscursiveEvaluationRules.Result result, EvaluationRigor rigor) {
+		attempt.applyEvaluation(result.classification(), result.overallScore(),
+				EvaluationJson.criteria(result), EvaluationJson.details(result), rigor, EvaluationJson.summary(result));
+	}
+
+	static final String PENDING_MESSAGE = "Resposta registrada, mas ainda não corrigida: nenhum provedor de IA estava "
+			+ "disponível. Ela fica pendente, fora das estatísticas, e pode ser reavaliada quando a IA voltar.";
+
+	public record AnswerContext(
+			UUID questionId,
+			StudyQuestionFormat format,
+			StudyQuestionStatus status,
+			String prompt,
+			String modelAnswer,
+			QuestionRubric rubric,
+			String sourceExcerpt,
+			String sourceTimestamp,
+			UUID sourceMaterialId,
+			String sourceMaterialTitle,
+			String sourceVideoId) {}
+
+	/** Feedback de uma questão aberta: só existe depois da resposta (a resposta-modelo nunca sai antes). */
+	public record DiscursiveFeedback(
+			UUID attemptId,
+			QuestionEvaluationStatus classification,
+			Integer scorePercent,
+			Map<String, Integer> criteriaScores,
+			List<String> correctPoints,
+			List<String> missingEssentialConcepts,
+			List<String> missingTerms,
+			List<String> errors,
+			String improvementTip,
+			String modelAnswer,
+			String sourceExcerpt,
+			String sourceTimestamp,
+			UUID sourceMaterialId,
+			String sourceMaterialTitle,
+			String sourceVideoId,
+			EvaluationRigor rigorLevel,
+			boolean pending,
+			String pendingMessage) {}
+
+	/**
+	 * Resultado de uma resposta. {@code correct} só é verdadeiro para CORRETA (PARCIAL não conta como acerto);
+	 * {@code feedback} vem preenchido nas questões abertas.
+	 */
+	public record StudyQuestionAnswer(
+			boolean correct,
+			String explanation,
+			QuestionEvaluationStatus classification,
+			Integer scorePercent,
+			DiscursiveFeedback feedback) {
+
+		public StudyQuestionAnswer(boolean correct, String explanation) {
+			this(correct, explanation, correct ? QuestionEvaluationStatus.CORRECT : QuestionEvaluationStatus.INCORRECT,
+					correct ? 100 : 0, null);
+		}
+
+		static StudyQuestionAnswer pending(UUID attemptId, String message) {
+			DiscursiveFeedback feedback = new DiscursiveFeedback(attemptId, QuestionEvaluationStatus.PENDING_EVALUATION,
+					null, Map.of(), List.of(), List.of(), List.of(), List.of(), null, null, null, null, null, null, null,
+					null, true, message);
+			return new StudyQuestionAnswer(false, message, QuestionEvaluationStatus.PENDING_EVALUATION, null, feedback);
+		}
+	}
 	public record StudyQuestionStats(long attempts, long correct, long accuracyPercent) {}
 	public record GlobalReviewSummary(
 			long totalDue,
