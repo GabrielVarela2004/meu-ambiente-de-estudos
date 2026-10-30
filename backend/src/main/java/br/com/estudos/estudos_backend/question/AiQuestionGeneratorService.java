@@ -224,10 +224,13 @@ public class AiQuestionGeneratorService {
 					.append("- A resposta-modelo é completa e usa SOMENTE o que o material diz, com a terminologia dele.\n")
 					.append("- A rubrica lista os conceitos essenciais (obrigatórios para estar correta), os complementares, ")
 					.append("os termos e expressões que o material usa e os erros conceituais comuns.\n")
+					.append("- Cada erro comum diz o equívoco e por que está errado (ex.: \"Se você achou que a inserção ")
+					.append("falha ou substitui o objeto anterior, você desconhece o tratamento de colisões\").\n")
+					.append("- A explicação detalha o mecanismo (o que acontece e por quê), não repete a resposta-modelo.\n")
 					.append("- \"sourceExcerpt\" é um trecho copiado literalmente do material que fundamenta a resposta; ")
 					.append("se a fonte for vídeo com marcações [MM:SS], informe o minuto em \"sourceTimestamp\".\n")
 					.append("- Não crie pergunta cuja resposta não esteja no material.\n");
-			itemSchema = "{\"prompt\":\"...\",\"modelAnswer\":\"resposta-modelo completa\",\"explanation\":\"por que a resposta-modelo está correta\","
+			itemSchema = "{\"prompt\":\"...\",\"modelAnswer\":\"resposta-modelo completa\",\"explanation\":\"explicação detalhada do mecanismo\","
 					+ "\"rubric\":{\"essentialConcepts\":[\"...\"],\"complementaryConcepts\":[\"...\"],\"materialTerms\":[\"...\"],\"commonMistakes\":[\"...\"]},"
 					+ "\"sourceExcerpt\":\"trecho literal do material\",\"sourceTimestamp\":\"MM:SS ou vazio\"}";
 		} else if (format == StudyQuestionFormat.TRUE_FALSE) {

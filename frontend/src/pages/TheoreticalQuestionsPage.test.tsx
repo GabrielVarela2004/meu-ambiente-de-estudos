@@ -98,6 +98,78 @@ describe('TheoreticalQuestionsPage — questão aberta', () => {
     expect(JSON.parse(String(answerCall?.body))).toEqual({ discursiveAnswer: 'Ele usa o hashCode.' })
   })
 
+  it('feedback de erro mostra correção, resposta correta, explicação e erros comuns', async () => {
+    const wrong: AnswerResult = {
+      ...partialAnswer,
+      classification: 'INCORRECT',
+      feedback: {
+        ...partialAnswer.feedback!,
+        classification: 'INCORRECT',
+        errors: ['Disse que a inserção lança exceção'],
+        explanation: 'Colisões vão para o mesmo bucket.',
+        commonMistakes: ['Se você achou que a inserção falha, desconhece o tratamento de colisões.'],
+      },
+    }
+    mockFetch((call) => (call.method === 'POST' ? jsonResponse(wrong) : jsonResponse([question])))
+    render(<TheoreticalQuestionsPage mode="block" blocks={[block]} selectedBlockId="b1" onSelectBlock={() => {}} />)
+
+    await userEvent.type(await screen.findByRole('textbox'), 'Lança exceção.')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Resposta' }))
+
+    expect(await screen.findByText(/^Correção: veja onde/)).toBeInTheDocument()
+    expect(screen.getByText('Disse que a inserção lança exceção')).toBeInTheDocument()
+    expect(screen.getByText('Resposta correta')).toBeInTheDocument()
+    expect(screen.getByText('Colisões vão para o mesmo bucket.')).toBeInTheDocument()
+    expect(screen.getByText(/desconhece o tratamento de colisões/)).toBeInTheDocument()
+  })
+
+  it('acerto mostra parabéns', async () => {
+    const right: AnswerResult = {
+      ...partialAnswer,
+      correct: true,
+      classification: 'CORRECT',
+      feedback: { ...partialAnswer.feedback!, classification: 'CORRECT', scorePercent: 92 },
+    }
+    mockFetch((call) => (call.method === 'POST' ? jsonResponse(right) : jsonResponse([question])))
+    render(<TheoreticalQuestionsPage mode="block" blocks={[block]} selectedBlockId="b1" onSelectBlock={() => {}} />)
+
+    await userEvent.type(await screen.findByRole('textbox'), 'Usa hashCode e equals.')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Resposta' }))
+
+    expect(await screen.findByText(/Parabéns, você acertou/)).toBeInTheDocument()
+  })
+
+  it('modo estudo mostra a resposta sem enviar tentativa', async () => {
+    const { calls } = mockFetch((call) =>
+      call.url.endsWith('/study-view')
+        ? jsonResponse({
+            questionId: 'q1',
+            prompt: question.prompt,
+            answer: MODEL_ANSWER,
+            explanation: 'Usa hashCode e equals.',
+            essentialConcepts: ['equals compara os objetos'],
+            commonMistakes: ['Se você achou que o HashSet ordena, confundiu com o TreeSet.'],
+            sourceExcerpt: EXCERPT,
+            sourceTimestamp: null,
+            sourceMaterialId: 'm1',
+            sourceMaterialTitle: 'Apostila de coleções',
+            sourceVideoId: null,
+          })
+        : jsonResponse([question]),
+    )
+    render(<TheoreticalQuestionsPage mode="block" blocks={[block]} selectedBlockId="b1" onSelectBlock={() => {}} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver resposta (modo estudo)' }))
+
+    expect(await screen.findByText(MODEL_ANSWER)).toBeInTheDocument()
+    expect(screen.getByText(/não conta na pontuação/)).toBeInTheDocument()
+    expect(screen.getByText(/confundiu com o TreeSet/)).toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ocultar resposta' }))
+    await waitFor(() => expect(screen.queryByText(MODEL_ANSWER)).not.toBeInTheDocument())
+  })
+
   it('"Responder de novo" limpa o feedback e reabre o campo para outra tentativa', async () => {
     mockFetch((call) => (call.method === 'POST' ? jsonResponse(partialAnswer) : jsonResponse([question])))
     render(<TheoreticalQuestionsPage mode="block" blocks={[block]} selectedBlockId="b1" onSelectBlock={() => {}} />)

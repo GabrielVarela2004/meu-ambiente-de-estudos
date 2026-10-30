@@ -95,6 +95,12 @@ public class StudyQuestionController {
 		return discursiveAnswerService.answer(studyBlockId, id, request.optionId(), request.discursiveAnswer());
 	}
 
+	/** Modo estudo: mostra a resposta sem avaliar (não grava tentativa nem mexe na revisão). */
+	@GetMapping("/{id}/study-view")
+	public StudyQuestionService.StudyView studyView(@PathVariable UUID studyBlockId, @PathVariable UUID id) {
+		return service.studyView(studyBlockId, id);
+	}
+
 	/** Tentativas desta questão que aguardam correção (IA estava indisponível). */
 	@GetMapping("/{id}/attempts/pending")
 	public List<PendingAttemptResponse> pendingAttempts(@PathVariable UUID studyBlockId, @PathVariable UUID id) {

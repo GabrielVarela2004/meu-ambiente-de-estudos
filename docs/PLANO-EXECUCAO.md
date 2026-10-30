@@ -162,6 +162,19 @@ existente em inglês — `CORRECT`, `PARTIAL`, `INCORRECT`, `PENDING_EVALUATION`
 - Backend: 235 testes, 226 passando; as 9 falhas (questões: `EstudosBackendApplicationTests`, `Etapa5…`, `Etapa7…`,
   `AiQuestionGenerationVarietyTest`) já existiam na `master` com a Etapa 8 em andamento.
 
+## Melhorias da IA (pedido do usuário em 2026-10-30, fora da sequência de etapas)
+
+Ordem combinada: 1 → 3 → 2 → 4. Decisão do usuário: a área teórica continua só com questões abertas (Etapa 8).
+
+- [ ] 1. Questões teóricas: feedback no formato "Parabéns" (CORRETA) ou "Correção → Resposta correta → Explicação"
+  (PARCIAL/INCORRETA), com `explanation` e `commonMistakes` da rubrica no feedback; modo estudo
+  (`GET …/questions/{id}/study-view`: resposta-modelo, explicação, conceitos essenciais e erros comuns, sem gravar
+  tentativa nem mexer na revisão espaçada); prompt de geração pede erros comuns no formato "se você achou que…,
+  …" e explicação detalhada. Sem migração.
+- [ ] 3. Limites da API: cache de respostas (`ai_response_cache`, TTL), contingência em 429 e painel de consumo.
+- [ ] 2. Qualidade: modelo por operação na rota (3.8 Flash ou 3.5 Flash Lite), validações e prompts enxutos.
+- [ ] 4. Reinício: `HealthIndicator` dos provedores (sem chamar a API) e laço de reinício no `start-dev.ps1`.
+
 ## Observações
 
 - O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta.

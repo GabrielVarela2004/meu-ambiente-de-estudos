@@ -105,6 +105,22 @@
   font-size: var(--text-sm);
 }
 
+.open-feedback-headline {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Modo estudo: resposta vista sem avaliação. */
+.study-view-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
 .open-feedback-actions {
   display: flex;
   gap: var(--space-2);

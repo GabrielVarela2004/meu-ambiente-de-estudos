@@ -414,12 +414,35 @@ public class StudyQuestionService {
 				question.getStatus(),
 				question.getPrompt(),
 				modelAnswer,
+				question.getExplanation(),
 				QuestionRubric.parse(question.getRubricJson()),
 				question.getSourceExcerpt(),
 				question.getSourceTimestamp(),
 				material == null ? null : material.getId(),
 				material == null ? null : material.getTitle(),
 				material == null || material.getSourceType() != StudyMaterialSourceType.YOUTUBE ? null : material.getExternalVideoId());
+	}
+
+	/**
+	 * Modo estudo: mostra a resposta da questão sem avaliar. Não grava tentativa nem mexe na revisão espaçada, então
+	 * não altera pontuação nem estatísticas. Nas objetivas antigas, a resposta é o texto da alternativa correta.
+	 */
+	@Transactional(readOnly = true)
+	public StudyView studyView(UUID blockId, UUID questionId) {
+		StudyQuestion question = getOwned(blockId, questionId);
+		AnswerContext context = answerContext(blockId, questionId);
+		String answer = context.modelAnswer();
+		if (answer == null || answer.isBlank()) {
+			answer = question.getOptions().stream()
+					.filter(StudyQuestionOption::isCorrect)
+					.map(StudyQuestionOption::getText)
+					.findFirst()
+					.orElse(null);
+		}
+		return new StudyView(context.questionId(), context.prompt(), answer, context.explanation(),
+				context.rubric().essentialConcepts(), context.rubric().commonMistakes(), context.sourceExcerpt(),
+				context.sourceTimestamp(), context.sourceMaterialId(), context.sourceMaterialTitle(),
+				context.sourceVideoId());
 	}
 
 	/**
@@ -510,7 +533,22 @@ public class StudyQuestionService {
 			StudyQuestionStatus status,
 			String prompt,
 			String modelAnswer,
+			String explanation,
 			QuestionRubric rubric,
+			String sourceExcerpt,
+			String sourceTimestamp,
+			UUID sourceMaterialId,
+			String sourceMaterialTitle,
+			String sourceVideoId) {}
+
+	/** Resposta de uma questão no modo estudo (sem avaliação). */
+	public record StudyView(
+			UUID questionId,
+			String prompt,
+			String answer,
+			String explanation,
+			List<String> essentialConcepts,
+			List<String> commonMistakes,
 			String sourceExcerpt,
 			String sourceTimestamp,
 			UUID sourceMaterialId,
@@ -529,6 +567,8 @@ public class StudyQuestionService {
 			List<String> errors,
 			String improvementTip,
 			String modelAnswer,
+			String explanation,
+			List<String> commonMistakes,
 			String sourceExcerpt,
 			String sourceTimestamp,
 			UUID sourceMaterialId,
@@ -556,8 +596,8 @@ public class StudyQuestionService {
 
 		static StudyQuestionAnswer pending(UUID attemptId, String message) {
 			DiscursiveFeedback feedback = new DiscursiveFeedback(attemptId, QuestionEvaluationStatus.PENDING_EVALUATION,
-					null, Map.of(), List.of(), List.of(), List.of(), List.of(), null, null, null, null, null, null, null,
-					null, true, message);
+					null, Map.of(), List.of(), List.of(), List.of(), List.of(), null, null, null, List.of(), null, null,
+					null, null, null, null, true, message);
 			return new StudyQuestionAnswer(false, message, QuestionEvaluationStatus.PENDING_EVALUATION, null, feedback);
 		}
 	}

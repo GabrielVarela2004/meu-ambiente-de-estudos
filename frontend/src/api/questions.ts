@@ -32,6 +32,10 @@ export type DiscursiveFeedback = {
   errors: string[]
   improvementTip: string | null
   modelAnswer: string | null
+  /** Explicação detalhada da resposta correta. */
+  explanation?: string | null
+  /** Erros comuns da rubrica ("se você achou que…"). */
+  commonMistakes?: string[]
   sourceExcerpt: string | null
   sourceTimestamp: string | null
   sourceMaterialId: string | null
@@ -49,6 +53,25 @@ export type AnswerResult = {
   classification: AnswerClassification
   scorePercent: number | null
   feedback: DiscursiveFeedback | null
+}
+
+/** Modo estudo: resposta da questão sem avaliação (não grava tentativa nem mexe na revisão). */
+export type StudyView = {
+  questionId: string
+  prompt: string
+  answer: string | null
+  explanation: string | null
+  essentialConcepts: string[]
+  commonMistakes: string[]
+  sourceExcerpt: string | null
+  sourceTimestamp: string | null
+  sourceMaterialId: string | null
+  sourceMaterialTitle: string | null
+  sourceVideoId: string | null
+}
+
+export function getStudyView(blockId: string, questionId: string): Promise<StudyView> {
+  return request<StudyView>(`/api/study-blocks/${blockId}/questions/${questionId}/study-view`)
 }
 
 /** Reavalia uma tentativa que ficou pendente por falta de IA. */

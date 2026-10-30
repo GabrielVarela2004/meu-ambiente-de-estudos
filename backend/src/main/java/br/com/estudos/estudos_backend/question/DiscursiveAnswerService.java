@@ -90,6 +90,8 @@ public class DiscursiveAnswerService {
 				result.errors(),
 				result.improvementTip(),
 				context.modelAnswer(),
+				context.explanation(),
+				context.rubric().commonMistakes(),
 				context.sourceExcerpt(),
 				context.sourceTimestamp(),
 				context.sourceMaterialId(),

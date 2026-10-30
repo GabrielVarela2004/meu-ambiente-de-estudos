@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react'
 import { request } from '../api/http'
-import { answerQuestion, reevaluateAttempt } from '../api/questions'
-import type { AnswerResult } from '../api/questions'
+import { answerQuestion, getStudyView, reevaluateAttempt } from '../api/questions'
+import type { AnswerResult, StudyView } from '../api/questions'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, SparklesIcon } from '../components/icons'
 import { DiscursiveFeedbackCard } from '../features/questions/DiscursiveFeedbackCard'
 import { SimuladoConfigModal } from '../features/questions/SimuladoConfigModal'
+import { StudyViewCard } from '../features/questions/StudyViewCard'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
 import { useDeferredEffect } from '../hooks/useDeferredEffect'
@@ -78,6 +79,10 @@ export function TheoreticalQuestionsPage({
   >({})
   const [submittingId, setSubmittingId] = useState<string | null>(null)
   const [reevaluatingId, setReevaluatingId] = useState<string | null>(null)
+
+  // Modo estudo: respostas vistas sem avaliação
+  const [studyViews, setStudyViews] = useState<Record<string, StudyView>>({})
+  const [loadingStudyViewId, setLoadingStudyViewId] = useState<string | null>(null)
 
   // Visualização de citações
   const [viewingExcerpt, setViewingExcerpt] = useState<Record<string, boolean>>({})
@@ -179,6 +184,27 @@ export function TheoreticalQuestionsPage({
     } finally {
       setReevaluatingId(null)
     }
+  }
+
+  /** Modo estudo: mostra a resposta sem registrar tentativa. */
+  const handleShowStudyView = async (q: StudyQuestion) => {
+    setLoadingStudyViewId(q.id)
+    try {
+      const view = await getStudyView(q.studyBlockId, q.id)
+      setStudyViews((prev) => ({ ...prev, [q.id]: view }))
+    } catch (err) {
+      alert(err instanceof Error && err.message ? err.message : 'Não foi possível carregar a resposta.')
+    } finally {
+      setLoadingStudyViewId(null)
+    }
+  }
+
+  const handleHideStudyView = (questionId: string) => {
+    setStudyViews((prev) => {
+      const next = { ...prev }
+      delete next[questionId]
+      return next
+    })
   }
 
   const filteredQuestions = questions.filter((q) => {
@@ -397,7 +423,21 @@ export function TheoreticalQuestionsPage({
                     >
                       {isSubmitting ? (q.format === 'DISCURSIVE' ? 'Corrigindo com a IA…' : 'Enviando…') : 'Confirmar Resposta'}
                     </button>
+                    {!studyViews[q.id] && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => void handleShowStudyView(q)}
+                        disabled={loadingStudyViewId === q.id}
+                      >
+                        {loadingStudyViewId === q.id ? 'Carregando…' : 'Ver resposta (modo estudo)'}
+                      </button>
+                    )}
                   </div>
+                )}
+
+                {studyViews[q.id] && (
+                  <StudyViewCard view={studyViews[q.id]} onClose={() => handleHideStudyView(q.id)} />
                 )}
 
                 {/* Feedback da questão aberta (correção rigorosa) */}

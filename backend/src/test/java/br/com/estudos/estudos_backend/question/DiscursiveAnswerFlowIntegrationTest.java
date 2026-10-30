@@ -100,6 +100,8 @@ class DiscursiveAnswerFlowIntegrationTest {
 				.andExpect(jsonPath("$.classification").value("PARTIAL"))
 				.andExpect(jsonPath("$.scorePercent").value(68))
 				.andExpect(jsonPath("$.feedback.modelAnswer").value("O HashSet usa hashCode e equals para não inserir objetos iguais."))
+				.andExpect(jsonPath("$.feedback.explanation").value("Usa hashCode e equals."))
+				.andExpect(jsonPath("$.feedback.commonMistakes").isArray())
 				.andExpect(jsonPath("$.feedback.missingEssentialConcepts[0]").value("equals compara os objetos"))
 				.andExpect(jsonPath("$.feedback.missingTerms[0]").value("balde"))
 				.andExpect(jsonPath("$.feedback.correctPoints[0]").value("Citou o hashCode"))
@@ -120,6 +122,26 @@ class DiscursiveAnswerFlowIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.correct").value(true))
 				.andExpect(jsonPath("$.classification").value("CORRECT"));
+	}
+
+	@Test
+	void studyViewShowsTheAnswerWithoutRecordingAnAttempt() throws Exception {
+		mockMvc.perform(get(questions() + "/" + questionId + "/study-view").header(CurrentUserResolver.USER_HEADER, userId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.answer").value("O HashSet usa hashCode e equals para não inserir objetos iguais."))
+				.andExpect(jsonPath("$.explanation").value("Usa hashCode e equals."))
+				.andExpect(jsonPath("$.commonMistakes").isArray());
+
+		// Sem tentativa nem mudança na revisão: estatísticas zeradas e agenda intacta.
+		mockMvc.perform(get(questions() + "/stats").header(CurrentUserResolver.USER_HEADER, userId))
+				.andExpect(jsonPath("$.attempts").value(0));
+		StudyQuestion saved = questionRepository.findById(UUID.fromString(questionId)).orElseThrow();
+		assertEquals(0, saved.getCorrectStreak());
+
+		// Outro usuário não vê a resposta.
+		mockMvc.perform(get(questions() + "/" + questionId + "/study-view")
+				.header(CurrentUserResolver.USER_HEADER, "outro-" + UUID.randomUUID()))
+				.andExpect(status().is4xxClientError());
 	}
 
 	@Test

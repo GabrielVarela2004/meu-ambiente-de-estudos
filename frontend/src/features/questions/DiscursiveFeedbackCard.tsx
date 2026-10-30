@@ -101,10 +101,16 @@ export function DiscursiveFeedbackCard({ feedback, onAnswerAgain, onReevaluate, 
         </dl>
       )}
 
+      <p className="open-feedback-headline">
+        {feedback.classification === 'CORRECT'
+          ? 'Parabéns, você acertou! Confira abaixo o que fez bem.'
+          : 'Correção: veja onde a resposta falhou, a resposta correta e a explicação.'}
+      </p>
+
       <ListSection title="O que você acertou" items={feedback.correctPoints} tone="ok" />
+      <ListSection title="Correção: erros na sua resposta" items={feedback.errors} tone="error" />
       <ListSection title="Conceitos essenciais que faltaram" items={feedback.missingEssentialConcepts} tone="missing" />
       <ListSection title="Termos do material que você deveria usar" items={feedback.missingTerms} tone="missing" />
-      <ListSection title="Erros identificados" items={feedback.errors} tone="error" />
 
       {feedback.improvementTip && (
         <p className="open-feedback-tip">
@@ -114,9 +120,20 @@ export function DiscursiveFeedbackCard({ feedback, onAnswerAgain, onReevaluate, 
 
       {feedback.modelAnswer && (
         <section className="open-feedback-section">
-          <h5>Resposta-modelo</h5>
+          <h5>Resposta correta</h5>
           <p className="open-feedback-model">{feedback.modelAnswer}</p>
         </section>
+      )}
+
+      {feedback.explanation && (
+        <section className="open-feedback-section">
+          <h5>Explicação detalhada</h5>
+          <p>{feedback.explanation}</p>
+        </section>
+      )}
+
+      {feedback.classification !== 'CORRECT' && (
+        <ListSection title="Erros comuns sobre este tema" items={feedback.commonMistakes ?? []} tone="missing" />
       )}
 
       {feedback.sourceExcerpt && (
