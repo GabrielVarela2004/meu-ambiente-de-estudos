@@ -25,7 +25,7 @@ export function SimuladoConfigModal({
 }: SimuladoConfigModalProps) {
   const [quantity, setQuantity] = useState(3)
   const [difficulty, setDifficulty] = useState<QuestionDifficulty>('INTERMEDIATE')
-  const [format, setFormat] = useState<QuestionFormat>('MULTIPLE_CHOICE')
+  // Área teórica: só questões abertas (o backend também força o formato).
   const [selectedTopicId, setSelectedTopicId] = useState('')
   const [topics, setTopics] = useState<KnowledgeTopic[]>([])
   const [loadingTopics, setLoadingTopics] = useState(false)
@@ -100,7 +100,7 @@ export function SimuladoConfigModal({
         body: JSON.stringify({
           quantity,
           difficulty,
-          format,
+          format: 'DISCURSIVE' satisfies QuestionFormat,
           topicId: selectedTopicId || null,
         }),
       })
@@ -172,18 +172,10 @@ export function SimuladoConfigModal({
             </label>
           </div>
 
-          <label>
-            Formato das questões
-            <select
-              value={format}
-              onChange={(e) => setFormat(e.target.value as QuestionFormat)}
-              disabled={generating}
-            >
-              <option value="MULTIPLE_CHOICE">Múltipla escolha</option>
-              <option value="TRUE_FALSE">Verdadeiro ou falso</option>
-              <option value="DISCURSIVE">Discursiva (avaliação semântica por evidência)</option>
-            </select>
-          </label>
+          <p className="form-hint">
+            As questões teóricas são sempre <strong>abertas</strong>: você responde com suas palavras e a IA corrige
+            com rigor, comparando com a resposta-modelo e os conceitos essenciais do material.
+          </p>
 
           <label>
             Assunto ou tópico (opcional)

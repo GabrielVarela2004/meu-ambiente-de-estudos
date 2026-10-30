@@ -1,5 +1,6 @@
 import { SettingsIcon } from '../components/icons'
 import { AiProvidersPanel } from '../features/ai/AiProvidersPanel'
+import { EvaluationRigorPanel } from '../features/questions/EvaluationRigorPanel'
 import '../styles/pages/settings-forum.css'
 
 // Amostras lidas de styles/tokens.css (fonte única das cores).
@@ -55,6 +56,9 @@ export function SettingsPage({ onNavigateToGoals }: Props) {
 
       {/* 2. Provedores de IA: rota por operação, modelo, limite diário e consumo */}
       <AiProvidersPanel />
+
+      {/* Correção das questões abertas: nível de rigor */}
+      <EvaluationRigorPanel />
 
       {/* 3. Uso individual (sem login) */}
       <div className="card mb-6">

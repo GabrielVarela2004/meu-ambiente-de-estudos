@@ -1,0 +1,153 @@
+/* Questões abertas: feedback da correção rigorosa. */
+
+.open-feedback-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+}
+
+.open-feedback-card.is-correct {
+  border-color: var(--color-success-border);
+  background: var(--color-success-bg);
+}
+
+.open-feedback-card.is-partial,
+.open-feedback-card.is-pending {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-bg);
+}
+
+.open-feedback-card.is-incorrect {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-bg);
+}
+
+.open-feedback-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.open-feedback-classification {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-lg);
+  letter-spacing: 0.02em;
+}
+
+.open-feedback-score {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+}
+
+.open-feedback-criteria {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.open-feedback-criteria div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+}
+
+.open-feedback-criteria dt {
+  color: var(--color-text-secondary);
+}
+
+.open-feedback-criteria dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+}
+
+.open-feedback-section h5 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.open-feedback-section ul {
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.open-feedback-section.is-ok h5 {
+  color: var(--color-success);
+}
+
+.open-feedback-section.is-missing h5 {
+  color: var(--color-warning);
+}
+
+.open-feedback-section.is-error h5 {
+  color: var(--color-danger);
+}
+
+.open-feedback-model {
+  white-space: pre-wrap;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.open-feedback-tip {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.open-feedback-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Configurações › nível de rigor */
+.rigor-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.rigor-option {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.rigor-option.is-selected {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+}
+
+.rigor-option-description {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Legenda do grupo só para leitores de tela */
+.rigor-options legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

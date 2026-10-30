@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
-import { answerQuestion } from '../api/questions'
+import { answerQuestion, reevaluateAttempt } from '../api/questions'
+import type { AnswerResult } from '../api/questions'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, SparklesIcon } from '../components/icons'
+import { DiscursiveFeedbackCard } from '../features/questions/DiscursiveFeedbackCard'
 import { SimuladoConfigModal } from '../features/questions/SimuladoConfigModal'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
@@ -71,9 +73,10 @@ export function TheoreticalQuestionsPage({
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [discursiveInputs, setDiscursiveInputs] = useState<Record<string, string>>({})
   const [questionResults, setQuestionResults] = useState<
-    Record<string, { correct: boolean; explanation: string | null }>
+    Record<string, AnswerResult>
   >({})
   const [submittingId, setSubmittingId] = useState<string | null>(null)
+  const [reevaluatingId, setReevaluatingId] = useState<string | null>(null)
 
   // Visualização de citações
   const [viewingExcerpt, setViewingExcerpt] = useState<Record<string, boolean>>({})
@@ -142,16 +145,40 @@ export function TheoreticalQuestionsPage({
         body = { optionId }
       }
 
-      const res = await answerQuestion<{ correct: boolean; explanation: string | null }>(q.studyBlockId, q.id, body)
+      const res = await answerQuestion<AnswerResult>(q.studyBlockId, q.id, body)
 
       setQuestionResults((prev) => ({
         ...prev,
         [q.id]: res,
       }))
-    } catch {
-      alert('Falha ao submeter resposta da questão.')
+    } catch (err) {
+      alert(err instanceof Error && err.message ? err.message : 'Falha ao enviar a resposta da questão.')
     } finally {
       setSubmittingId(null)
+    }
+  }
+
+  /** Responder de novo a mesma pergunta: limpa o feedback e abre o campo (a próxima resposta é outra tentativa). */
+  const handleAnswerAgain = (questionId: string) => {
+    setQuestionResults((prev) => {
+      const next = { ...prev }
+      delete next[questionId]
+      return next
+    })
+    setDiscursiveInputs((prev) => ({ ...prev, [questionId]: '' }))
+  }
+
+  /** Reavalia uma resposta que ficou pendente por falta de IA. */
+  const handleReevaluate = async (q: StudyQuestion, attemptId?: string) => {
+    if (!attemptId) return
+    setReevaluatingId(q.id)
+    try {
+      const res = await reevaluateAttempt(q.studyBlockId, q.id, attemptId)
+      setQuestionResults((prev) => ({ ...prev, [q.id]: res }))
+    } catch (err) {
+      alert(err instanceof Error && err.message ? err.message : 'Não foi possível reavaliar agora.')
+    } finally {
+      setReevaluatingId(null)
     }
   }
 
@@ -293,7 +320,8 @@ export function TheoreticalQuestionsPage({
                 </div>
 
                 {/* Excerto de Apoio */}
-                {q.sourceExcerpt && (
+                {/* Em questões abertas o trecho só aparece no feedback, depois da resposta. */}
+                {q.sourceExcerpt && q.format !== 'DISCURSIVE' && (
                   <div className="source-excerpt-accordion">
                     <button
                       type="button"
@@ -349,7 +377,7 @@ export function TheoreticalQuestionsPage({
                       id={`discursive-${q.id}`}
                       className="form-textarea"
                       rows={4}
-                      placeholder="Redija sua resposta técnica para avaliação semântica dos critérios..."
+                      placeholder="Explique com suas palavras, usando os termos do material. A correção é rigorosa: profundidade e conceitos essenciais contam."
                       value={discursiveInputs[q.id] || ''}
                       onChange={(e) =>
                         setDiscursiveInputs((prev) => ({ ...prev, [q.id]: e.target.value }))
@@ -368,13 +396,23 @@ export function TheoreticalQuestionsPage({
                       onClick={() => void handleAnswerQuestion(q)}
                       disabled={isSubmitting}
                     >
-                      {isSubmitting ? 'Avaliando Gabarito...' : 'Confirmar Resposta'}
+                      {isSubmitting ? (q.format === 'DISCURSIVE' ? 'Corrigindo com a IA…' : 'Enviando…') : 'Confirmar Resposta'}
                     </button>
                   </div>
                 )}
 
-                {/* Feedback e Gabarito */}
-                {result && (
+                {/* Feedback da questão aberta (correção rigorosa) */}
+                {result?.feedback && (
+                  <DiscursiveFeedbackCard
+                    feedback={result.feedback}
+                    onAnswerAgain={() => handleAnswerAgain(q.id)}
+                    onReevaluate={() => void handleReevaluate(q, result.feedback?.attemptId)}
+                    reevaluating={reevaluatingId === q.id}
+                  />
+                )}
+
+                {/* Feedback e Gabarito das objetivas */}
+                {result && !result.feedback && (
                   <div className={`answer-feedback-card ${result.correct ? 'correct' : 'incorrect'}`}>
                     <div className="flex-gap-center mb-1">
                       <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />

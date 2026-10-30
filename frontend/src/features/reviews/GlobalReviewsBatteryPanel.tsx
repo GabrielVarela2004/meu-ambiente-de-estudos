@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { request } from '../../api/http'
 import { answerQuestion, rescheduleQuestionReview } from '../../api/questions'
+import type { AnswerResult } from '../../api/questions'
+import { DiscursiveFeedbackCard } from '../questions/DiscursiveFeedbackCard'
 import type { QuestionAnswerPayload } from '../../api/questions'
 import '../../styles/pages/learning-panels.css'
 
@@ -31,11 +33,6 @@ export type GlobalReviewSummary = {
   learningCount: number
   needsReinforcementCount: number
   totalActiveQuestions: number
-}
-
-type AnswerResult = {
-  correct: boolean
-  explanation: string
 }
 
 type Props = {
@@ -127,7 +124,13 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
       const res = await answerQuestion<AnswerResult>(currentQ.studyBlockId, currentQ.id, payload)
 
       setBatteryAnswers((prev) => ({ ...prev, [currentQ.id]: res }))
-      if (res.correct) {
+      if (res.classification === 'PENDING_EVALUATION') {
+        // Sem IA: não conta como acerto nem como erro até ser reavaliada.
+        setFeedbackMessage('Resposta registrada como pendente: será corrigida quando a IA estiver disponível.')
+      } else if (res.classification === 'PARTIAL') {
+        setBatteryStats((prev) => ({ ...prev, wrong: prev.wrong + 1 }))
+        setFeedbackMessage(`Resposta parcial: não conta como acerto e a questão volta em poucos dias (${difficultyLabels[currentQ.difficulty]}).`)
+      } else if (res.correct) {
         setBatteryStats((prev) => ({ ...prev, correct: prev.correct + 1 }))
         const nextStreak = currentQ.correctStreak + 1
         setFeedbackMessage(`Acertou! Streak aumentou para ${nextStreak}. Intervalo expandido com base na dificuldade ${difficultyLabels[currentQ.difficulty]}.`)
@@ -325,11 +328,17 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                   {/* Feedback on answer */}
                   {currentResult && (
                     <div className={`battery-feedback-box ${currentResult.correct ? 'correct' : 'wrong'}`}>
-                      <h4>{currentResult.correct ? '✔ Resposta Correta!' : '✖ Resposta Incorreta'}</h4>
-                      <p>{currentResult.explanation}</p>
+                      {currentResult.feedback ? (
+                        <DiscursiveFeedbackCard feedback={currentResult.feedback} />
+                      ) : (
+                        <>
+                          <h4>{currentResult.correct ? '✔ Resposta Correta!' : '✖ Resposta Incorreta'}</h4>
+                          <p>{currentResult.explanation}</p>
+                        </>
+                      )}
                       {feedbackMessage && <p className="streak-feedback">{feedbackMessage}</p>}
                       <div className="mt-3">
-                        <button type="button" className="primary" onClick={handleNextInBattery}>
+                        <button type="button" className="btn btn-primary" onClick={handleNextInBattery}>
                           {currentIndex < questions.length - 1 ? 'Próxima Questão →' : 'Finalizar Bateria'}
                         </button>
                       </div>
@@ -485,7 +494,8 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
                       </div>
                     )}
 
-                    {res && (
+                    {res?.feedback && <DiscursiveFeedbackCard feedback={res.feedback} />}
+                    {res && !res.feedback && (
                       <p className={res.correct ? 'answer-correct' : 'answer-wrong'}>
                         {res.correct ? '✔ Resposta correta!' : '✖ Resposta incorreta.'} {res.explanation}
                       </p>
