@@ -2,6 +2,7 @@ package br.com.estudos.estudos_backend.career.adapter.in.web;
 
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.career.service.CareerSkillsProfileService;
 import br.com.estudos.estudos_backend.career.service.CareerSkillsProfileService.UserCareerSkillsProfile;
@@ -45,7 +45,7 @@ public class CareerSkillsController {
 	@PostMapping("/assess")
 	public ResponseEntity<AssessmentResponse> assess(@Valid @RequestBody AssessmentRequest request) {
 		KnowledgeTopic topic = service.findTopicForSkill(request.skillName())
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Competência não encontrada"));
+				.orElseThrow(() -> new NotFoundException("Competência não encontrada"));
 		UUID blockId = topic.getStudyBlock().getId();
 		PracticalExercise exercise = exerciseService.generateFromMaterials(blockId, null, topic.getId(), null, null);
 		return ResponseEntity.status(HttpStatus.CREATED).body(new AssessmentResponse(

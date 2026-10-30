@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -157,7 +157,7 @@ public class CareerJobInsightService {
 
 	private CareerJob findJob(UUID jobId) {
 		return jobRepository.findById(jobId)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vaga não encontrada"));
+				.orElseThrow(() -> new NotFoundException("Vaga não encontrada"));
 	}
 
 	private static String describe(CareerJob job, JobMatchEvaluation eval, CareerProfile profile) {
