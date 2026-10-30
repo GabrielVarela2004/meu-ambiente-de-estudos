@@ -3,11 +3,12 @@ package br.com.estudos.estudos_backend.goal;
 import java.util.List;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.*;
@@ -49,9 +50,9 @@ public class StudyGoalService {
 		try {
 			goal.addProgress(units);
 		} catch (IllegalArgumentException exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage());
+			throw new InvalidInputException(exception.getMessage());
 		} catch (IllegalStateException exception) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage());
+			throw new BusinessRuleException(exception.getMessage());
 		}
 		return goal;
 	}
@@ -62,7 +63,7 @@ public class StudyGoalService {
 		try {
 			goal.archive();
 		} catch (IllegalStateException exception) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage());
+			throw new BusinessRuleException(exception.getMessage());
 		}
 	}
 
@@ -70,13 +71,13 @@ public class StudyGoalService {
 		activeBlock(blockId);
 		return goalRepository.findById(goalId)
 				.filter(goal -> goal.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study goal not found"));
+				.orElseThrow(() -> new NotFoundException("Meta de estudo não encontrada."));
 	}
 
 	private StudyBlock activeBlock(UUID id) {
 		String ownerId = currentUserResolver.currentUserId();
 		return blockRepository.findByIdAndOwnerId(id, ownerId)
 				.filter(block -> block.getStatus() == StudyBlockStatus.ACTIVE)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found"));
+				.orElseThrow(() -> new NotFoundException("Bloco de estudo não encontrado."));
 	}
 }
