@@ -41,7 +41,7 @@ public class LearningCriteriaProperties {
 			@Value("${estudos.learning.review.medium-interval-days:3}") int reviewMediumAccuracyIntervalDays,
 			@Value("${estudos.learning.review.high-unconfirmed-interval-days:7}") int reviewHighAccuracyUnconfirmedIntervalDays,
 			@Value("${estudos.learning.review.mastered-initial-interval-days:14}") int reviewMasteredInitialIntervalDays,
-			@Value("${estudos.learning.execution.timeout-millis:2500}") int executionTimeoutMillis) {
+			@Value("${estudos.learning.execution.timeout-millis:20000}") int executionTimeoutMillis) {
 		this.theoreticalMinAccuracyPercent = theoreticalMinAccuracyPercent;
 		this.theoreticalMinQuestionsEvaluated = theoreticalMinQuestionsEvaluated;
 		this.theoreticalMinDistinctSessions = theoreticalMinDistinctSessions;
@@ -62,7 +62,7 @@ public class LearningCriteriaProperties {
 		return new LearningCriteriaProperties(
 				85, 20, 2, 85, 10,
 				5, 2, true,
-				60, 1, 3, 7, 14, 2500);
+				60, 1, 3, 7, 14, 20000);
 	}
 
 	public int getTheoreticalMinAccuracyPercent() { return theoreticalMinAccuracyPercent; }

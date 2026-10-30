@@ -25,6 +25,12 @@ export type KnowledgeTopic = {
   stateReason: string
   attempts: number
   recentAccuracyPercent: number | null
+  masteryPercent: number | null
+  theoryPercent: number | null
+  practicalPercent: number | null
+  practicalExercises: number
+  mastered: boolean
+  masteryReason: string
 }
 
 type QuestionSummary = { id: string; prompt: string }
@@ -210,6 +216,20 @@ export function TopicsPanel({ blockId, questions, evidenceVersion, onTopicsChang
         Respostas registradas: {topic.attempts}
         {topic.recentAccuracyPercent !== null && <> · acerto recente: {topic.recentAccuracyPercent}%</>}
       </p>
+      <div className="topic-mastery">
+        <div className="topic-mastery-head">
+          <strong>Desempenho no tópico: {topic.masteryPercent ?? 0}%</strong>
+          {topic.mastered && <span className="badge badge-emerald">Dominado</span>}
+        </div>
+        <div className="topic-mastery-bar" aria-hidden="true">
+          <span style={{ width: `${topic.masteryPercent ?? 0}%` }} />
+        </div>
+        <p className="review-detail">
+          Prática (peso 70%): {topic.practicalPercent === null ? 'sem exercícios' : `${topic.practicalPercent}% em ${topic.practicalExercises} exercício(s)`}
+          {' · '}Teoria (peso 30%): {topic.theoryPercent === null ? 'sem dados suficientes' : `${topic.theoryPercent}%`}
+        </p>
+        <p className="review-detail">{topic.masteryReason}</p>
+      </div>
       <label className="prerequisite-selector">
         Pré-requisito deste tópico:{' '}
         <select

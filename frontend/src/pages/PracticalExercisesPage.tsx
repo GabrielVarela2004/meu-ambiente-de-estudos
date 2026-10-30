@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
-import { CodeIcon, FolderIcon, SparklesIcon, CheckCircleIcon } from '../components/icons'
+import { CodeIcon, FolderIcon, SparklesIcon } from '../components/icons'
+import { AttemptResultPanel, type AttemptResult } from '../features/exercises/AttemptResultPanel'
 import { ExerciseTutorChat } from '../features/exercises/ExerciseTutorChat'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
@@ -24,14 +25,6 @@ const exerciseTypeLabels: Record<string, string> = {
 
 type SourceOption = { id: string; title: string }
 
-type AttemptResult = {
-  selfRating: number
-  scorePercent: number
-  autonomyPercent: number | null
-  hintsUsedCount: number
-  solutionRevealed: boolean
-  passed: boolean
-}
 
 export type PracticalExercise = {
   id: string
@@ -50,7 +43,15 @@ export type PracticalExercise = {
   hintsJson?: string | null
   testCasesJson?: string | null
   steps?: string[]
+  language?: string | null
+  testCode?: string | null
+  autoEvaluable?: boolean | null
   status: 'ACTIVE' | 'ARCHIVED'
+}
+
+/** Exercício em Java com testes: será corrigido automaticamente se o ambiente de execução estiver disponível. */
+function hasAutomaticTests(ex: PracticalExercise) {
+  return ex.language === 'JAVA' && !!ex.testCode && ex.autoEvaluable !== false
 }
 
 type Props = {
@@ -187,12 +188,12 @@ export function PracticalExercisesPage({
 
   const handleSubmitExercise = async (ex: PracticalExercise) => {
     const userAnswer = answers[ex.id] ?? (ex.starterCode || '')
-    const selfRating = ratings[ex.id] || 4
+    // Com correção automática confirmada, a nota vem da execução; senão, vale a autoavaliação.
+    const selfRating = ex.autoEvaluable === true ? null : ratings[ex.id] || 4
 
     setSubmittingId(ex.id)
     try {
-      // A nota combina a autoavaliação (provisória até a correção automática) com a autonomia,
-      // que o backend calcula a partir das ajudas pedidas à tutora do exercício.
+      // O backend executa o código (quando há testes) e aplica a autonomia, calculada pelas ajudas da tutora.
       const res = await request<AttemptResult & { id: string }>(
         `/api/study-blocks/${ex.studyBlockId || selectedBlockId}/exercises/${ex.id}/attempts`,
         {
@@ -205,8 +206,8 @@ export function PracticalExercisesPage({
       )
       setFeedback((prev) => ({ ...prev, [ex.id]: res }))
       setAttemptCounts((prev) => ({ ...prev, [ex.id]: (prev[ex.id] ?? 0) + 1 }))
-    } catch {
-      setError('Erro ao enviar avaliação do exercício.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao enviar avaliação do exercício.')
     } finally {
       setSubmittingId(null)
     }
@@ -379,6 +380,7 @@ export function PracticalExercisesPage({
                     {ex.studyBlockTitle && (
                       <span className="badge badge-subtle">{ex.studyBlockTitle}</span>
                     )}
+                    {hasAutomaticTests(ex) && <span className="badge badge-info">Correção automática</span>}
                     <span className={`difficulty-badge ${ex.difficulty?.toLowerCase() || 'intermediate'}`}>
                       {difficultyLabels[ex.difficulty || 'INTERMEDIATE'] ?? ex.difficulty}
                     </span>
@@ -428,6 +430,13 @@ export function PracticalExercisesPage({
                   </ol>
                 )}
 
+                {hasAutomaticTests(ex) && (
+                  <details className="attempt-details">
+                    <summary>Ver os testes que seu código precisa passar</summary>
+                    <pre className="exercise-test-code">{ex.testCode}</pre>
+                  </details>
+                )}
+
                 {/* Área de Resposta do Estudante */}
                 <div className="exercise-answer-section">
                   <label htmlFor={`answer-${ex.id}`} className="text-xs text-muted block mb-1">
@@ -456,9 +465,16 @@ export function PracticalExercisesPage({
 
                 {/* Autoavaliação e Envio */}
                 <div className="exercise-actions-bar">
+                  {ex.autoEvaluable === true ? (
+                    <span className="text-xs text-muted">
+                      Seu código será executado com os testes e analisado (conceito e boas práticas).
+                    </span>
+                  ) : (
                   <div className="self-eval-group">
                     <label htmlFor={`rating-${ex.id}`} className="text-xs text-muted">
-                      Autoavaliação (provisória até a correção automática):
+                      {hasAutomaticTests(ex)
+                        ? 'Autoavaliação (usada só se a correção automática estiver indisponível):'
+                        : 'Autoavaliação (este exercício não tem correção automática):'}
                     </label>
                     <select
                       id={`rating-${ex.id}`}
@@ -475,6 +491,7 @@ export function PracticalExercisesPage({
                       <option value="1">★☆☆☆☆ Não Conseguiu (Necessita Revisão)</option>
                     </select>
                   </div>
+                  )}
 
                   <button
                     type="button"
@@ -482,37 +499,12 @@ export function PracticalExercisesPage({
                     onClick={() => void handleSubmitExercise(ex)}
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? 'Registrando...' : 'Registrar Tentativa'}
+                    {isSubmitting ? (ex.autoEvaluable === true ? 'Executando...' : 'Registrando...') : 'Enviar Solução'}
                   </button>
                 </div>
 
-                {/* Feedback da Avaliação */}
-                {result && (
-                  <div className={`exercise-feedback-panel ${result.passed ? 'passed' : 'needs-review'}`}>
-                    <div className="flex-between mb-2">
-                      <div className="flex-gap-center">
-                        <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-                        <strong className="text-emerald-400">
-                          Tentativa registrada no histórico
-                        </strong>
-                      </div>
-                      <span className={`badge ${result.passed ? 'badge-emerald' : 'badge-amber'}`}>
-                        Nota: {result.scorePercent}%
-                      </span>
-                    </div>
-                    <p className="text-sm">
-                      Autoavaliação {result.selfRating}/5 × autonomia {result.autonomyPercent ?? 100}%
-                      {result.hintsUsedCount > 0 && ` (${result.hintsUsedCount} ajuda(s) da tutora)`}.
-                    </p>
-                    <p className="text-sm">
-                      {result.solutionRevealed
-                        ? 'A solução foi revelada: esta tentativa não conta para o domínio do tópico.'
-                        : result.passed
-                          ? 'Bom resultado. A próxima revisão deste exercício será espaçada.'
-                          : 'Resultado ainda baixo. Este exercício voltará antes na sua fila de revisão.'}
-                    </p>
-                  </div>
-                )}
+                {/* Resultado da Avaliação */}
+                {result && <AttemptResultPanel result={result} />}
               </div>
             )
           })}

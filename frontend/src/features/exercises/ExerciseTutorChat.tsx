@@ -116,6 +116,14 @@ export function ExerciseTutorChat({ exercisePath, steps, currentCode, refreshKey
           Autonomia: {autonomy}%
         </span>
       </div>
+      {session && Object.keys(session.penaltyByStep).length > 0 && (
+        <p className="text-xs exercise-tutor-difficulty">
+          Onde você precisou de ajuda:{' '}
+          {Object.entries(session.penaltyByStep)
+            .map(([step, penalty]) => `${step === '-1' ? 'Geral' : `Etapa ${Number(step) + 1}`} (−${penalty}%)`)
+            .join(' · ')}
+        </p>
+      )}
       <p className="text-xs text-muted">
         Converse sobre a etapa em que travou. Esclarecer o enunciado não desconta; dicas descontam conforme o quanto
         da solução foi entregue.

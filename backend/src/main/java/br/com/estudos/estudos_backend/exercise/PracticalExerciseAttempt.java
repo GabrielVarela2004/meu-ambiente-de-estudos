@@ -99,6 +99,15 @@ public class PracticalExerciseAttempt {
 	@Column(name = "autonomy_percent")
 	private Integer autonomyPercent;
 
+	@Column(name = "correctness_percent")
+	private Integer correctnessPercent;
+
+	@Column(name = "concept_percent")
+	private Integer conceptPercent;
+
+	@Column(name = "quality_percent")
+	private Integer qualityPercent;
+
 	@Column(name = "created_at", nullable = false)
 	private OffsetDateTime createdAt;
 
@@ -201,6 +210,13 @@ public class PracticalExerciseAttempt {
 		this.autonomyPercent = Math.max(0, Math.min(100, autonomyPercent));
 	}
 
+	/** Notas parciais da correção automática (0–100 cada); {@code null} quando não houve execução. */
+	public void recordBreakdown(Integer correctnessPercent, Integer conceptPercent, Integer qualityPercent) {
+		this.correctnessPercent = correctnessPercent;
+		this.conceptPercent = conceptPercent;
+		this.qualityPercent = qualityPercent;
+	}
+
 	@PrePersist
 	void onCreate() {
 		if (id == null) id = UUID.randomUUID();
@@ -243,5 +259,8 @@ public class PracticalExerciseAttempt {
 	public String getTestResultsJson() { return testResultsJson; }
 	public String getErrorCategory() { return errorCategory; }
 	public Integer getAutonomyPercent() { return autonomyPercent; }
+	public Integer getCorrectnessPercent() { return correctnessPercent; }
+	public Integer getConceptPercent() { return conceptPercent; }
+	public Integer getQualityPercent() { return qualityPercent; }
 	public OffsetDateTime getCreatedAt() { return createdAt; }
 }

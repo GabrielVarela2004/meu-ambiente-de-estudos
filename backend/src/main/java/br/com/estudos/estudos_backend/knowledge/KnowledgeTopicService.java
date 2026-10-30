@@ -18,6 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialProcessingStatus;
+import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttempt;
+import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttemptRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialStatus;
 import br.com.estudos.estudos_backend.question.StudyQuestion;
@@ -39,19 +41,22 @@ public class KnowledgeTopicService {
 	private final StudyQuestionAttemptRepository attemptRepository;
 	private final StudyMaterialRepository materialRepository;
 	private final SourceTopicExtractor sourceTopicExtractor;
+	private final PracticalExerciseAttemptRepository practicalAttemptRepository;
 	private final TopicLearningStateEvaluator evaluator = new TopicLearningStateEvaluator();
+	private final TopicMasteryCalculator masteryCalculator = new TopicMasteryCalculator();
 
 	public KnowledgeTopicService(KnowledgeTopicRepository topicRepository,
 			KnowledgeTopicQuestionRepository linkRepository, StudyBlockService blockService,
 			StudyQuestionRepository questionRepository, StudyQuestionAttemptRepository attemptRepository) {
-		this(topicRepository, linkRepository, blockService, questionRepository, attemptRepository, null, null);
+		this(topicRepository, linkRepository, blockService, questionRepository, attemptRepository, null, null, null);
 	}
 
 	@Autowired
 	public KnowledgeTopicService(KnowledgeTopicRepository topicRepository,
 			KnowledgeTopicQuestionRepository linkRepository, StudyBlockService blockService,
 			StudyQuestionRepository questionRepository, StudyQuestionAttemptRepository attemptRepository,
-			StudyMaterialRepository materialRepository, SourceTopicExtractor sourceTopicExtractor) {
+			StudyMaterialRepository materialRepository, SourceTopicExtractor sourceTopicExtractor,
+			PracticalExerciseAttemptRepository practicalAttemptRepository) {
 		this.topicRepository = topicRepository;
 		this.linkRepository = linkRepository;
 		this.blockService = blockService;
@@ -59,6 +64,7 @@ public class KnowledgeTopicService {
 		this.attemptRepository = attemptRepository;
 		this.materialRepository = materialRepository;
 		this.sourceTopicExtractor = sourceTopicExtractor;
+		this.practicalAttemptRepository = practicalAttemptRepository;
 	}
 
 	@Transactional
@@ -271,14 +277,27 @@ public class KnowledgeTopicService {
 			assessmentsById.put(topic.getId(), evaluator.evaluate(evidence, questionIds.size()));
 		}
 
+		Map<UUID, List<TopicMasteryCalculator.PracticalEvidence>> practicalByTopic = new HashMap<>();
+		if (practicalAttemptRepository != null) {
+			for (PracticalExerciseAttempt attempt : practicalAttemptRepository.findAllByStudyBlockIdOrderByCreatedAtDesc(blockId)) {
+				if (attempt.getTopicId() != null) {
+					practicalByTopic.computeIfAbsent(attempt.getTopicId(), key -> new ArrayList<>())
+							.add(new TopicMasteryCalculator.PracticalEvidence(attempt.getExercise().getId(),
+									attempt.getScorePercent(), attempt.isSolutionRevealed()));
+				}
+			}
+		}
+
 		return topics.stream().map(topic -> {
 			List<UUID> questionIds = List.copyOf(questionIdsByTopic.getOrDefault(topic.getId(), List.of()));
 			TopicLearningAssessment assessment = assessmentsById.get(topic.getId());
+			TopicMasteryCalculator.TopicMastery mastery = masteryCalculator.calculate(assessment,
+					practicalByTopic.getOrDefault(topic.getId(), List.of()));
 			String prerequisiteWarning = buildPrerequisiteWarning(topic, topicsById, assessmentsById);
 			String sourceMaterialTitle = topic.getSourceMaterialId() == null
 					? null
 					: materialTitlesById.get(topic.getSourceMaterialId());
-			return new TopicView(topic, questionIds, assessment, prerequisiteWarning, sourceMaterialTitle);
+			return new TopicView(topic, questionIds, assessment, prerequisiteWarning, sourceMaterialTitle, mastery);
 		}).toList();
 	}
 
@@ -400,11 +419,17 @@ public class KnowledgeTopicService {
 			List<UUID> questionIds,
 			TopicLearningAssessment assessment,
 			String prerequisiteWarning,
-			String sourceMaterialTitle) {
+			String sourceMaterialTitle,
+			TopicMasteryCalculator.TopicMastery mastery) {
 
 		public TopicView(KnowledgeTopic topic, List<UUID> questionIds,
 				TopicLearningAssessment assessment, String prerequisiteWarning) {
-			this(topic, questionIds, assessment, prerequisiteWarning, null);
+			this(topic, questionIds, assessment, prerequisiteWarning, null, null);
+		}
+
+		public TopicView(KnowledgeTopic topic, List<UUID> questionIds,
+				TopicLearningAssessment assessment, String prerequisiteWarning, String sourceMaterialTitle) {
+			this(topic, questionIds, assessment, prerequisiteWarning, sourceMaterialTitle, null);
 		}
 	}
 }

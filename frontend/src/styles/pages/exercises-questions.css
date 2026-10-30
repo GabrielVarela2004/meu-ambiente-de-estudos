@@ -396,3 +396,81 @@
   justify-content: flex-end;
   gap: var(--space-2);
 }
+
+.exercise-tutor-difficulty {
+  margin: 0;
+  color: var(--color-warning);
+}
+
+/* ---- Resultado da correção automática ---- */
+.attempt-score-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.attempt-score-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 1fr 44px;
+  align-items: center;
+  gap: var(--space-3);
+}
+.attempt-score-track {
+  height: 8px;
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+}
+.attempt-score-track span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+.attempt-score-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.attempt-details {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+.attempt-details summary {
+  cursor: pointer;
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+.attempt-details ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.attempt-ok {
+  color: var(--color-success);
+}
+.attempt-fail {
+  color: var(--color-text);
+}
+.exercise-test-code {
+  max-height: 280px;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  overflow: auto;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 560px) {
+  .attempt-score-row {
+    grid-template-columns: 1fr 44px;
+  }
+  .attempt-score-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

@@ -3,6 +3,8 @@ package br.com.estudos.estudos_backend.exercise;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -166,9 +168,10 @@ public class PracticalExerciseController {
 			StudyQuestionDifficulty difficulty,
 			PracticalExerciseType exerciseType) {}
 
+	/** selfRating só é obrigatório quando o exercício não tem correção automática. */
 	public record AttemptRequest(
 			@NotBlank @Size(max = 20000) String answer,
-			@Min(1) @Max(5) int selfRating,
+			@Min(1) @Max(5) Integer selfRating,
 			@Size(max = 5000) String feedback) {}
 
 	public record ExerciseResponse(
@@ -188,6 +191,9 @@ public class PracticalExerciseController {
 			String hintsJson,
 			String testCasesJson,
 			List<String> steps,
+			String language,
+			String testCode,
+			Boolean autoEvaluable,
 			PracticalExerciseStatus status,
 			OffsetDateTime createdAt,
 			OffsetDateTime updatedAt) {
@@ -210,19 +216,44 @@ public class PracticalExerciseController {
 					e.getHintsJson(),
 					e.getTestCasesJson(),
 					PracticalExerciseSteps.parse(e.getStepsJson()),
+					e.getLanguage(),
+					e.getTestCode(),
+					e.getAutoEvaluable(),
 					e.getStatus(),
 					e.getCreatedAt(),
 					e.getUpdatedAt());
 		}
 	}
 
+	/**
+	 * @param report relatório do avaliador (testes, checagens de conceito e boas práticas); {@code null} na autoavaliação
+	 */
 	public record AttemptResponse(UUID id, String answer, int selfRating, String feedback, int scorePercent,
 			Integer autonomyPercent, int hintsUsedCount, boolean solutionRevealed, boolean passed,
-			OffsetDateTime createdAt) {
+			ExerciseEvaluationStatus evaluationStatus, Integer correctnessPercent, Integer conceptPercent,
+			Integer qualityPercent, int testsTotal, int testsPassed, Map<String, Object> report, OffsetDateTime createdAt) {
+		private static final ObjectMapper MAPPER = new ObjectMapper();
+
 		static AttemptResponse from(PracticalExerciseAttempt a) {
+			boolean passed = a.getEvaluationStatus() == ExerciseEvaluationStatus.SELF_RATED
+					? a.isMandatoryTestsPassed()
+					: a.getEvaluationStatus() == ExerciseEvaluationStatus.PASSED;
 			return new AttemptResponse(a.getId(), a.getAnswer(), a.getSelfRating(), a.getFeedback(), a.getScorePercent(),
-					a.getAutonomyPercent(), a.getHintsUsedCount(), a.isSolutionRevealed(), a.isMandatoryTestsPassed(),
-					a.getCreatedAt());
+					a.getAutonomyPercent(), a.getHintsUsedCount(), a.isSolutionRevealed(), passed,
+					a.getEvaluationStatus(), a.getCorrectnessPercent(), a.getConceptPercent(), a.getQualityPercent(),
+					a.getTestsTotal(), a.getTestsPassed(), parse(a.getTestResultsJson()), a.getCreatedAt());
+		}
+
+		@SuppressWarnings("unchecked")
+		private static Map<String, Object> parse(String json) {
+			if (json == null || json.isBlank()) {
+				return null;
+			}
+			try {
+				return MAPPER.readValue(json, Map.class);
+			} catch (Exception e) {
+				return null;
+			}
 		}
 	}
 }

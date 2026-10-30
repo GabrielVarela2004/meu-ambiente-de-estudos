@@ -545,3 +545,29 @@
   margin-bottom: 0;
   font-weight: var(--weight-regular);
 }
+
+/* ---- Desempenho combinado do tópico (70% prática + 30% teoria) ---- */
+.topic-mastery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+}
+.topic-mastery-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.topic-mastery-bar {
+  height: 8px;
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+}
+.topic-mastery-bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
