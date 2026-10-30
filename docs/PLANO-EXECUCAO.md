@@ -159,14 +159,14 @@ existente em inglês — `CORRECT`, `PARTIAL`, `INCORRECT`, `PENDING_EVALUATION`
   a imagem, cai na autoavaliação. Migração V29.
 - [x] Desempenho do tópico = 70% prática + 30% teoria (`TopicMasteryCalculator`); "dominado" exige prática ≥ 85%
   em 3 exercícios e teoria consistente ≥ 80%.
-- Backend: 235 testes, 226 passando; as 9 falhas (questões: `EstudosBackendApplicationTests`, `Etapa5…`, `Etapa7…`,
+- Backend: 235 testes, 226 passando (em 2026-10-30, depois da Etapa 8, 249 testes e nenhuma falha); as 9 falhas (questões: `EstudosBackendApplicationTests`, `Etapa5…`, `Etapa7…`,
   `AiQuestionGenerationVarietyTest`) já existiam na `master` com a Etapa 8 em andamento.
 
 ## Melhorias da IA (pedido do usuário em 2026-10-30, fora da sequência de etapas)
 
 Ordem combinada: 1 → 3 → 2 → 4. Decisão do usuário: a área teórica continua só com questões abertas (Etapa 8).
 
-- [ ] 1. Questões teóricas: feedback no formato "Parabéns" (CORRETA) ou "Correção → Resposta correta → Explicação"
+- [x] 1. Questões teóricas: feedback no formato "Parabéns" (CORRETA) ou "Correção → Resposta correta → Explicação"
   (PARCIAL/INCORRETA), com `explanation` e `commonMistakes` da rubrica no feedback; modo estudo
   (`GET …/questions/{id}/study-view`: resposta-modelo, explicação, conceitos essenciais e erros comuns, sem gravar
   tentativa nem mexer na revisão espaçada); prompt de geração pede erros comuns no formato "se você achou que…,
