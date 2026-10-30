@@ -3,6 +3,9 @@ package br.com.estudos.estudos_backend.exercise;
 import java.util.List;
 import java.util.UUID;
 
+import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
+import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -103,19 +106,19 @@ public class PracticalExerciseService {
 		StudyMaterial material = null;
 		if (materialId != null) {
 			if (materialRepository == null) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Material repository not configured");
+				throw new InvalidInputException("Repositório de materiais indisponível.");
 			}
 			material = materialRepository.findById(materialId)
 					.filter(item -> item.getStudyBlock().getId().equals(blockId))
 					.filter(item -> item.getStatus() == StudyMaterialStatus.ACTIVE)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid study material"));
+					.orElseThrow(() -> new InvalidInputException("Material de estudo inválido."));
 		}
 
 		if (topicId != null && knowledgeTopicRepository != null) {
 			knowledgeTopicRepository.findById(topicId)
 					.filter(t -> t.getStudyBlock().getId().equals(blockId))
 					.filter(t -> t.getStatus() == KnowledgeTopicStatus.ACTIVE)
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid knowledge topic"));
+					.orElseThrow(() -> new InvalidInputException("Tópico inválido."));
 		}
 
 		String resolvedExcerpt = sourceExcerpt;
@@ -168,7 +171,7 @@ public class PracticalExerciseService {
 			targetMaterial = materials.stream()
 					.filter(m -> m.getId().equals(materialId))
 					.findFirst()
-					.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					.orElseThrow(() -> new InvalidInputException(
 							"O material selecionado não pertence a este bloco ou está inativo."));
 		} else {
 			targetMaterial = materials.get(0);
@@ -314,14 +317,14 @@ public class PracticalExerciseService {
 	@Transactional
 	public PracticalExercise rescheduleReview(UUID exerciseId, int days) {
 		if (days < 1 || days > 365) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 1 and 365");
+			throw new InvalidInputException("O número de dias deve estar entre 1 e 365.");
 		}
 		String ownerId = currentUserResolver.currentUserId();
 		PracticalExercise exercise = exerciseRepository.findById(exerciseId)
 				.filter(item -> item.getStudyBlock().getOwnerId().equals(ownerId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Practical exercise not found"));
+				.orElseThrow(() -> new NotFoundException("Exercício prático não encontrado."));
 		if (exercise.getStatus() == PracticalExerciseStatus.ARCHIVED) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived exercises cannot be rescheduled");
+			throw new BusinessRuleException("Exercícios arquivados não podem ser reagendados.");
 		}
 		exercise.scheduleNextReview(true);
 		return exerciseRepository.save(exercise);
@@ -337,13 +340,13 @@ public class PracticalExerciseService {
 		activeBlock(blockId);
 		return exerciseRepository.findById(exerciseId)
 				.filter(item -> item.getStudyBlock().getId().equals(blockId))
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Exercise not found"));
+				.orElseThrow(() -> new NotFoundException("Exercício prático não encontrado."));
 	}
 
 	private StudyBlock activeBlock(UUID id) {
 		String ownerId = currentUserResolver.currentUserId();
 		return blockRepository.findByIdAndOwnerId(id, ownerId)
 				.filter(block -> block.getStatus() == StudyBlockStatus.ACTIVE)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Study block not found"));
+				.orElseThrow(() -> new NotFoundException("Bloco de estudo não encontrado."));
 	}
 }
