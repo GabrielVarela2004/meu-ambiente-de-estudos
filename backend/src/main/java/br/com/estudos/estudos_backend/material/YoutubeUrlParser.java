@@ -4,8 +4,7 @@ import java.net.URI;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
 
 public final class YoutubeUrlParser {
 
@@ -18,9 +17,14 @@ public final class YoutubeUrlParser {
 		if (rawUrl == null || rawUrl.isBlank()) {
 			throw invalidUrl();
 		}
+		String trimmed = rawUrl.trim();
+		// Link colado sem esquema (ex.: "youtu.be/ID") é tratado como https.
+		if (!trimmed.contains("://")) {
+			trimmed = "https://" + trimmed;
+		}
 		URI uri;
 		try {
-			uri = URI.create(rawUrl.trim());
+			uri = URI.create(trimmed);
 		} catch (IllegalArgumentException exception) {
 			throw invalidUrl();
 		}
@@ -95,9 +99,8 @@ public final class YoutubeUrlParser {
 		return null;
 	}
 
-	private static ResponseStatusException invalidUrl() {
-		return new ResponseStatusException(
-				HttpStatus.BAD_REQUEST,
+	private static InvalidInputException invalidUrl() {
+		return new InvalidInputException(
 				"URL do YouTube inválida. Informe um link válido como https://www.youtube.com/watch?v=... ou https://youtu.be/...");
 	}
 }
