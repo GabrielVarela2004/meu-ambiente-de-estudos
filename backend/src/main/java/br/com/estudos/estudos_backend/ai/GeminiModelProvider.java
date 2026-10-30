@@ -13,6 +13,8 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Locale;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -33,6 +35,8 @@ import br.com.estudos.estudos_backend.chat.AiTutorProvider.AiTutorRequest;
  */
 @Component
 public class GeminiModelProvider implements AiModelProvider {
+
+	private static final Logger log = LoggerFactory.getLogger(GeminiModelProvider.class);
 
 	static final String QUOTA_DAILY_MESSAGE = "A cota diária gratuita do Gemini foi esgotada. Ela é renovada à "
 			+ "meia-noite do horário do Pacífico (por volta das 4h ou 5h em Brasília). Tente novamente depois "
@@ -140,6 +144,8 @@ public class GeminiModelProvider implements AiModelProvider {
 			Thread.currentThread().interrupt();
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "A requisição ao Gemini foi interrompida.");
 		} catch (IOException e) {
+			// Só o tipo e a mensagem do erro (sem a chave): ex. certificado do Cloudflare WARP, DNS, conexão recusada.
+			log.warn("Falha de rede ao chamar o Gemini: {}", e.toString());
 			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Falha de rede ao conectar com o Gemini.");
 		}
 	}

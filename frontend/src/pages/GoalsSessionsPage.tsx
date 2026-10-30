@@ -1,33 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { request } from '../api/http'
+import {
+  addGoalProgress,
+  archiveGoal,
+  changeSessionState,
+  createGoal,
+  listGoals,
+  listSessions,
+  planSession,
+} from '../api/goals'
+import type { GoalStatus, SessionStatus, StudyGoal, StudySession } from '../api/goals'
 import { CheckCircleIcon, ClockIcon, TargetIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/goals-sessions.css'
 import { useDeferredEffect } from '../hooks/useDeferredEffect'
 
-type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
-type SessionStatus = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
-
-type Goal = {
-  id: string
-  title: string
-  description: string | null
-  targetUnits: number
-  completedUnits: number
-  status: GoalStatus
-  updatedAt: string
-}
-
-type Session = {
-  id: string
-  plannedMinutes: number
-  notes: string | null
-  status: SessionStatus
-  startedAt: string | null
-  endedAt: string | null
-  createdAt: string
-}
+type Goal = StudyGoal
+type Session = StudySession
 
 type Props = {
   blocks: StudyBlock[]
@@ -53,6 +42,17 @@ function studiedMinutes(session: Session, now: number): number {
   if (!session.startedAt) return 0
   const end = session.endedAt ? new Date(session.endedAt).getTime() : now
   return Math.max(0, Math.round((end - new Date(session.startedAt).getTime()) / 60000))
+}
+
+/** Tempo decorrido da sessão em andamento como H:MM:SS (cronômetro). */
+export function formatElapsed(session: Session, now: number): string {
+  if (!session.startedAt) return '0:00:00'
+  const end = session.endedAt ? new Date(session.endedAt).getTime() : now
+  const total = Math.max(0, Math.floor((end - new Date(session.startedAt).getTime()) / 1000))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
 function formatDateTime(value: string | null): string {
@@ -81,10 +81,7 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
     setLoading(true)
     setError(null)
     try {
-      const [g, s] = await Promise.all([
-        request<Goal[]>(`/api/study-blocks/${blockId}/goals`),
-        request<Session[]>(`/api/study-blocks/${blockId}/sessions`),
-      ])
+      const [g, s] = await Promise.all([listGoals(blockId), listSessions(blockId)])
       setGoals(g)
       setSessions(s)
     } catch {
@@ -96,11 +93,11 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
 
   useDeferredEffect(() => load(), [load])
 
-  // Atualiza o cronômetro das sessões em andamento a cada 30 s.
+  // Cronômetro: atualiza a cada segundo enquanto houver sessão em andamento.
   const hasRunningSession = sessions.some((s) => s.status === 'IN_PROGRESS')
   useEffect(() => {
     if (!hasRunningSession) return
-    const timer = window.setInterval(() => setNow(Date.now()), 30000)
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [hasRunningSession])
 
@@ -120,13 +117,10 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
     e.preventDefault()
     if (!blockId || !goalForm.title.trim()) return
     void run('new-goal', async () => {
-      const created = await request<Goal>(`/api/study-blocks/${blockId}/goals`, {
-        method: 'POST',
-        body: JSON.stringify({
-          title: goalForm.title.trim(),
-          description: goalForm.description.trim() || null,
-          targetUnits: goalForm.targetUnits,
-        }),
+      const created = await createGoal(blockId, {
+        title: goalForm.title.trim(),
+        description: goalForm.description.trim() || null,
+        targetUnits: goalForm.targetUnits,
       })
       setGoals((prev) => [created, ...prev])
       setGoalForm({ title: '', description: '', targetUnits: 10 })
@@ -137,10 +131,7 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
     const units = Math.min(progressInput[goal.id] ?? 1, goal.targetUnits - goal.completedUnits)
     if (!blockId || units < 1) return
     void run(goal.id, async () => {
-      const updated = await request<Goal>(`/api/study-blocks/${blockId}/goals/${goal.id}/progress`, {
-        method: 'POST',
-        body: JSON.stringify({ units }),
-      })
+      const updated = await addGoalProgress(blockId, goal.id, units)
       setGoals((prev) => prev.map((g) => (g.id === goal.id ? updated : g)))
       setProgressInput((prev) => ({ ...prev, [goal.id]: 1 }))
     }, 'Erro ao registrar progresso.')
@@ -149,7 +140,7 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
   const handleArchiveGoal = (goal: Goal) => {
     if (!blockId) return
     void run(goal.id, async () => {
-      await request<void>(`/api/study-blocks/${blockId}/goals/${goal.id}`, { method: 'DELETE' })
+      await archiveGoal(blockId, goal.id)
       setGoals((prev) => prev.map((g) => (g.id === goal.id ? { ...g, status: 'ARCHIVED' } : g)))
     }, 'Erro ao arquivar a meta.')
   }
@@ -158,12 +149,9 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
     e.preventDefault()
     if (!blockId) return
     void run('new-session', async () => {
-      const created = await request<Session>(`/api/study-blocks/${blockId}/sessions`, {
-        method: 'POST',
-        body: JSON.stringify({
-          plannedMinutes: sessionForm.plannedMinutes,
-          notes: sessionForm.notes.trim() || null,
-        }),
+      const created = await planSession(blockId, {
+        plannedMinutes: sessionForm.plannedMinutes,
+        notes: sessionForm.notes.trim() || null,
       })
       setSessions((prev) => [created, ...prev])
       setSessionForm((prev) => ({ ...prev, notes: '' }))
@@ -173,10 +161,7 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
   const handleSessionAction = (session: Session, action: 'start' | 'complete' | 'cancel') => {
     if (!blockId) return
     void run(session.id, async () => {
-      const updated = await request<Session>(
-        `/api/study-blocks/${blockId}/sessions/${session.id}/${action}`,
-        { method: 'POST' },
-      )
+      const updated = await changeSessionState(blockId, session.id, action)
       setSessions((prev) => prev.map((s) => (s.id === session.id ? updated : s)))
       setNow(Date.now())
     }, 'Erro ao atualizar a sessão.')
@@ -451,6 +436,12 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
                           <span className={`badge ${status.className}`}>{status.label}</span>
                         </div>
                         {session.notes && <p className="gs-item-desc">{session.notes}</p>}
+                        {session.status === 'IN_PROGRESS' && (
+                          <p className="gs-timer" role="timer" aria-label="Tempo de estudo da sessão em andamento">
+                            <span className="gs-timer-value">{formatElapsed(session, now)}</span>
+                            <span className="gs-timer-target">de {session.plannedMinutes} min planejados</span>
+                          </p>
+                        )}
                         <div className="gs-item-footer">
                           <span className="text-xs text-secondary">
                             {session.status === 'PLANNED' && `Criada em ${formatDateTime(session.createdAt)}`}

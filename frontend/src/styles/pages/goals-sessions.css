@@ -127,3 +127,24 @@
     width: 100%;
   }
 }
+
+/* Cronômetro da sessão em andamento */
+.gs-timer {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.gs-timer-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-timer-target {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
