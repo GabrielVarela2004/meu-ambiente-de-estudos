@@ -97,8 +97,8 @@ transcrição. oEmbed devolve título, canal e miniatura (sem duração).
 9. Testes com Gemini, oEmbed e transcrição simulados: link com `?si=`, análise com sucesso, cota esgotada →
    transcrição, vídeo privado, JSON inválido, reprocessamento.
 10. Aviso na tela: limite de ~8 h de vídeo por dia no plano gratuito e só vídeos públicos.
-- [ ] Ponto de decisão D2 (playlist): decidido em 2026-10-30 — colar vários links de uma vez (opção C), feito antes
-  da Etapa 8.
+- [x] Ponto de decisão D2 (playlist): decidido em 2026-10-30 — colar vários links de uma vez (opção C), feito antes
+  da Etapa 8 (`features/sources/YoutubeBatchImport.tsx`, até 50 links por envio, repetidos descartados).
 
 ## Observações
 

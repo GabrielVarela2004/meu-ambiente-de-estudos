@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { request } from '../api/http'
 import { importMaterialFile, importYoutubeVideo, previewYoutube, toggleMaterialChat } from '../api/materials'
 import type { YoutubePreview } from '../api/materials'
+import { YoutubeBatchImport } from '../features/sources/YoutubeBatchImport'
 import '../styles/pages/video.css'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, PlusCircleIcon, SearchIcon, SparklesIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
@@ -76,6 +77,7 @@ export function AddContentPage({
   const [ytUrl, setYtUrl] = useState('')
   const [ytTitle, setYtTitle] = useState('')
   const [ytEnabledForChat, setYtEnabledForChat] = useState(true)
+  const [ytMode, setYtMode] = useState<'SINGLE' | 'BATCH'>('SINGLE')
   const [ytPreview, setYtPreview] = useState<YoutubePreview | null>(null)
   const [ytPreviewError, setYtPreviewError] = useState<string | null>(null)
   const [ytPreviewLoading, setYtPreviewLoading] = useState(false)
@@ -559,6 +561,26 @@ export function AddContentPage({
 
       {/* Form 4: Vídeo do YouTube */}
       {activeTab === 'YOUTUBE' && (
+        <div className="youtube-mode-switch" role="group" aria-label="Quantidade de vídeos">
+          <button
+            type="button"
+            className={`btn btn-sm ${ytMode === 'SINGLE' ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={ytMode === 'SINGLE'}
+            onClick={() => setYtMode('SINGLE')}
+          >
+            Um vídeo
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${ytMode === 'BATCH' ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={ytMode === 'BATCH'}
+            onClick={() => setYtMode('BATCH')}
+          >
+            Vários vídeos de uma vez
+          </button>
+        </div>
+      )}
+      {activeTab === 'YOUTUBE' && ytMode === 'SINGLE' && (
         <form onSubmit={handleSubmitYoutube} className="card source-form-card">
           <div className="form-field-group">
             <label htmlFor="yt-url">URL do Vídeo do YouTube *</label>
@@ -645,6 +667,16 @@ export function AddContentPage({
             </button>
           </div>
         </form>
+      )}
+      {activeTab === 'YOUTUBE' && ytMode === 'BATCH' && (
+        <YoutubeBatchImport
+          blockId={targetBlockId}
+          disabled={!blocks.length}
+          onImported={(blockId) => {
+            setFeedback({ type: 'success', message: 'Vídeos adicionados! Eles estão sendo processados; acompanhe na área do bloco.' })
+            onSourceAdded(blockId)
+          }}
+        />
       )}
     </div>
   )
