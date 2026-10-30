@@ -49,7 +49,7 @@ class AiSettingsControllerIntegrationTest {
 				.andExpect(jsonPath("$.providers[2].id").value("gemini"))
 				.andExpect(jsonPath("$.providers[0].keyConfigured").value(false))
 				.andExpect(jsonPath("$.providers[0].unavailableReason").value("sem chave de API configurada"))
-				.andExpect(jsonPath("$.routes", hasSize(AiOperation.values().length)))
+				.andExpect(jsonPath("$.routes", hasSize((int) java.util.Arrays.stream(AiOperation.values()).filter(AiOperation::routable).count())))
 				.andExpect(content().string(not(containsString("apiKey"))));
 	}
 

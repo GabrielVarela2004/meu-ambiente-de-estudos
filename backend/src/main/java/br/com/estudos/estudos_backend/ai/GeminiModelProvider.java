@@ -43,6 +43,8 @@ public class GeminiModelProvider implements AiModelProvider {
 			+ "minuto e tente novamente; se continuar, a cota diária acabou e é renovada à meia-noite do horário "
 			+ "do Pacífico (por volta das 4h ou 5h em Brasília).";
 
+	private static final int VIDEO_TIMEOUT_SECONDS = 300;
+
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private final GeminiProperties properties;
 	private final HttpClient httpClient;
@@ -93,18 +95,37 @@ public class GeminiModelProvider implements AiModelProvider {
 			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
 					"A integração com o Gemini não está configurada (GEMINI_API_KEY ausente).");
 		}
-		String resolvedModel = requestedModel == null || requestedModel.isBlank()
-				? properties.getModel() : requestedModel.trim();
-		checkLocalRateLimit();
+		return send(buildBody(request, null), resolveModel(requestedModel), properties.getRequestTimeoutSeconds());
+	}
 
+	/**
+	 * Gera uma resposta a partir de um vídeo público do YouTube enviado por URL ({@code fileData.fileUri}),
+	 * sem baixar o vídeo. Recurso em preview no Gemini; só vídeos públicos.
+	 */
+	public AiModelResult generateFromYoutubeVideo(String videoUrl, AiTutorRequest request, String requestedModel) {
+		if (!isConfigured()) {
+			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+					"A integração com o Gemini não está configurada (GEMINI_API_KEY ausente).");
+		}
+		// Vídeos longos demoram mais para serem analisados que uma resposta de texto.
+		int timeoutSeconds = Math.max(properties.getRequestTimeoutSeconds(), VIDEO_TIMEOUT_SECONDS);
+		return send(buildBody(request, videoUrl), resolveModel(requestedModel), timeoutSeconds);
+	}
+
+	private String resolveModel(String requestedModel) {
+		return requestedModel == null || requestedModel.isBlank() ? properties.getModel() : requestedModel.trim();
+	}
+
+	private AiModelResult send(ObjectNode body, String resolvedModel, int timeoutSeconds) {
+		checkLocalRateLimit();
 		try {
 			String url = properties.getBaseUrl() + URLEncoder.encode(resolvedModel, StandardCharsets.UTF_8)
 					+ ":generateContent";
 			HttpRequest httpRequest = HttpRequest.newBuilder(URI.create(url))
-					.timeout(Duration.ofSeconds(properties.getRequestTimeoutSeconds()))
+					.timeout(Duration.ofSeconds(timeoutSeconds))
 					.header("x-goog-api-key", properties.getApiKey())
 					.header("Content-Type", "application/json")
-					.POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(buildBody(request))))
+					.POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
 					.build();
 			HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 			handleHttpErrors(response.statusCode(), response.body(), resolvedModel);
@@ -121,7 +142,7 @@ public class GeminiModelProvider implements AiModelProvider {
 		}
 	}
 
-	private ObjectNode buildBody(AiTutorRequest request) {
+	private ObjectNode buildBody(AiTutorRequest request, String youtubeVideoUrl) {
 		ObjectNode body = objectMapper.createObjectNode();
 		if (request.systemInstruction() != null && !request.systemInstruction().isBlank()) {
 			body.putObject("systemInstruction").putArray("parts").addObject().put("text", request.systemInstruction());
@@ -133,11 +154,20 @@ public class GeminiModelProvider implements AiModelProvider {
 			}
 			addContent(contents, "assistant".equals(message.role()) ? "model" : "user", message.content());
 		}
-		addContent(contents, "user", request.userPrompt());
+		if (youtubeVideoUrl == null) {
+			addContent(contents, "user", request.userPrompt());
+		} else {
+			ObjectNode content = contents.addObject();
+			content.put("role", "user");
+			ArrayNode parts = content.putArray("parts");
+			parts.addObject().putObject("fileData").put("fileUri", youtubeVideoUrl);
+			parts.addObject().put("text", request.userPrompt());
+		}
 		ObjectNode generationConfig = body.putObject("generationConfig");
+		// Pedidos com limite explícito maior (ex.: anotações de vídeo) podem passar do padrão de texto.
 		int maxTokens = request.maxOutputTokens() == null
 				? properties.getMaxOutputTokens()
-				: Math.min(request.maxOutputTokens(), properties.getMaxOutputTokens());
+				: request.maxOutputTokens();
 		generationConfig.put("maxOutputTokens", maxTokens);
 		if (request.jsonObjectMode()) {
 			generationConfig.put("responseMimeType", "application/json");

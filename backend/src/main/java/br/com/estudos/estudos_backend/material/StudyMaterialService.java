@@ -26,41 +26,21 @@ public class StudyMaterialService {
 	private final StudyMaterialRepository repository;
 	private final StudyBlockService studyBlockService;
 	private final MaterialFileStorage fileStorage;
-	private final YoutubeTranscriptExtractor youtubeTranscriptExtractor;
 	private final KnowledgeTopicService knowledgeTopicService;
 	private final WebPageExtractor webPageExtractor;
 	private final MaterialSummarizer summarizer;
-
-	public StudyMaterialService(
-			StudyMaterialRepository repository,
-			StudyBlockService studyBlockService,
-			MaterialFileStorage fileStorage,
-			YoutubeTranscriptExtractor youtubeTranscriptExtractor) {
-		this(repository, studyBlockService, fileStorage, youtubeTranscriptExtractor, null, null, null);
-	}
-
-	public StudyMaterialService(
-			StudyMaterialRepository repository,
-			StudyBlockService studyBlockService,
-			MaterialFileStorage fileStorage,
-			YoutubeTranscriptExtractor youtubeTranscriptExtractor,
-			KnowledgeTopicService knowledgeTopicService) {
-		this(repository, studyBlockService, fileStorage, youtubeTranscriptExtractor, knowledgeTopicService, null, null);
-	}
 
 	@Autowired
 	public StudyMaterialService(
 			StudyMaterialRepository repository,
 			StudyBlockService studyBlockService,
 			MaterialFileStorage fileStorage,
-			YoutubeTranscriptExtractor youtubeTranscriptExtractor,
 			KnowledgeTopicService knowledgeTopicService,
 			WebPageExtractor webPageExtractor,
 			MaterialSummarizer summarizer) {
 		this.repository = repository;
 		this.studyBlockService = studyBlockService;
 		this.fileStorage = fileStorage;
-		this.youtubeTranscriptExtractor = youtubeTranscriptExtractor;
 		this.knowledgeTopicService = knowledgeTopicService;
 		this.webPageExtractor = webPageExtractor;
 		this.summarizer = summarizer;
@@ -80,41 +60,6 @@ public class StudyMaterialService {
 				null,
 				null,
 				null,
-				StudyMaterialProcessingStatus.COMPLETED,
-				null));
-		studyBlockService.touch(block);
-		syncTopicsIfAvailable(studyBlockId);
-		return saved;
-	}
-
-	@Transactional
-	public StudyMaterial importYoutubeVideo(UUID studyBlockId, String rawUrl) {
-		StudyBlock block = getActiveBlock(studyBlockId);
-		String videoId = YoutubeUrlParser.extractVideoId(rawUrl);
-		if (repository.existsByStudyBlockIdAndExternalVideoIdAndStatus(
-				studyBlockId, videoId, StudyMaterialStatus.ACTIVE)) {
-			throw new BusinessRuleException("Este vídeo do YouTube já foi importado neste bloco de estudo.");
-		}
-		YoutubeTranscriptExtractor.ExtractedYoutubeTranscript extracted = youtubeTranscriptExtractor.extract(videoId);
-		if (extracted == null || extracted.transcriptText() == null || extracted.transcriptText().isBlank()) {
-			throw new ResponseStatusException(
-					HttpStatus.valueOf(422),
-					"Este vídeo não possui legendas ou transcrição disponíveis para extração.");
-		}
-		String title = (extracted.title() == null || extracted.title().isBlank())
-				? "Vídeo YouTube (" + videoId + ")"
-				: extracted.title().trim();
-		if (title.length() > 160) {
-			title = title.substring(0, 160);
-		}
-		StudyMaterial saved = repository.save(new StudyMaterial(
-				block,
-				title,
-				extracted.transcriptText().trim(),
-				StudyMaterialSourceType.YOUTUBE,
-				YoutubeUrlParser.canonicalUrl(videoId),
-				videoId,
-				extracted.language(),
 				StudyMaterialProcessingStatus.COMPLETED,
 				null));
 		studyBlockService.touch(block);

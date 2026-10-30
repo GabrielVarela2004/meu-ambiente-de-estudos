@@ -27,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class StudyMaterialController {
 
 	private final StudyMaterialService service;
+	private final YoutubeImportService youtubeImportService;
 
-	public StudyMaterialController(StudyMaterialService service) {
+	public StudyMaterialController(StudyMaterialService service, YoutubeImportService youtubeImportService) {
 		this.service = service;
+		this.youtubeImportService = youtubeImportService;
 	}
 
 	@PostMapping
@@ -50,7 +52,20 @@ public class StudyMaterialController {
 	public ResponseEntity<StudyMaterialResponse> importYoutube(
 			@PathVariable UUID studyBlockId, @Valid @RequestBody YoutubeMaterialRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(StudyMaterialResponse.from(service.importYoutubeVideo(studyBlockId, request.url())));
+				.body(StudyMaterialResponse.from(youtubeImportService.importVideo(studyBlockId, request.url())));
+	}
+
+	/** Prévia do vídeo antes de salvar (oEmbed público, sem chave). */
+	@GetMapping("/youtube/preview")
+	public YoutubeImportService.YoutubePreview previewYoutube(
+			@PathVariable UUID studyBlockId, @RequestParam @NotBlank @Size(max = 1000) String url) {
+		return youtubeImportService.preview(studyBlockId, url);
+	}
+
+	/** Nova tentativa de processar um vídeo (após erro ou para tentar a análise por IA de novo). */
+	@PostMapping("/{id}/reprocess")
+	public StudyMaterialResponse reprocessYoutube(@PathVariable UUID studyBlockId, @PathVariable UUID id) {
+		return StudyMaterialResponse.from(youtubeImportService.reprocess(studyBlockId, id));
 	}
 
 	@PostMapping("/web")
@@ -117,6 +132,10 @@ public class StudyMaterialController {
 			String errorMessage,
 			String metadataJson,
 			boolean enabledForChat,
+			String videoChannel,
+			String videoThumbnailUrl,
+			Integer videoDurationSeconds,
+			VideoAnalysisMethod analysisMethod,
 			int wordCount,
 			int charCount,
 			StudyMaterialStatus status,
@@ -143,6 +162,10 @@ public class StudyMaterialController {
 					material.getErrorMessage(),
 					material.getMetadataJson(),
 					material.isEnabledForChat(),
+					material.getVideoChannel(),
+					material.getVideoThumbnailUrl(),
+					material.getVideoDurationSeconds(),
+					material.getAnalysisMethod(),
 					wordCount,
 					charCount,
 					material.getStatus(),

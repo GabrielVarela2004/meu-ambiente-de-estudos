@@ -99,6 +99,17 @@ transcrição. oEmbed devolve título, canal e miniatura (sem duração).
 10. Aviso na tela: limite de ~8 h de vídeo por dia no plano gratuito e só vídeos públicos.
 - Ponto de decisão: importar playlist inteira (exige YouTube Data API e outra chave) → `DECISOES-PENDENTES.md`.
 
+**Retomar daqui (2026-10-30, sessão pausada pelo limite de uso):** backend da etapa pronto e testado
+(207 testes): itens 1, 2 (endpoint), 4, 5, 6 (backend, inclusive `POST …/{id}/reprocess`), 8 e 9 (testes de unidade
+com Gemini/oEmbed/transcrição simulados). Falta:
+- Frontend: prévia na Adicionar Conteúdo (`GET …/materials/youtube/preview?url=`, campos `videoId, canonicalUrl,
+  embedUrl, title, channel, thumbnailUrl, alreadyImported, aiAnalysisAvailable`) + aviso do item 10; player com a
+  IFrame API (`youtube-nocookie.com`) na área do bloco; status "processando" com atualização periódica e botão
+  "Tentar novamente"; selo do método (`analysisMethod`); minutos clicáveis (item 7) no chat e nos trechos.
+- Funções tipadas em `frontend/src/api/materials.ts` (preview e reprocess).
+- Teste de integração dos endpoints novos (MockMvc com oEmbed/transcrição/analisador simulados).
+- Registrar a decisão da playlist (D2) em `DECISOES-PENDENTES.md`, rodar lint/build e marcar a etapa.
+
 ## Observações
 
 - O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta,

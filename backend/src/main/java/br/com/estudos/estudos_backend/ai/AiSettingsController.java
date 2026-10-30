@@ -34,6 +34,7 @@ public class AiSettingsController {
 	public SettingsResponse settings() {
 		List<ProviderResponse> providers = settingsService.providers().stream().map(this::toResponse).toList();
 		List<RouteResponse> routes = Arrays.stream(AiOperation.values())
+				.filter(AiOperation::routable)
 				.map(op -> {
 					AiOperationRoute route = settingsService.route(op);
 					return new RouteResponse(op, op.label(), route.getProviderId(), route.isFallbackEnabled());
