@@ -19,7 +19,11 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
 - [x] Etapa 4 — Limite de upload: multipart em 10MB (`UPLOAD_MAX_FILE_SIZE`/`UPLOAD_MAX_REQUEST_SIZE`), `MaterialFileStorage`
   usa o mesmo valor para PDF/DOCX/PPTX (texto segue em 2 MB), o tratador global de erros devolve 413 em português,
   textos do frontend e README corrigidos. Backend: 138 testes passando.
-- [ ] Etapa 5 — Tratamento de erros padronizado
+- [x] Etapa 5 — Tratamento de erros padronizado: `common/exception` (NotFound, BusinessRule, InvalidInput, estendendo
+  `ResponseStatusException` para manter códigos e `catch` existentes) + `GlobalExceptionHandler` com resposta única
+  `{ status, error, message, fields, timestamp }`, locale pt-BR fixo para validação, 500 sem stack trace. Services
+  convertidos um pacote por commit e mensagens traduzidas. Erros de provedores externos (429/502/503/504) seguem
+  como `ResponseStatusException`, no mesmo formato. `http.ts` já lia `message`. Backend: 145 testes.
 - [ ] Etapa 6 — Integração com o Gemini
 - [ ] Etapa 7 — Vídeos do YouTube como fonte
 - [ ] Etapa 8 — Questões teóricas abertas com correção rigorosa

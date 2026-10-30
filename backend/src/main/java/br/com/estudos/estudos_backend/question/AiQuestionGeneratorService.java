@@ -104,7 +104,7 @@ public class AiQuestionGeneratorService {
 
 		if (materials.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.valueOf(422),
-					"Active study materials are required in this block to generate AI questions");
+					"Adicione ao menos uma fonte ativa ao bloco antes de gerar questões.");
 		}
 
 		KnowledgeTopic selectedTopic = null;
@@ -242,7 +242,7 @@ public class AiQuestionGeneratorService {
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String rawReply) {
 		try {
 			if (rawReply == null || rawReply.isBlank()) {
-				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI provider returned empty response");
+				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O provedor de IA retornou uma resposta vazia.");
 			}
 			String cleaned = cleanJsonEnvelope(rawReply);
 			JsonNode root = objectMapper.readTree(cleaned);
@@ -256,7 +256,7 @@ public class AiQuestionGeneratorService {
 			}
 
 			if (items.isEmpty()) {
-				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI provider returned no valid questions");
+				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O provedor de IA não retornou nenhuma questão válida.");
 			}
 
 			UUID materialId = primaryMaterial == null ? null : primaryMaterial.getId();
@@ -276,7 +276,7 @@ public class AiQuestionGeneratorService {
 			throw exception;
 		} catch (Exception exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-					"AI provider response could not be parsed as a valid question");
+					"Não foi possível interpretar a resposta do provedor de IA como uma questão válida.");
 		}
 	}
 
@@ -290,7 +290,7 @@ public class AiQuestionGeneratorService {
 			sourceExcerpt = defaultExcerpt;
 		}
 		if (prompt.isBlank()) {
-			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI provider returned an empty question prompt");
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O provedor de IA retornou uma questão sem enunciado.");
 		}
 
 		// Mantém compatibilidade com a assinatura de 8 argumentos quando topicId e sourceExcerpt não foram enviados no JSON
@@ -300,7 +300,7 @@ public class AiQuestionGeneratorService {
 			String expectedAnswer = root.path("expectedAnswer").asText("").trim();
 			if (expectedAnswer.isBlank()) {
 				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-						"AI provider did not supply evaluation criteria for discursive question");
+						"O provedor de IA não informou os critérios de avaliação da questão discursiva.");
 			}
 			if (hasExtendedMetadata) {
 				return studyQuestionService.create(studyBlockId, primaryMaterialId, topicId, sourceExcerpt,
@@ -326,14 +326,14 @@ public class AiQuestionGeneratorService {
 					|| options.stream().filter(StudyQuestionController.OptionRequest::correct).count() != 1
 					|| options.stream().anyMatch(o -> o.text() == null || o.text().isBlank())) {
 				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-						"AI provider returned invalid options for true/false question: requires exactly 2 options with 1 correct");
+						"O provedor de IA retornou alternativas inválidas para verdadeiro ou falso (são exigidas 2 alternativas e 1 correta).");
 			}
 		} else { // MULTIPLE_CHOICE
 			if (options.size() < 2 || options.size() > 6
 					|| options.stream().filter(StudyQuestionController.OptionRequest::correct).count() != 1
 					|| options.stream().anyMatch(o -> o.text() == null || o.text().isBlank())) {
 				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-						"AI provider returned invalid options for multiple-choice question: requires 2 to 6 options with exactly 1 correct");
+						"O provedor de IA retornou alternativas inválidas para múltipla escolha (são exigidas de 2 a 6 alternativas e exatamente 1 correta).");
 			}
 		}
 

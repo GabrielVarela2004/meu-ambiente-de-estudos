@@ -150,7 +150,7 @@ public class PracticalExerciseService {
 			PracticalExerciseType exerciseType) {
 		activeBlock(blockId);
 		if (materialRepository == null) {
-			throw new ResponseStatusException(HttpStatus.valueOf(422), "Material repository not available");
+			throw new ResponseStatusException(HttpStatus.valueOf(422), "Repositório de materiais indisponível.");
 		}
 
 		List<StudyMaterial> materials = materialRepository
@@ -163,7 +163,7 @@ public class PracticalExerciseService {
 
 		if (materials.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.valueOf(422),
-					"Active study materials are required in this block to generate practical exercises");
+					"Adicione ao menos uma fonte ativa ao bloco antes de gerar exercícios práticos.");
 		}
 
 		StudyMaterial targetMaterial = null;

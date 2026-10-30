@@ -109,7 +109,7 @@ public class MaterialFileStorage {
 			throw exception;
 		} catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-					"Could not store or process the study file");
+					"Não foi possível armazenar ou processar o arquivo de estudo.");
 		}
 	}
 
