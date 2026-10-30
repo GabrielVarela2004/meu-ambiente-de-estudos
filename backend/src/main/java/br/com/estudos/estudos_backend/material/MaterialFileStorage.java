@@ -19,6 +19,7 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -75,7 +76,7 @@ public class MaterialFileStorage {
 
 	public String readAndStore(MultipartFile file) {
 		if (file == null || file.isEmpty()) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A non-empty study file is required");
+			throw new InvalidInputException("Envie um arquivo de estudo não vazio.");
 		}
 		String originalName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
 		String lowerName = originalName.toLowerCase();
@@ -96,8 +97,8 @@ public class MaterialFileStorage {
 					? normalizeCode(rawExtracted)
 					: sanitizeExtractedText(rawExtracted);
 			if (extracted.isBlank()) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-						"The uploaded file does not contain extractable text");
+				throw new InvalidInputException(
+						"O arquivo enviado não contém texto que possa ser extraído.");
 			}
 			String storedName = UUID.randomUUID() + ext;
 			Files.write(storageDirectory.resolve(storedName), bytes);
@@ -182,14 +183,14 @@ public class MaterialFileStorage {
 	private String extractPdfText(byte[] bytes) {
 		try (PDDocument document = Loader.loadPDF(bytes)) {
 			if (document.isEncrypted()) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Encrypted PDF files are not supported");
+				throw new InvalidInputException("PDFs protegidos por senha não são suportados.");
 			}
 			PDFTextStripper stripper = new PDFTextStripper();
 			return stripper.getText(document);
 		} catch (ResponseStatusException exception) {
 			throw exception;
 		} catch (Exception exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or corrupted PDF file");
+			throw new InvalidInputException("Arquivo PDF inválido ou corrompido.");
 		}
 	}
 
@@ -199,25 +200,25 @@ public class MaterialFileStorage {
 			ZipEntry entry;
 			while ((entry = zis.getNextEntry()) != null) {
 				if ("word/document.xml".equals(entry.getName())) {
-					documentXml = readLimited(zis, MAX_DOCX_XML_BYTES, "DOCX internal XML exceeds maximum safe size");
+					documentXml = readLimited(zis, MAX_DOCX_XML_BYTES, "O conteúdo interno do DOCX excede o tamanho máximo seguro.");
 					break;
 				}
 			}
 		} catch (ResponseStatusException exception) {
 			throw exception;
 		} catch (Exception exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or corrupted DOCX archive");
+			throw new InvalidInputException("Arquivo DOCX inválido ou corrompido.");
 		}
 
 		if (documentXml == null) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid DOCX file: missing word/document.xml");
+			throw new InvalidInputException("Arquivo DOCX inválido: o conteúdo principal (word/document.xml) não foi encontrado.");
 		}
 
 		try {
 			Document doc = secureBuilder().parse(new ByteArrayInputStream(documentXml));
 			return paragraphsText(doc, "w:p", "p");
 		} catch (Exception exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid XML structure in DOCX file");
+			throw new InvalidInputException("Estrutura XML inválida no arquivo DOCX.");
 		}
 	}
 
@@ -231,17 +232,17 @@ public class MaterialFileStorage {
 			long total = 0;
 			while ((entry = zis.getNextEntry()) != null) {
 				if (++entries > MAX_PPTX_ENTRIES) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PPTX archive has too many entries");
+					throw new InvalidInputException("O arquivo PPTX tem entradas internas demais.");
 				}
 				Matcher slide = SLIDE_ENTRY.matcher(entry.getName());
 				Matcher note = NOTES_ENTRY.matcher(entry.getName());
 				if (!slide.matches() && !note.matches()) {
 					continue;
 				}
-				byte[] xml = readLimited(zis, MAX_PPTX_PART_BYTES, "PPTX slide XML exceeds maximum safe size");
+				byte[] xml = readLimited(zis, MAX_PPTX_PART_BYTES, "Um slide do PPTX excede o tamanho máximo seguro.");
 				total += xml.length;
 				if (total > MAX_PPTX_TOTAL_BYTES) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PPTX content exceeds maximum safe size");
+					throw new InvalidInputException("O conteúdo do PPTX excede o tamanho máximo seguro.");
 				}
 				if (slide.matches()) {
 					slides.put(Integer.parseInt(slide.group(1)), xml);
@@ -252,11 +253,11 @@ public class MaterialFileStorage {
 		} catch (ResponseStatusException exception) {
 			throw exception;
 		} catch (Exception exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or corrupted PPTX archive");
+			throw new InvalidInputException("Arquivo PPTX inválido ou corrompido.");
 		}
 
 		if (slides.isEmpty()) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid PPTX file: no slides found");
+			throw new InvalidInputException("Arquivo PPTX inválido: nenhum slide encontrado.");
 		}
 
 		try {
@@ -283,7 +284,7 @@ public class MaterialFileStorage {
 			}
 			return out.toString();
 		} catch (Exception exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid XML structure in PPTX file");
+			throw new InvalidInputException("Estrutura XML inválida no arquivo PPTX.");
 		}
 	}
 
@@ -300,7 +301,7 @@ public class MaterialFileStorage {
 		while ((read = zis.read(buffer)) != -1) {
 			total += read;
 			if (total > maxBytes) {
-				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, limitMessage);
+				throw new InvalidInputException(limitMessage);
 			}
 			out.write(buffer, 0, read);
 		}
