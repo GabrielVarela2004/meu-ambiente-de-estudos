@@ -67,6 +67,9 @@ public class PracticalExercise {
 	@Column(name = "test_cases_json", columnDefinition = "TEXT")
 	private String testCasesJson;
 
+	@Column(name = "steps_json", columnDefinition = "TEXT")
+	private String stepsJson;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	private PracticalExerciseStatus status;
@@ -225,6 +228,9 @@ public class PracticalExercise {
 		nextReviewAt = OffsetDateTime.now().plusDays(reviewIntervalDays);
 	}
 
+	/** Etapas do exercício (lista JSON de textos) usadas pela tutoria para localizar a dificuldade. */
+	public void defineSteps(String stepsJson) { this.stepsJson = stepsJson; }
+
 	public void archive() { status = PracticalExerciseStatus.ARCHIVED; }
 	public UUID getId() { return id; }
 	public StudyBlock getStudyBlock() { return studyBlock; }
@@ -240,6 +246,7 @@ public class PracticalExercise {
 	public String getSolutionCode() { return solutionCode; }
 	public String getHintsJson() { return hintsJson; }
 	public String getTestCasesJson() { return testCasesJson; }
+	public String getStepsJson() { return stepsJson; }
 	public PracticalExerciseStatus getStatus() { return status; }
 	public OffsetDateTime getCreatedAt() { return createdAt; }
 	public OffsetDateTime getUpdatedAt() { return updatedAt; }

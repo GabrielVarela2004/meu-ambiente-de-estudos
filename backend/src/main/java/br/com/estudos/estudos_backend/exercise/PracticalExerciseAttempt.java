@@ -96,6 +96,9 @@ public class PracticalExerciseAttempt {
 	@Column(name = "error_category", length = 60)
 	private String errorCategory;
 
+	@Column(name = "autonomy_percent")
+	private Integer autonomyPercent;
+
 	@Column(name = "created_at", nullable = false)
 	private OffsetDateTime createdAt;
 
@@ -193,6 +196,11 @@ public class PracticalExerciseAttempt {
 		return AssistanceLevel.INDEPENDENT;
 	}
 
+	/** Autonomia (0–100) calculada a partir das ajudas recebidas no chat do exercício. */
+	public void recordAutonomy(int autonomyPercent) {
+		this.autonomyPercent = Math.max(0, Math.min(100, autonomyPercent));
+	}
+
 	@PrePersist
 	void onCreate() {
 		if (id == null) id = UUID.randomUUID();
@@ -234,5 +242,6 @@ public class PracticalExerciseAttempt {
 	public String getExecutionStatus() { return executionStatus; }
 	public String getTestResultsJson() { return testResultsJson; }
 	public String getErrorCategory() { return errorCategory; }
+	public Integer getAutonomyPercent() { return autonomyPercent; }
 	public OffsetDateTime getCreatedAt() { return createdAt; }
 }

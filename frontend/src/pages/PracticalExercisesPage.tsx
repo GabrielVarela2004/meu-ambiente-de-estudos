@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
 import { CodeIcon, FolderIcon, SparklesIcon, CheckCircleIcon } from '../components/icons'
+import { ExerciseTutorChat } from '../features/exercises/ExerciseTutorChat'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
 
@@ -8,6 +9,28 @@ const difficultyLabels: Record<string, string> = {
   EASY: 'Fácil',
   INTERMEDIATE: 'Intermediária',
   HARD: 'Difícil',
+}
+
+const exerciseTypeLabels: Record<string, string> = {
+  PROBLEM_SOLVING: 'Resolução de problema',
+  METHOD_IMPLEMENTATION: 'Implementar método',
+  FEATURE_IMPLEMENTATION: 'Implementar funcionalidade',
+  CODE_FIX: 'Corrigir código',
+  CODE_ANALYSIS: 'Analisar código',
+  SMALL_SOLUTION: 'Solução curta',
+  SQL_QUERY: 'Consulta SQL',
+  MULTI_TOPIC_INTEGRATION: 'Integrar vários tópicos',
+}
+
+type SourceOption = { id: string; title: string }
+
+type AttemptResult = {
+  selfRating: number
+  scorePercent: number
+  autonomyPercent: number | null
+  hintsUsedCount: number
+  solutionRevealed: boolean
+  passed: boolean
 }
 
 export type PracticalExercise = {
@@ -26,6 +49,7 @@ export type PracticalExercise = {
   solutionCode?: string | null
   hintsJson?: string | null
   testCasesJson?: string | null
+  steps?: string[]
   status: 'ACTIVE' | 'ARCHIVED'
 }
 
@@ -49,16 +73,47 @@ export function PracticalExercisesPage({
   // Submissão e respostas
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [ratings, setRatings] = useState<Record<string, number>>({})
-  const [feedback, setFeedback] = useState<Record<string, { selfRating: number; passed: boolean }>>({})
+  const [feedback, setFeedback] = useState<Record<string, AttemptResult>>({})
+  const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({})
   const [submittingId, setSubmittingId] = useState<string | null>(null)
 
   // Visualização de excerto / dicas
   const [viewingExcerpt, setViewingExcerpt] = useState<Record<string, boolean>>({})
 
-  // Geração com IA
+  // Geração com IA: qualquer bloco ativo, opcionalmente focada num material ou tópico
   const [generating, setGenerating] = useState(false)
+  const [genBlockId, setGenBlockId] = useState<string>('')
+  const [genMaterialId, setGenMaterialId] = useState('')
+  const [genTopicId, setGenTopicId] = useState('')
+  const [genDifficulty, setGenDifficulty] = useState('INTERMEDIATE')
+  const [genType, setGenType] = useState('PROBLEM_SOLVING')
+  const [genMaterials, setGenMaterials] = useState<SourceOption[]>([])
+  const [genTopics, setGenTopics] = useState<SourceOption[]>([])
 
   const activeBlock = blocks.find((b) => b.id === selectedBlockId)
+  const activeBlocks = blocks.filter((b) => b.status === 'ACTIVE')
+  const targetBlockId = mode === 'block' ? selectedBlockId || '' : genBlockId || activeBlocks[0]?.id || ''
+
+  // Seleções de outro bloco são ignoradas até o usuário escolher de novo.
+  const effectiveMaterialId = genMaterials.some((m) => m.id === genMaterialId) ? genMaterialId : ''
+  const effectiveTopicId = genTopics.some((t) => t.id === genTopicId) ? genTopicId : ''
+
+  useEffect(() => {
+    if (!targetBlockId) return
+    let cancelled = false
+    void Promise.all([
+      request<SourceOption[]>(`/api/study-blocks/${targetBlockId}/materials?includeArchived=false`).catch(() => []),
+      request<SourceOption[]>(`/api/study-blocks/${targetBlockId}/topics`).catch(() => []),
+    ]).then(([materials, topics]) => {
+      if (!cancelled) {
+        setGenMaterials(materials)
+        setGenTopics(topics)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [targetBlockId])
 
   const loadExercises = useCallback(async () => {
     setLoading(true)
@@ -101,7 +156,6 @@ export function PracticalExercisesPage({
   }, [loadExercises])
 
   const handleGenerateAi = async () => {
-    const targetBlockId = selectedBlockId || (blocks.length > 0 ? blocks[0].id : null)
     if (!targetBlockId) {
       setError('Selecione um bloco de estudos para gerar exercícios práticos.')
       return
@@ -115,12 +169,15 @@ export function PracticalExercisesPage({
         {
           method: 'POST',
           body: JSON.stringify({
-            difficulty: 'INTERMEDIATE',
-            exerciseType: 'CODE_IMPLEMENTATION',
+            materialId: effectiveMaterialId || null,
+            topicId: effectiveTopicId || null,
+            difficulty: genDifficulty,
+            exerciseType: genType,
           }),
         }
       )
-      setExercises((prev) => [generated, ...prev])
+      const blockTitle = blocks.find((b) => b.id === targetBlockId)?.title
+      setExercises((prev) => [{ ...generated, studyBlockTitle: blockTitle }, ...prev])
     } catch {
       setError('Erro ao gerar exercício prático via IA. Verifique se o bloco possui fontes cadastradas.')
     } finally {
@@ -134,8 +191,9 @@ export function PracticalExercisesPage({
 
     setSubmittingId(ex.id)
     try {
-      // O backend registra a tentativa com a autoavaliação (1–5); não há correção automática.
-      const res = await request<{ id: string; selfRating: number }>(
+      // A nota combina a autoavaliação (provisória até a correção automática) com a autonomia,
+      // que o backend calcula a partir das ajudas pedidas à tutora do exercício.
+      const res = await request<AttemptResult & { id: string }>(
         `/api/study-blocks/${ex.studyBlockId || selectedBlockId}/exercises/${ex.id}/attempts`,
         {
           method: 'POST',
@@ -145,13 +203,8 @@ export function PracticalExercisesPage({
           }),
         }
       )
-      setFeedback((prev) => ({
-        ...prev,
-        [ex.id]: {
-          selfRating: res.selfRating,
-          passed: res.selfRating >= 4,
-        },
-      }))
+      setFeedback((prev) => ({ ...prev, [ex.id]: res }))
+      setAttemptCounts((prev) => ({ ...prev, [ex.id]: (prev[ex.id] ?? 0) + 1 }))
     } catch {
       setError('Erro ao enviar avaliação do exercício.')
     } finally {
@@ -188,7 +241,7 @@ export function PracticalExercisesPage({
             type="button"
             className="btn btn-primary"
             onClick={handleGenerateAi}
-            disabled={generating || (mode === 'block' && !selectedBlockId)}
+            disabled={generating || !targetBlockId}
           >
             <SparklesIcon className="w-4 h-4" />
             <span>{generating ? 'Gerando com IA...' : 'Gerar Exercício Prático'}</span>
@@ -223,6 +276,67 @@ export function PracticalExercisesPage({
         </div>
       )}
 
+      {/* Conteúdo do exercício: qualquer bloco cadastrado, com foco opcional em material ou tópico */}
+      <div className="card exercise-generator-card mb-6">
+        <div className="exercise-generator-grid">
+          {mode === 'global' && (
+            <label className="exercise-generator-field">
+              <span className="text-xs text-muted">Bloco de conteúdo</span>
+              <select className="form-select" value={targetBlockId} onChange={(e) => setGenBlockId(e.target.value)}>
+                {activeBlocks.length === 0 && <option value="">Nenhum bloco ativo</option>}
+                {activeBlocks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="exercise-generator-field">
+            <span className="text-xs text-muted">Tópico</span>
+            <select className="form-select" value={effectiveTopicId} onChange={(e) => setGenTopicId(e.target.value)} disabled={!targetBlockId}>
+              <option value="">Qualquer tópico do bloco</option>
+              {genTopics.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="exercise-generator-field">
+            <span className="text-xs text-muted">Material</span>
+            <select className="form-select" value={effectiveMaterialId} onChange={(e) => setGenMaterialId(e.target.value)} disabled={!targetBlockId}>
+              <option value="">Materiais mais recentes do bloco</option>
+              {genMaterials.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="exercise-generator-field">
+            <span className="text-xs text-muted">Dificuldade</span>
+            <select className="form-select" value={genDifficulty} onChange={(e) => setGenDifficulty(e.target.value)}>
+              {Object.entries(difficultyLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="exercise-generator-field">
+            <span className="text-xs text-muted">Tipo</span>
+            <select className="form-select" value={genType} onChange={(e) => setGenType(e.target.value)}>
+              {Object.entries(exerciseTypeLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
       {error && <div className="alert-error-banner mb-6">{error}</div>}
 
       {/* Lista de Exercícios */}
@@ -251,6 +365,8 @@ export function PracticalExercisesPage({
           {exercises.map((ex, index) => {
             const result = feedback[ex.id]
             const isSubmitting = submittingId === ex.id
+            const exerciseBlockId = ex.studyBlockId || selectedBlockId
+            const steps = ex.steps ?? []
 
             return (
               <div key={ex.id} className="card exercise-item-card">
@@ -301,6 +417,17 @@ export function PracticalExercisesPage({
                   </div>
                 )}
 
+                {steps.length > 0 && (
+                  <ol className="exercise-steps-list">
+                    {steps.map((step, i) => (
+                      <li key={i}>
+                        <span className="exercise-step-num">{i + 1}</span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+
                 {/* Área de Resposta do Estudante */}
                 <div className="exercise-answer-section">
                   <label htmlFor={`answer-${ex.id}`} className="text-xs text-muted block mb-1">
@@ -318,11 +445,20 @@ export function PracticalExercisesPage({
                   />
                 </div>
 
+                {exerciseBlockId && (
+                  <ExerciseTutorChat
+                    exercisePath={`/api/study-blocks/${exerciseBlockId}/exercises/${ex.id}`}
+                    steps={steps}
+                    currentCode={answers[ex.id] ?? (ex.starterCode || '')}
+                    refreshKey={attemptCounts[ex.id] ?? 0}
+                  />
+                )}
+
                 {/* Autoavaliação e Envio */}
                 <div className="exercise-actions-bar">
                   <div className="self-eval-group">
                     <label htmlFor={`rating-${ex.id}`} className="text-xs text-muted">
-                      Autoavaliação de Domínio Prático:
+                      Autoavaliação (provisória até a correção automática):
                     </label>
                     <select
                       id={`rating-${ex.id}`}
@@ -361,13 +497,19 @@ export function PracticalExercisesPage({
                         </strong>
                       </div>
                       <span className={`badge ${result.passed ? 'badge-emerald' : 'badge-amber'}`}>
-                        Autoavaliação: {result.selfRating}/5
+                        Nota: {result.scorePercent}%
                       </span>
                     </div>
                     <p className="text-sm">
-                      {result.passed
-                        ? 'Bom domínio declarado. A próxima revisão deste exercício será espaçada.'
-                        : 'Domínio ainda baixo. Este exercício voltará antes na sua fila de revisão.'}
+                      Autoavaliação {result.selfRating}/5 × autonomia {result.autonomyPercent ?? 100}%
+                      {result.hintsUsedCount > 0 && ` (${result.hintsUsedCount} ajuda(s) da tutora)`}.
+                    </p>
+                    <p className="text-sm">
+                      {result.solutionRevealed
+                        ? 'A solução foi revelada: esta tentativa não conta para o domínio do tópico.'
+                        : result.passed
+                          ? 'Bom resultado. A próxima revisão deste exercício será espaçada.'
+                          : 'Resultado ainda baixo. Este exercício voltará antes na sua fila de revisão.'}
                     </p>
                   </div>
                 )}

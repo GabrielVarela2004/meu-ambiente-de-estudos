@@ -2,6 +2,7 @@ package br.com.estudos.estudos_backend.exercise;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -26,8 +27,12 @@ import br.com.estudos.estudos_backend.question.StudyQuestionDifficulty;
 @RequestMapping("/api/study-blocks/{blockId}/exercises")
 public class PracticalExerciseController {
 	private final PracticalExerciseService service;
+	private final PracticalExerciseTutorService tutorService;
 
-	public PracticalExerciseController(PracticalExerciseService service) { this.service = service; }
+	public PracticalExerciseController(PracticalExerciseService service, PracticalExerciseTutorService tutorService) {
+		this.service = service;
+		this.tutorService = tutorService;
+	}
 
 	@PostMapping
 	public ResponseEntity<ExerciseResponse> create(
@@ -86,6 +91,61 @@ public class PracticalExerciseController {
 		return service.attempts(blockId, exerciseId).stream().map(AttemptResponse::from).toList();
 	}
 
+	@GetMapping("/{exerciseId}/tutor")
+	public TutorSessionResponse tutorSession(@PathVariable UUID blockId, @PathVariable UUID exerciseId) {
+		return TutorSessionResponse.from(tutorService.session(blockId, exerciseId));
+	}
+
+	@PostMapping("/{exerciseId}/tutor/messages")
+	public TutorSessionResponse askTutor(@PathVariable UUID blockId, @PathVariable UUID exerciseId,
+			@Valid @RequestBody TutorMessageRequest request) {
+		tutorService.ask(blockId, exerciseId, request.message(), request.currentCode(), request.stepIndex());
+		return TutorSessionResponse.from(tutorService.session(blockId, exerciseId));
+	}
+
+	@PostMapping("/{exerciseId}/tutor/reveal-solution")
+	public TutorSessionResponse revealSolution(@PathVariable UUID blockId, @PathVariable UUID exerciseId) {
+		tutorService.revealSolution(blockId, exerciseId);
+		return TutorSessionResponse.from(tutorService.session(blockId, exerciseId));
+	}
+
+	public record TutorMessageRequest(
+			@NotBlank @Size(max = 4000) String message,
+			@Size(max = 20000) String currentCode,
+			Integer stepIndex) {}
+
+	public record TutorMessageResponse(
+			UUID id,
+			Integer stepIndex,
+			String userMessage,
+			String assistantAnswer,
+			ExerciseHelpLevel helpLevel,
+			String helpLevelLabel,
+			int penaltyPercent,
+			OffsetDateTime createdAt) {
+		static TutorMessageResponse from(PracticalExerciseChatMessage m) {
+			return new TutorMessageResponse(m.getId(), m.getStepIndex(), m.getUserMessage(), m.getAssistantAnswer(),
+					m.getHelpLevel(), m.getHelpLevel().label(), m.getHelpLevel().penaltyPercent(), m.getCreatedAt());
+		}
+	}
+
+	/** Histórico do chat do exercício e a autonomia acumulada desde a última tentativa. */
+	public record TutorSessionResponse(
+			List<TutorMessageResponse> messages,
+			int autonomyPercent,
+			int hintsUsed,
+			boolean solutionRevealed,
+			Map<Integer, Integer> penaltyByStep) {
+		static TutorSessionResponse from(PracticalExerciseTutorService.TutorSession session) {
+			return new TutorSessionResponse(
+					session.messages().stream().map(TutorMessageResponse::from).toList(),
+					session.autonomy().autonomyPercent(),
+					session.autonomy().hintsUsed(),
+					session.autonomy().solutionRevealed(),
+					session.autonomy().penaltyByStep());
+		}
+	}
+
 	public record ExerciseRequest(
 			@NotBlank @Size(max = 160) String title,
 			@NotBlank @Size(max = 10000) String prompt,
@@ -127,6 +187,7 @@ public class PracticalExerciseController {
 			String solutionCode,
 			String hintsJson,
 			String testCasesJson,
+			List<String> steps,
 			PracticalExerciseStatus status,
 			OffsetDateTime createdAt,
 			OffsetDateTime updatedAt) {
@@ -144,18 +205,24 @@ public class PracticalExerciseController {
 					e.getDifficulty(),
 					e.getExerciseType(),
 					e.getStarterCode(),
-					e.getSolutionCode(),
+					// A solução de referência só é entregue pelo endpoint de tutoria "reveal-solution".
+					null,
 					e.getHintsJson(),
 					e.getTestCasesJson(),
+					PracticalExerciseSteps.parse(e.getStepsJson()),
 					e.getStatus(),
 					e.getCreatedAt(),
 					e.getUpdatedAt());
 		}
 	}
 
-	public record AttemptResponse(UUID id, String answer, int selfRating, String feedback, OffsetDateTime createdAt) {
+	public record AttemptResponse(UUID id, String answer, int selfRating, String feedback, int scorePercent,
+			Integer autonomyPercent, int hintsUsedCount, boolean solutionRevealed, boolean passed,
+			OffsetDateTime createdAt) {
 		static AttemptResponse from(PracticalExerciseAttempt a) {
-			return new AttemptResponse(a.getId(), a.getAnswer(), a.getSelfRating(), a.getFeedback(), a.getCreatedAt());
+			return new AttemptResponse(a.getId(), a.getAnswer(), a.getSelfRating(), a.getFeedback(), a.getScorePercent(),
+					a.getAutonomyPercent(), a.getHintsUsedCount(), a.isSolutionRevealed(), a.isMandatoryTestsPassed(),
+					a.getCreatedAt());
 		}
 	}
 }
