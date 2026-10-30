@@ -26,7 +26,7 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
   como `ResponseStatusException`, no mesmo formato. `http.ts` já lia `message`. Backend: 145 testes.
 - [x] Etapa 6 — Integração com o Gemini (plano e o que foi feito abaixo). Backend: 169 testes.
 - [x] Etapa 7 — Vídeos do YouTube como fonte (plano abaixo; playlist: D2 decidida — vários links de uma vez). Backend: 212 testes.
-- [ ] Etapa 8 — Questões teóricas abertas com correção rigorosa (em andamento; plano abaixo)
+- [x] Etapa 8 — Questões teóricas abertas com correção rigorosa (plano abaixo). Backend: 225 testes.
 - [ ] Etapa 9 — Limpeza
 - [ ] Etapa 10 — Testes no frontend (Vitest)
 - [ ] Etapa 11 — CI no GitHub Actions
