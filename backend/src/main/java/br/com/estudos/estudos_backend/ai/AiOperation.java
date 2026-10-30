@@ -5,7 +5,9 @@ public enum AiOperation {
 	CHAT("Tutor IA (chat)"),
 	QUESTION_GENERATION("Geração de questões"),
 	EXERCISE_GENERATION("Geração de exercícios práticos"),
-	TOPIC_EXTRACTION("Extração de tópicos das fontes");
+	TOPIC_EXTRACTION("Extração de tópicos das fontes"),
+	MATERIAL_SUMMARY("Resumo de materiais"),
+	PERFORMANCE_ANALYSIS("Análise de desempenho");
 
 	private final String label;
 

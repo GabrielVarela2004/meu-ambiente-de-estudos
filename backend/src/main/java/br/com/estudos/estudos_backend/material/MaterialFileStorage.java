@@ -7,7 +7,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import javax.xml.XMLConstants;
@@ -30,6 +35,24 @@ import org.w3c.dom.NodeList;
 public class MaterialFileStorage {
 	private static final int MAX_EXTRACTED_CHARS = 100_000;
 	private static final int MAX_DOCX_XML_BYTES = 5_000_000;
+	/** Limites do PPTX contra zip-bomb: por parte XML, total descompactado e número de entradas. */
+	private static final int MAX_PPTX_PART_BYTES = 5_000_000;
+	private static final long MAX_PPTX_TOTAL_BYTES = 50_000_000L;
+	private static final int MAX_PPTX_ENTRIES = 5_000;
+	private static final long MAX_BINARY_FILE_BYTES = 20_000_000L;
+	private static final long MAX_TEXT_FILE_BYTES = 2_000_000L;
+
+	private static final Pattern SLIDE_ENTRY = Pattern.compile("ppt/slides/slide(\\d+)\\.xml");
+	private static final Pattern NOTES_ENTRY = Pattern.compile("ppt/notesSlides/notesSlide(\\d+)\\.xml");
+
+	/** Extensões de código-fonte e configuração tratadas como texto puro. */
+	static final Set<String> CODE_EXTENSIONS = Set.of(
+			".java", ".kt", ".py", ".js", ".jsx", ".ts", ".tsx", ".c", ".h", ".cpp", ".hpp", ".cs", ".go",
+			".rb", ".php", ".rs", ".swift", ".scala", ".sql", ".sh", ".ps1", ".html", ".css", ".scss",
+			".json", ".yml", ".yaml", ".xml", ".gradle", ".properties", ".ipynb");
+
+	public static final String SUPPORTED_MESSAGE =
+			"Formatos suportados: .txt, .md, .pdf, .docx, .pptx e arquivos de código (.java, .py, .ts, .sql…)";
 
 	private final Path storageDirectory;
 
@@ -45,10 +68,9 @@ public class MaterialFileStorage {
 		String lowerName = originalName.toLowerCase();
 		String ext = extension(lowerName);
 		if (ext == null) {
-			throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-					"Only .txt, .md, .pdf, and .docx files are supported");
+			throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, SUPPORTED_MESSAGE);
 		}
-		long maxBytes = (ext.equals(".pdf") || ext.equals(".docx")) ? 5_000_000L : 1_000_000L;
+		long maxBytes = isBinary(ext) ? MAX_BINARY_FILE_BYTES : MAX_TEXT_FILE_BYTES;
 		if (file.getSize() > maxBytes) {
 			throw new ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE,
 					"File size exceeds the maximum allowed limit");
@@ -57,7 +79,9 @@ public class MaterialFileStorage {
 			Files.createDirectories(storageDirectory);
 			byte[] bytes = file.getBytes();
 			String rawExtracted = extractText(bytes, ext);
-			String extracted = sanitizeExtractedText(rawExtracted);
+			String extracted = CODE_EXTENSIONS.contains(ext)
+					? normalizeCode(rawExtracted)
+					: sanitizeExtractedText(rawExtracted);
 			if (extracted.isBlank()) {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 						"The uploaded file does not contain extractable text");
@@ -73,6 +97,22 @@ public class MaterialFileStorage {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
 					"Could not store or process the study file");
 		}
+	}
+
+	/** Tipo de fonte correspondente ao nome do arquivo (usado ao salvar o material). */
+	public StudyMaterialSourceType sourceTypeFor(String filename) {
+		String ext = extension(filename == null ? "" : filename.toLowerCase());
+		if (ext == null) {
+			return StudyMaterialSourceType.FILE_TXT;
+		}
+		return switch (ext) {
+			case ".pdf" -> StudyMaterialSourceType.FILE_PDF;
+			case ".docx" -> StudyMaterialSourceType.FILE_DOCX;
+			case ".pptx" -> StudyMaterialSourceType.FILE_PPTX;
+			case ".md" -> StudyMaterialSourceType.FILE_MD;
+			case ".txt" -> StudyMaterialSourceType.FILE_TXT;
+			default -> StudyMaterialSourceType.FILE_CODE;
+		};
 	}
 
 	/**
@@ -96,17 +136,30 @@ public class MaterialFileStorage {
 	}
 
 	private String extractText(byte[] bytes, String ext) {
-		if (ext.equals(".txt") || ext.equals(".md")) {
-			String content = new String(bytes, StandardCharsets.UTF_8);
-			return content.startsWith("\uFEFF") ? content.substring(1) : content;
-		}
 		if (ext.equals(".pdf")) {
 			return extractPdfText(bytes);
 		}
 		if (ext.equals(".docx")) {
 			return extractDocxText(bytes);
 		}
-		throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported file extension");
+		if (ext.equals(".pptx")) {
+			return extractPptxText(bytes);
+		}
+		return readUtf8(bytes);
+	}
+
+	/** Código preserva a indentação: só remove caracteres nulos e normaliza quebras de linha. */
+	static String normalizeCode(String text) {
+		return text.replace("\u0000", "")
+				.replace("\r\n", "\n")
+				.replace("\r", "\n")
+				.replaceAll("\\n{4,}", "\n\n\n")
+				.strip();
+	}
+
+	private static String readUtf8(byte[] bytes) {
+		String content = new String(bytes, StandardCharsets.UTF_8);
+		return content.startsWith("﻿") ? content.substring(1) : content;
 	}
 
 	private String extractPdfText(byte[] bytes) {
@@ -129,19 +182,7 @@ public class MaterialFileStorage {
 			ZipEntry entry;
 			while ((entry = zis.getNextEntry()) != null) {
 				if ("word/document.xml".equals(entry.getName())) {
-					ByteArrayOutputStream out = new ByteArrayOutputStream();
-					byte[] buffer = new byte[4096];
-					int read;
-					int total = 0;
-					while ((read = zis.read(buffer)) != -1) {
-						total += read;
-						if (total > MAX_DOCX_XML_BYTES) {
-							throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-									"DOCX internal XML exceeds maximum safe size");
-						}
-						out.write(buffer, 0, read);
-					}
-					documentXml = out.toByteArray();
+					documentXml = readLimited(zis, MAX_DOCX_XML_BYTES, "DOCX internal XML exceeds maximum safe size");
 					break;
 				}
 			}
@@ -156,41 +197,142 @@ public class MaterialFileStorage {
 		}
 
 		try {
-			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-			factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-			factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-			factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-			factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-			factory.setXIncludeAware(false);
-			factory.setExpandEntityReferences(false);
-			DocumentBuilder builder = factory.newDocumentBuilder();
-			Document doc = builder.parse(new ByteArrayInputStream(documentXml));
-			StringBuilder sb = new StringBuilder();
-			NodeList paragraphs = doc.getElementsByTagName("w:p");
-			if (paragraphs.getLength() == 0) {
-				paragraphs = doc.getElementsByTagName("p");
-			}
-			for (int i = 0; i < paragraphs.getLength(); i++) {
-				Node p = paragraphs.item(i);
-				String text = p.getTextContent();
-				if (text != null && !text.isBlank()) {
-					if (!sb.isEmpty()) {
-						sb.append("\n");
-					}
-					sb.append(text.trim());
-				}
-			}
-			return sb.toString();
+			Document doc = secureBuilder().parse(new ByteArrayInputStream(documentXml));
+			return paragraphsText(doc, "w:p", "p");
 		} catch (Exception exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid XML structure in DOCX file");
 		}
 	}
 
+	/** Texto de cada slide (em ordem) seguido das anotações do apresentador, quando existem. */
+	private String extractPptxText(byte[] bytes) {
+		Map<Integer, byte[]> slides = new TreeMap<>();
+		Map<Integer, byte[]> notes = new TreeMap<>();
+		try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(bytes))) {
+			ZipEntry entry;
+			int entries = 0;
+			long total = 0;
+			while ((entry = zis.getNextEntry()) != null) {
+				if (++entries > MAX_PPTX_ENTRIES) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PPTX archive has too many entries");
+				}
+				Matcher slide = SLIDE_ENTRY.matcher(entry.getName());
+				Matcher note = NOTES_ENTRY.matcher(entry.getName());
+				if (!slide.matches() && !note.matches()) {
+					continue;
+				}
+				byte[] xml = readLimited(zis, MAX_PPTX_PART_BYTES, "PPTX slide XML exceeds maximum safe size");
+				total += xml.length;
+				if (total > MAX_PPTX_TOTAL_BYTES) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PPTX content exceeds maximum safe size");
+				}
+				if (slide.matches()) {
+					slides.put(Integer.parseInt(slide.group(1)), xml);
+				} else {
+					notes.put(Integer.parseInt(note.group(1)), xml);
+				}
+			}
+		} catch (ResponseStatusException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or corrupted PPTX archive");
+		}
+
+		if (slides.isEmpty()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid PPTX file: no slides found");
+		}
+
+		try {
+			DocumentBuilder builder = secureBuilder();
+			StringBuilder out = new StringBuilder();
+			for (Map.Entry<Integer, byte[]> slide : slides.entrySet()) {
+				String slideText = paragraphsText(builder.parse(new ByteArrayInputStream(slide.getValue())), "a:p", "p");
+				String notesText = "";
+				byte[] notesXml = notes.get(slide.getKey());
+				if (notesXml != null) {
+					notesText = stripSlideNumber(paragraphsText(builder.parse(new ByteArrayInputStream(notesXml)), "a:p", "p"));
+				}
+				if (slideText.isBlank() && notesText.isBlank()) {
+					continue;
+				}
+				out.append("Slide ").append(slide.getKey()).append('\n');
+				if (!slideText.isBlank()) {
+					out.append(slideText).append('\n');
+				}
+				if (!notesText.isBlank()) {
+					out.append("Anotações: ").append(notesText).append('\n');
+				}
+				out.append('\n');
+			}
+			return out.toString();
+		} catch (Exception exception) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid XML structure in PPTX file");
+		}
+	}
+
+	/** As anotações costumam terminar com o número do slide como parágrafo isolado. */
+	private static String stripSlideNumber(String notes) {
+		return notes.replaceAll("(?m)^\\d{1,4}$\\n?", "").trim();
+	}
+
+	private static byte[] readLimited(ZipInputStream zis, int maxBytes, String limitMessage) throws IOException {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		byte[] buffer = new byte[4096];
+		int read;
+		int total = 0;
+		while ((read = zis.read(buffer)) != -1) {
+			total += read;
+			if (total > maxBytes) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, limitMessage);
+			}
+			out.write(buffer, 0, read);
+		}
+		return out.toByteArray();
+	}
+
+	private static DocumentBuilder secureBuilder() throws Exception {
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+		factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+		factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+		factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+		factory.setXIncludeAware(false);
+		factory.setExpandEntityReferences(false);
+		return factory.newDocumentBuilder();
+	}
+
+	private static String paragraphsText(Document doc, String qualifiedTag, String fallbackTag) {
+		NodeList paragraphs = doc.getElementsByTagName(qualifiedTag);
+		if (paragraphs.getLength() == 0) {
+			paragraphs = doc.getElementsByTagName(fallbackTag);
+		}
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < paragraphs.getLength(); i++) {
+			Node p = paragraphs.item(i);
+			String text = p.getTextContent();
+			if (text != null && !text.isBlank()) {
+				if (!sb.isEmpty()) {
+					sb.append("\n");
+				}
+				sb.append(text.trim());
+			}
+		}
+		return sb.toString();
+	}
+
+	private static boolean isBinary(String ext) {
+		return ext.equals(".pdf") || ext.equals(".docx") || ext.equals(".pptx");
+	}
+
 	private String extension(String filename) {
-		if (filename.endsWith(".md")) return ".md";
-		if (filename.endsWith(".txt")) return ".txt";
-		if (filename.endsWith(".pdf")) return ".pdf";
-		if (filename.endsWith(".docx")) return ".docx";
+		int dot = filename.lastIndexOf('.');
+		if (dot < 0) {
+			return null;
+		}
+		String ext = filename.substring(dot);
+		if (Set.of(".md", ".txt", ".pdf", ".docx", ".pptx").contains(ext) || CODE_EXTENSIONS.contains(ext)) {
+			return ext;
+		}
 		return null;
 	}
 }

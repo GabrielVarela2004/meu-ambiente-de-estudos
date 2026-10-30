@@ -25,13 +25,24 @@ public class StudyMaterialService {
 	private final MaterialFileStorage fileStorage;
 	private final YoutubeTranscriptExtractor youtubeTranscriptExtractor;
 	private final KnowledgeTopicService knowledgeTopicService;
+	private final WebPageExtractor webPageExtractor;
+	private final MaterialSummarizer summarizer;
 
 	public StudyMaterialService(
 			StudyMaterialRepository repository,
 			StudyBlockService studyBlockService,
 			MaterialFileStorage fileStorage,
 			YoutubeTranscriptExtractor youtubeTranscriptExtractor) {
-		this(repository, studyBlockService, fileStorage, youtubeTranscriptExtractor, null);
+		this(repository, studyBlockService, fileStorage, youtubeTranscriptExtractor, null, null, null);
+	}
+
+	public StudyMaterialService(
+			StudyMaterialRepository repository,
+			StudyBlockService studyBlockService,
+			MaterialFileStorage fileStorage,
+			YoutubeTranscriptExtractor youtubeTranscriptExtractor,
+			KnowledgeTopicService knowledgeTopicService) {
+		this(repository, studyBlockService, fileStorage, youtubeTranscriptExtractor, knowledgeTopicService, null, null);
 	}
 
 	@Autowired
@@ -40,12 +51,16 @@ public class StudyMaterialService {
 			StudyBlockService studyBlockService,
 			MaterialFileStorage fileStorage,
 			YoutubeTranscriptExtractor youtubeTranscriptExtractor,
-			KnowledgeTopicService knowledgeTopicService) {
+			KnowledgeTopicService knowledgeTopicService,
+			WebPageExtractor webPageExtractor,
+			MaterialSummarizer summarizer) {
 		this.repository = repository;
 		this.studyBlockService = studyBlockService;
 		this.fileStorage = fileStorage;
 		this.youtubeTranscriptExtractor = youtubeTranscriptExtractor;
 		this.knowledgeTopicService = knowledgeTopicService;
+		this.webPageExtractor = webPageExtractor;
+		this.summarizer = summarizer;
 	}
 
 	@Transactional
@@ -53,7 +68,7 @@ public class StudyMaterialService {
 		StudyBlock block = getActiveBlock(studyBlockId);
 		String content = fileStorage.readAndStore(file);
 		String filename = file.getOriginalFilename() == null ? "Material importado" : file.getOriginalFilename();
-		StudyMaterialSourceType sourceType = detectFileSourceType(filename);
+		StudyMaterialSourceType sourceType = fileStorage.sourceTypeFor(filename);
 		StudyMaterial saved = repository.save(new StudyMaterial(
 				block,
 				filename,
@@ -104,6 +119,54 @@ public class StudyMaterialService {
 		studyBlockService.touch(block);
 		syncTopicsIfAvailable(studyBlockId);
 		return saved;
+	}
+
+	/**
+	 * Importa uma página web pública como fonte. Não é transacional durante o download
+	 * (rede lenta não deve segurar conexão com o banco); a gravação em si é atômica.
+	 */
+	public StudyMaterial importWebPage(UUID studyBlockId, String rawUrl) {
+		if (webPageExtractor == null) {
+			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Importação de páginas web indisponível.");
+		}
+		StudyBlock block = getActiveBlock(studyBlockId);
+		WebPageExtractor.ExtractedWebPage page = webPageExtractor.extract(rawUrl);
+		String url = page.finalUrl().length() > 1000 ? page.finalUrl().substring(0, 1000) : page.finalUrl();
+		if (repository.existsByStudyBlockIdAndSourceUrlAndStatus(studyBlockId, url, StudyMaterialStatus.ACTIVE)) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta página já foi importada neste bloco de estudo.");
+		}
+		String title = page.title() == null || page.title().isBlank() ? url : page.title().strip();
+		if (title.length() > 160) {
+			title = title.substring(0, 160);
+		}
+		StudyMaterial saved = repository.save(new StudyMaterial(
+				block,
+				title,
+				fileStorage.sanitizeExtractedText(page.text()),
+				StudyMaterialSourceType.WEB,
+				url,
+				null,
+				null,
+				StudyMaterialProcessingStatus.COMPLETED,
+				null));
+		studyBlockService.touch(block);
+		syncTopicsIfAvailable(studyBlockId);
+		return saved;
+	}
+
+	/** Gera (ou regenera) o resumo do material — sem transação durante a chamada à IA. */
+	public StudyMaterial generateSummary(UUID studyBlockId, UUID id) {
+		if (summarizer == null) {
+			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Geração de resumos indisponível.");
+		}
+		StudyMaterial material = get(id);
+		validateOwnership(material, studyBlockId);
+		if (material.getStatus() == StudyMaterialStatus.ARCHIVED) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "Archived study materials cannot be summarized");
+		}
+		MaterialSummarizer.Summary summary = summarizer.summarize(material.getTitle(), material.getContent());
+		material.applySummary(summary.text(), summary.source());
+		return repository.save(material);
 	}
 
 	@Transactional
@@ -198,20 +261,6 @@ public class StudyMaterialService {
 		if (knowledgeTopicService != null) {
 			knowledgeTopicService.extractFromSources(studyBlockId, false);
 		}
-	}
-
-	private StudyMaterialSourceType detectFileSourceType(String filename) {
-		String lower = filename.toLowerCase();
-		if (lower.endsWith(".pdf")) {
-			return StudyMaterialSourceType.FILE_PDF;
-		}
-		if (lower.endsWith(".docx")) {
-			return StudyMaterialSourceType.FILE_DOCX;
-		}
-		if (lower.endsWith(".md")) {
-			return StudyMaterialSourceType.FILE_MD;
-		}
-		return StudyMaterialSourceType.FILE_TXT;
 	}
 
 	private StudyBlock getActiveBlock(UUID id) {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../../api/http'
+import { LearningInsightsPanel } from './LearningInsightsPanel'
 import '../../styles/pages/learning-panels.css'
 
 type OverallPerformanceSummary = {
@@ -199,6 +200,8 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
           </p>
         </div>
       </div>
+
+      <LearningInsightsPanel />
 
       {/* Barra de Filtros Dinâmicos */}
       <section className="card filters-card">

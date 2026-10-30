@@ -53,6 +53,9 @@ const sourceTypeBadgeLabels: Record<SourceType, string> = {
   FILE_MD: 'MD',
   FILE_PDF: 'PDF',
   FILE_DOCX: 'DOCX',
+  FILE_PPTX: 'PPTX',
+  FILE_CODE: 'Código',
+  WEB: 'Web',
   YOUTUBE: 'YouTube',
 }
 

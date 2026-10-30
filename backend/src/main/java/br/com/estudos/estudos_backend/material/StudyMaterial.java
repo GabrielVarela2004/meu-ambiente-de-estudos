@@ -59,6 +59,15 @@ public class StudyMaterial {
 	@Column(name = "enabled_for_chat", nullable = false)
 	private boolean enabledForChat;
 
+	@Column(columnDefinition = "TEXT")
+	private String summary;
+
+	@Column(name = "summary_source", length = 160)
+	private String summarySource;
+
+	@Column(name = "summary_generated_at")
+	private OffsetDateTime summaryGeneratedAt;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	private StudyMaterialStatus status;
@@ -154,8 +163,36 @@ public class StudyMaterial {
 	}
 
 	public void update(String title, String content) {
+		if (content != null && !content.equals(this.content)) {
+			// O resumo descreve o conteúdo antigo; deixa de valer quando o texto muda.
+			clearSummary();
+		}
 		this.title = title;
 		this.content = content;
+	}
+
+	public void applySummary(String summary, String summarySource) {
+		this.summary = summary;
+		this.summarySource = summarySource == null || summarySource.length() <= 160 ? summarySource : summarySource.substring(0, 160);
+		this.summaryGeneratedAt = OffsetDateTime.now();
+	}
+
+	public void clearSummary() {
+		this.summary = null;
+		this.summarySource = null;
+		this.summaryGeneratedAt = null;
+	}
+
+	public String getSummary() {
+		return summary;
+	}
+
+	public String getSummarySource() {
+		return summarySource;
+	}
+
+	public OffsetDateTime getSummaryGeneratedAt() {
+		return summaryGeneratedAt;
 	}
 
 	public void setMetadataJson(String metadataJson) {

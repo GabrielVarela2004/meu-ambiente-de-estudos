@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface StudySessionRepository extends JpaRepository<StudySession, UUID> {
 	List<StudySession> findAllByStudyBlockIdOrderByUpdatedAtDesc(UUID studyBlockId);
+
+	List<StudySession> findAllByStudyBlockIdIn(java.util.Collection<UUID> studyBlockIds);
 }

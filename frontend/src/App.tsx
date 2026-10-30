@@ -26,7 +26,7 @@ type StudyMaterial = {
   studyBlockId: string
   title: string
   content: string
-  sourceType?: 'TEXT' | 'FILE_TXT' | 'FILE_MD' | 'FILE_PDF' | 'FILE_DOCX' | 'YOUTUBE'
+  sourceType?: 'TEXT' | 'FILE_TXT' | 'FILE_MD' | 'FILE_PDF' | 'FILE_DOCX' | 'FILE_PPTX' | 'FILE_CODE' | 'WEB' | 'YOUTUBE'
   sourceUrl?: string | null
   externalVideoId?: string | null
   processingStatus?: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'

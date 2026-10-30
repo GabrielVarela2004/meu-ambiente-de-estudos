@@ -27,6 +27,9 @@ const sourceTypeLabels: Record<string, string> = {
   FILE_MD: 'Markdown',
   FILE_PDF: 'PDF',
   FILE_DOCX: 'Word (DOCX)',
+  FILE_PPTX: 'Apresentação (PPTX)',
+  FILE_CODE: 'Código-fonte',
+  WEB: 'Página Web',
   YOUTUBE: 'Vídeo YouTube',
 }
 
@@ -42,6 +45,8 @@ export function BlockWorkspacePage({
   const [loading, setLoading] = useState(false)
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null)
   const [togglingChatId, setTogglingChatId] = useState<string | null>(null)
+  const [summarizingId, setSummarizingId] = useState<string | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
 
   const loadMaterials = useCallback(async () => {
     setLoading(true)
@@ -63,6 +68,22 @@ export function BlockWorkspacePage({
   useEffect(() => {
     void loadMaterials()
   }, [loadMaterials])
+
+  const handleGenerateSummary = async (mat: StudyMaterialItem) => {
+    setSummarizingId(mat.id)
+    setSummaryError(null)
+    try {
+      const updated = await request<StudyMaterialItem>(
+        `/api/study-blocks/${block.id}/materials/${mat.id}/summary`,
+        { method: 'POST' },
+      )
+      setMaterials((prev) => prev.map((m) => (m.id === mat.id ? { ...m, ...updated } : m)))
+    } catch (err) {
+      setSummaryError(err instanceof Error && err.message ? err.message : 'Não foi possível gerar o resumo.')
+    } finally {
+      setSummarizingId(null)
+    }
+  }
 
   const handleToggleChat = async (mat: StudyMaterialItem, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -229,8 +250,55 @@ export function BlockWorkspacePage({
                 </div>
               </div>
 
+              {selectedMaterial.sourceUrl && (
+                <a
+                  className="reader-source-link"
+                  href={selectedMaterial.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Abrir fonte original ↗
+                </a>
+              )}
+
+              <section className="reader-summary" aria-label="Resumo do material">
+                <div className="reader-summary-header">
+                  <h3>Resumo</h3>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={summarizingId === selectedMaterial.id}
+                    onClick={() => void handleGenerateSummary(selectedMaterial)}
+                  >
+                    {summarizingId === selectedMaterial.id
+                      ? 'Gerando…'
+                      : selectedMaterial.summary
+                        ? 'Gerar novamente'
+                        : 'Gerar resumo'}
+                  </button>
+                </div>
+                {summaryError && summarizingId === null && <p className="error-text">{summaryError}</p>}
+                {selectedMaterial.summary ? (
+                  <>
+                    <p className="reader-summary-text">{selectedMaterial.summary}</p>
+                    <p className="reader-summary-meta">
+                      {selectedMaterial.summarySource}
+                      {selectedMaterial.summaryGeneratedAt &&
+                        ` · ${new Date(selectedMaterial.summaryGeneratedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="reader-summary-empty">
+                    Ainda sem resumo. Com um provedor de IA configurado o resumo é escrito pela IA; sem chave, as frases
+                    mais representativas do próprio texto são selecionadas.
+                  </p>
+                )}
+              </section>
+
               <div className="reader-content-body">
-                <pre className="content-pre-wrap">{selectedMaterial.content}</pre>
+                <pre className={`content-pre-wrap ${selectedMaterial.sourceType === 'FILE_CODE' ? 'is-code' : ''}`}>
+                  {selectedMaterial.content}
+                </pre>
               </div>
             </div>
           ) : (

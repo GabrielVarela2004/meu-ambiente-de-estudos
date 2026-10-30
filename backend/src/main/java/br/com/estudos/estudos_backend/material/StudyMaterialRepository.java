@@ -20,4 +20,7 @@ public interface StudyMaterialRepository extends JpaRepository<StudyMaterial, UU
 
 	boolean existsByStudyBlockIdAndExternalVideoIdAndStatus(
 			UUID studyBlockId, String externalVideoId, StudyMaterialStatus status);
+
+	boolean existsByStudyBlockIdAndSourceUrlAndStatus(
+			UUID studyBlockId, String sourceUrl, StudyMaterialStatus status);
 }

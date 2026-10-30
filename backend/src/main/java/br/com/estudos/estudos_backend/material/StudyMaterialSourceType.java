@@ -6,5 +6,8 @@ public enum StudyMaterialSourceType {
 	FILE_MD,
 	FILE_PDF,
 	FILE_DOCX,
+	FILE_PPTX,
+	FILE_CODE,
+	WEB,
 	YOUTUBE
 }

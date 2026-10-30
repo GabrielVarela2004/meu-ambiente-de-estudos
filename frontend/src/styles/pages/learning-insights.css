@@ -1,0 +1,125 @@
+/* ==========================================================================
+   ANÁLISES DE DESEMPENHO (semanal/mensal, dificuldade, tópicos, análise escrita)
+   ========================================================================== */
+.insights-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.insights-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.insights-buckets {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+}
+
+.insights-bucket {
+  display: flex;
+  flex: 1 0 72px;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  text-align: center;
+}
+
+.insights-bucket-track {
+  display: flex;
+  align-items: flex-end;
+  width: 28px;
+  height: 96px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.insights-bucket-fill {
+  width: 100%;
+  min-height: 2px;
+  background: var(--color-accent);
+}
+
+.insights-bucket-accuracy {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.insights-bucket-label,
+.insights-bucket-meta,
+.insights-muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.insights-box {
+  padding: var(--space-4);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.insights-box h4 {
+  margin: 0 0 var(--space-3);
+}
+
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.insights-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.insights-recommendations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.insights-analysis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.insights-analysis-header h4 {
+  margin: 0;
+}
+
+.insights-analysis-text {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}

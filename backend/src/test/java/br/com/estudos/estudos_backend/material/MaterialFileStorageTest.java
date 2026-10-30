@@ -146,8 +146,8 @@ class MaterialFileStorageTest {
 
 	@Test
 	void rejectsOversizedTextFileWithContentTooLarge() {
-		// Limite para TXT é 1MB (1_000_000 bytes)
-		byte[] largeBytes = new byte[1_000_001];
+		// Limite para arquivos de texto é 2MB (2_000_000 bytes)
+		byte[] largeBytes = new byte[2_000_001];
 		MockMultipartFile largeFile = new MockMultipartFile(
 				"file", "gigante.txt", "text/plain", largeBytes);
 

@@ -2,7 +2,16 @@ import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { request } from '../../api/http'
 
-export type SourceType = 'TEXT' | 'FILE_TXT' | 'FILE_MD' | 'FILE_PDF' | 'FILE_DOCX' | 'YOUTUBE'
+export type SourceType =
+  | 'TEXT'
+  | 'FILE_TXT'
+  | 'FILE_MD'
+  | 'FILE_PDF'
+  | 'FILE_DOCX'
+  | 'FILE_PPTX'
+  | 'FILE_CODE'
+  | 'WEB'
+  | 'YOUTUBE'
 export type ProcessingStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 
 export type StudyMaterialItem = {
@@ -21,6 +30,9 @@ export type StudyMaterialItem = {
   wordCount?: number
   charCount?: number
   status: 'ACTIVE' | 'ARCHIVED'
+  summary?: string | null
+  summarySource?: string | null
+  summaryGeneratedAt?: string | null
   createdAt: string
   updatedAt: string
 }

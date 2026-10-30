@@ -53,6 +53,18 @@ public class StudyMaterialController {
 				.body(StudyMaterialResponse.from(service.importYoutubeVideo(studyBlockId, request.url())));
 	}
 
+	@PostMapping("/web")
+	public ResponseEntity<StudyMaterialResponse> importWebPage(
+			@PathVariable UUID studyBlockId, @Valid @RequestBody WebPageMaterialRequest request) {
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(StudyMaterialResponse.from(service.importWebPage(studyBlockId, request.url())));
+	}
+
+	@PostMapping("/{id}/summary")
+	public StudyMaterialResponse generateSummary(@PathVariable UUID studyBlockId, @PathVariable UUID id) {
+		return StudyMaterialResponse.from(service.generateSummary(studyBlockId, id));
+	}
+
 	@GetMapping
 	public List<StudyMaterialResponse> list(
 			@PathVariable UUID studyBlockId, @RequestParam(defaultValue = "false") boolean includeArchived) {
@@ -84,6 +96,10 @@ public class StudyMaterialController {
 			@NotBlank @Size(max = 100000) String content) {
 	}
 
+	public record WebPageMaterialRequest(
+			@NotBlank @Size(max = 1000) String url) {
+	}
+
 	public record YoutubeMaterialRequest(
 			@NotBlank @Size(max = 1000) String url) {
 	}
@@ -104,6 +120,9 @@ public class StudyMaterialController {
 			int wordCount,
 			int charCount,
 			StudyMaterialStatus status,
+			String summary,
+			String summarySource,
+			OffsetDateTime summaryGeneratedAt,
 			OffsetDateTime createdAt,
 			OffsetDateTime updatedAt) {
 
@@ -127,6 +146,9 @@ public class StudyMaterialController {
 					wordCount,
 					charCount,
 					material.getStatus(),
+					material.getSummary(),
+					material.getSummarySource(),
+					material.getSummaryGeneratedAt(),
 					material.getCreatedAt(),
 					material.getUpdatedAt());
 		}

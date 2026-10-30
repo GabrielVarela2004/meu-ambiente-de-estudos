@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { request } from '../api/http'
-import { CheckCircleIcon, FileTextIcon, FolderIcon, PlusCircleIcon, SparklesIcon } from '../components/icons'
+import { CheckCircleIcon, FileTextIcon, FolderIcon, PlusCircleIcon, SearchIcon, SparklesIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/add-content.css'
 
@@ -13,7 +13,7 @@ type Props = {
   onNavigateToBlock: (blockId: string) => void
 }
 
-type TabMode = 'TEXT' | 'FILE' | 'YOUTUBE'
+type TabMode = 'TEXT' | 'FILE' | 'WEB' | 'YOUTUBE'
 
 type CreatedMaterial = {
   id: string
@@ -73,6 +73,11 @@ export function AddContentPage({
   const [ytUrl, setYtUrl] = useState('')
   const [ytTitle, setYtTitle] = useState('')
   const [ytEnabledForChat, setYtEnabledForChat] = useState(true)
+
+  // Modo Página Web
+  const [webUrl, setWebUrl] = useState('')
+  const [webTitle, setWebTitle] = useState('')
+  const [webEnabledForChat, setWebEnabledForChat] = useState(true)
 
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -136,7 +141,7 @@ export function AddContentPage({
       return
     }
     if (!selectedFile) {
-      setFeedback({ type: 'error', message: 'Selecione um arquivo PDF, DOCX, Markdown ou TXT.' })
+      setFeedback({ type: 'error', message: 'Selecione um arquivo PDF, DOCX, PPTX, Markdown, TXT ou de código.' })
       return
     }
 
@@ -162,7 +167,40 @@ export function AddContentPage({
     } catch {
       setFeedback({
         type: 'error',
-        message: 'Falha ao processar o arquivo. Verifique se o formato é suportado (.pdf, .docx, .md, .txt).',
+        message: 'Falha ao processar o arquivo. Formatos aceitos: .pdf, .docx, .pptx, .md, .txt e arquivos de código.',
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSubmitWeb = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!targetBlockId) {
+      setFeedback({ type: 'error', message: 'Selecione um bloco de estudo de destino.' })
+      return
+    }
+    if (!webUrl.trim()) {
+      setFeedback({ type: 'error', message: 'Informe o endereço da página.' })
+      return
+    }
+
+    setSubmitting(true)
+    setFeedback(null)
+    try {
+      const created = await request<CreatedMaterial>(`/api/study-blocks/${targetBlockId}/materials/web`, {
+        method: 'POST',
+        body: JSON.stringify({ url: webUrl.trim() }),
+      })
+      await applySourceOptions(targetBlockId, created, { title: webTitle, enabledForChat: webEnabledForChat })
+      setFeedback({ type: 'success', message: `Página "${webTitle.trim() || created.title}" importada como fonte!` })
+      setWebUrl('')
+      setWebTitle('')
+      onSourceAdded(targetBlockId)
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        message: err instanceof Error && err.message ? err.message : 'Não foi possível importar a página.',
       })
     } finally {
       setSubmitting(false)
@@ -277,7 +315,16 @@ export function AddContentPage({
           onClick={() => setActiveTab('FILE')}
         >
           <PlusCircleIcon className="w-4 h-4" />
-          <span>Upload de Arquivo (PDF, DOCX, MD, TXT)</span>
+          <span>Upload de Arquivo (PDF, DOCX, PPTX, código…)</span>
+        </button>
+
+        <button
+          type="button"
+          className={`content-type-tab-btn ${activeTab === 'WEB' ? 'active' : ''}`}
+          onClick={() => setActiveTab('WEB')}
+        >
+          <SearchIcon className="w-4 h-4" />
+          <span>Página Web (link)</span>
         </button>
 
         <button
@@ -367,7 +414,7 @@ export function AddContentPage({
               <input
                 id="file-upload-input"
                 type="file"
-                accept=".pdf,.docx,.md,.txt"
+                accept=".pdf,.docx,.pptx,.md,.txt,.java,.kt,.py,.js,.jsx,.ts,.tsx,.c,.h,.cpp,.hpp,.cs,.go,.rb,.php,.rs,.swift,.scala,.sql,.sh,.ps1,.html,.css,.scss,.json,.yml,.yaml,.xml,.gradle,.properties,.ipynb"
                 onChange={handleFileChange}
                 className="file-hidden-input"
               />
@@ -383,7 +430,7 @@ export function AddContentPage({
                 ) : (
                   <div>
                     <strong>Clique para escolher ou arraste o arquivo aqui</strong>
-                    <p className="text-xs text-muted">Formatos suportados: PDF, DOCX, Markdown (.md), Texto (.txt)</p>
+                    <p className="text-xs text-muted">PDF, DOCX e PPTX (até 20 MB), Markdown, TXT e código-fonte (.java, .py, .ts, .sql…, até 2 MB)</p>
                   </div>
                 )}
               </div>
@@ -427,7 +474,58 @@ export function AddContentPage({
         </form>
       )}
 
-      {/* Form 3: Vídeo do YouTube */}
+      {/* Form 3: Página Web */}
+      {activeTab === 'WEB' && (
+        <form onSubmit={handleSubmitWeb} className="card source-form-card">
+          <div className="form-field-group">
+            <label htmlFor="web-url">Endereço da página *</label>
+            <input
+              id="web-url"
+              type="url"
+              className="form-input"
+              placeholder="https://docs.oracle.com/javase/tutorial/java/IandI/polymorphism.html"
+              value={webUrl}
+              onChange={(e) => setWebUrl(e.target.value)}
+              required
+            />
+            <p className="form-hint">
+              O texto principal da página (artigo ou conteúdo) é extraído; menus, rodapés e scripts são descartados.
+              Páginas que exigem login ou dependem de JavaScript podem não ter texto legível.
+            </p>
+          </div>
+
+          <div className="form-field-group">
+            <label htmlFor="web-title">Título Customizado (opcional)</label>
+            <input
+              id="web-title"
+              type="text"
+              className="form-input"
+              placeholder="Por padrão, usa o título da página"
+              value={webTitle}
+              onChange={(e) => setWebTitle(e.target.value)}
+            />
+          </div>
+
+          <div className="form-checkbox-row">
+            <label className="checkbox-label-styled">
+              <input
+                type="checkbox"
+                checked={webEnabledForChat}
+                onChange={(e) => setWebEnabledForChat(e.target.checked)}
+              />
+              <span className="checkbox-text">Habilitar esta página para o Chat do Bloco</span>
+            </label>
+          </div>
+
+          <div className="form-footer-actions">
+            <button type="submit" className="btn btn-primary" disabled={submitting || !webUrl.trim() || !blocks.length}>
+              {submitting ? 'Baixando e extraindo o texto...' : 'Importar Página'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Form 4: Vídeo do YouTube */}
       {activeTab === 'YOUTUBE' && (
         <form onSubmit={handleSubmitYoutube} className="card source-form-card">
           <div className="form-field-group">
