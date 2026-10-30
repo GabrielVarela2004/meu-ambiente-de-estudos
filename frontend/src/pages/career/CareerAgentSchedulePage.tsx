@@ -3,6 +3,7 @@ import { request } from '../../api/http'
 import { runCareerAgent } from '../../api/career'
 import '../../styles/pages/career.css'
 import { CheckCircleIcon, ClockIcon, SparklesIcon } from '../../components/icons'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 type AgentExecution = {
   id: string
@@ -68,8 +69,10 @@ export function CareerAgentSchedulePage() {
     }
   }
 
+  useDeferredEffect(() => loadData(), [])
+
+  // Atualiza o estado do agente a cada 15 s.
   useEffect(() => {
-    void loadData()
     const interval = setInterval(() => {
       void loadData()
     }, 15000)

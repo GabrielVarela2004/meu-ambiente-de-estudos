@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { request } from '../../api/http'
 import { SparklesIcon } from '../../components/icons'
 import '../../styles/pages/ai-providers.css'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 type AiOperation = 'CHAT' | 'QUESTION_GENERATION' | 'EXERCISE_GENERATION' | 'TOPIC_EXTRACTION' | 'MATERIAL_SUMMARY'
 
@@ -89,9 +90,7 @@ export function AiProvidersPanel() {
     }
   }, [])
 
-  useEffect(() => {
-    void load()
-  }, [load])
+  useDeferredEffect(() => load(), [load])
 
   const saveProvider = async (provider: Provider) => {
     const draft = drafts[provider.id]

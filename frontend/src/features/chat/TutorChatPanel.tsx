@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../api/http'
 import type { SourceType, StudyMaterialItem } from '../../types/material'
 import { TimestampText } from '../../components/video/TimestampText'
 import { useVideoPlayer } from '../video/videoPlayer'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 type ChatHistoryItem = {
   id: string
@@ -171,18 +172,18 @@ export function TutorChatPanel({
     }
   }, [chatMode, selectedBlockId, allBlocks])
 
-  useEffect(() => {
-    void loadStatus()
-  }, [loadStatus])
+  useDeferredEffect(() => loadStatus(), [loadStatus])
 
-  useEffect(() => {
+  // Ao trocar de bloco/modo: recarrega histórico e sugestões e limpa a seleção e a última resposta.
+  useDeferredEffect(() => {
     void loadHistory()
     void loadSuggestedQuestions()
     setSelectedSourceIds([])
     setLatestAnswer(null)
   }, [loadHistory, loadSuggestedQuestions])
 
-  useEffect(() => {
+  // Modo universal começa com todos os blocos selecionados.
+  useDeferredEffect(() => {
     if (allBlocks.length > 0 && selectedUniversalBlockIds.length === 0) {
       setSelectedUniversalBlockIds(allBlocks.map((b) => b.id))
     }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { request } from '../../api/http'
 import { runCareerAgent } from '../../api/career'
 import {
@@ -9,6 +9,7 @@ import {
   SparklesIcon,
 } from '../../components/icons'
 import '../../styles/pages/career.css'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 type JobItem = {
   id: string
@@ -78,9 +79,7 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
     }
   }, [])
 
-  useEffect(() => {
-    void loadJobs()
-  }, [loadJobs])
+  useDeferredEffect(() => loadJobs(), [loadJobs])
 
   const handleRunAgent = async () => {
     setSearching(true)

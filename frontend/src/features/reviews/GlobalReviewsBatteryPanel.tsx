@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { request } from '../../api/http'
 import { answerQuestion, rescheduleQuestionReview } from '../../api/questions'
 import type { AnswerResult } from '../../api/questions'
 import { DiscursiveFeedbackCard } from '../questions/DiscursiveFeedbackCard'
 import type { QuestionAnswerPayload } from '../../api/questions'
 import '../../styles/pages/learning-panels.css'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 export type QuestionDifficulty = 'EASY' | 'INTERMEDIATE' | 'HARD'
 export type QuestionFormat = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'DISCURSIVE'
@@ -89,9 +90,7 @@ export function GlobalReviewsBatteryPanel({ onSelectBlock, onReviewCompleted }: 
     }
   }, [])
 
-  useEffect(() => {
-    void loadData()
-  }, [loadData])
+  useDeferredEffect(() => loadData(), [loadData])
 
   const startBattery = () => {
     if (questions.length === 0) return

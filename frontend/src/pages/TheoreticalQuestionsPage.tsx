@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { request } from '../api/http'
 import { answerQuestion, reevaluateAttempt } from '../api/questions'
 import type { AnswerResult } from '../api/questions'
@@ -7,6 +7,7 @@ import { DiscursiveFeedbackCard } from '../features/questions/DiscursiveFeedback
 import { SimuladoConfigModal } from '../features/questions/SimuladoConfigModal'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
+import { useDeferredEffect } from '../hooks/useDeferredEffect'
 
 export type QuestionDifficulty = 'EASY' | 'INTERMEDIATE' | 'HARD'
 export type QuestionFormat = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'DISCURSIVE'
@@ -119,9 +120,7 @@ export function TheoreticalQuestionsPage({
     }
   }, [mode, selectedBlockId, activeBlock, blocks])
 
-  useEffect(() => {
-    void loadQuestions()
-  }, [loadQuestions])
+  useDeferredEffect(() => loadQuestions(), [loadQuestions])
 
   const handleAnswerQuestion = async (q: StudyQuestion, optId?: string) => {
     setSubmittingId(q.id)

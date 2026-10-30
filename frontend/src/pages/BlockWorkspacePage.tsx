@@ -16,6 +16,7 @@ import type { StudyMaterialItem } from '../types/material'
 import '../styles/pages/block-workspace.css'
 import '../styles/pages/video.css'
 import type { StudyBlock } from './StudyBlocksPage'
+import { useDeferredEffect } from '../hooks/useDeferredEffect'
 
 type Props = {
   block: StudyBlock
@@ -89,9 +90,7 @@ export function BlockWorkspacePage({
     }
   }, [block.id, selectedMaterialId])
 
-  useEffect(() => {
-    void loadMaterials()
-  }, [loadMaterials])
+  useDeferredEffect(() => loadMaterials(), [loadMaterials])
 
   // Vídeos são processados em segundo plano: enquanto houver algum "processando", a lista se atualiza sozinha.
   const hasProcessing = materials.some((m) => m.processingStatus === 'PROCESSING')

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { request } from '../../api/http'
 import { LearningInsightsPanel } from './LearningInsightsPanel'
 import '../../styles/pages/learning-panels.css'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 type OverallPerformanceSummary = {
   totalAttempts: number
@@ -177,9 +178,7 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
     }
   }, [days, selectedBlockId, selectedTopicId, selectedDifficulty])
 
-  useEffect(() => {
-    void loadData()
-  }, [loadData])
+  useDeferredEffect(() => loadData(), [loadData])
 
   const toggleBlockExpanded = (blockId: string) => {
     setExpandedBlocks((prev) => ({

@@ -4,6 +4,7 @@ import { request } from '../api/http'
 import { CheckCircleIcon, ClockIcon, TargetIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/goals-sessions.css'
+import { useDeferredEffect } from '../hooks/useDeferredEffect'
 
 type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
 type SessionStatus = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
@@ -93,9 +94,7 @@ export function GoalsSessionsPage({ blocks, selectedBlockId, onSelectBlock }: Pr
     }
   }, [blockId])
 
-  useEffect(() => {
-    void load()
-  }, [load])
+  useDeferredEffect(() => load(), [load])
 
   // Atualiza o cronômetro das sessões em andamento a cada 30 s.
   const hasRunningSession = sessions.some((s) => s.status === 'IN_PROGRESS')

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { request } from '../../api/http'
 import '../../styles/pages/learning-insights.css'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 type Period = 'WEEK' | 'MONTH'
 
@@ -96,9 +97,7 @@ export function LearningInsightsPanel() {
     }
   }, [period])
 
-  useEffect(() => {
-    void loadInsights()
-  }, [loadInsights])
+  useDeferredEffect(() => loadInsights(), [loadInsights])
 
   function changePeriod(next: Period) {
     setPeriod(next)

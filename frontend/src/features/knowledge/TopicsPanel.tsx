@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../api/http'
 import '../../styles/pages/learning-panels.css'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 export type LearningState = 'NOT_STUDIED' | 'INSUFFICIENT_DATA' | 'LEARNING' | 'NEEDS_REVIEW' | 'CONSISTENT'
 export type KnowledgeTopicOrigin = 'MANUAL' | 'AI_EXTRACTED'
@@ -70,9 +71,7 @@ export function TopicsPanel({ blockId, questions, evidenceVersion, onTopicsChang
     }
   }, [blockId, onTopicsChanged])
 
-  useEffect(() => {
-    void loadTopics()
-  }, [loadTopics, evidenceVersion])
+  useDeferredEffect(() => loadTopics(), [loadTopics, evidenceVersion])
 
   const extractTopicsFromSources = async () => {
     setExtracting(true)

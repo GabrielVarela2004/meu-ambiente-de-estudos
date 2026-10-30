@@ -21,6 +21,7 @@ import { CareerPreferencesPage } from './pages/career/CareerPreferencesPage'
 import { CareerSkillsPage } from './pages/career/CareerSkillsPage'
 import { CareerSourcesPage } from './pages/career/CareerSourcesPage'
 import { CareerAgentSchedulePage } from './pages/career/CareerAgentSchedulePage'
+import { useDeferredEffect } from './hooks/useDeferredEffect'
 
 type StudyMaterial = {
   id: string
@@ -135,9 +136,7 @@ function App() {
     }
   }, [loadBlockCounts, loadGlobalReviews])
 
-  useEffect(() => {
-    void loadBlocks()
-  }, [loadBlocks])
+  useDeferredEffect(() => loadBlocks(), [loadBlocks])
 
   const loadMaterials = useCallback(async () => {
     if (!selectedBlockId) return
@@ -152,9 +151,7 @@ function App() {
     }
   }, [selectedBlockId])
 
-  useEffect(() => {
-    void loadMaterials()
-  }, [loadMaterials])
+  useDeferredEffect(() => loadMaterials(), [loadMaterials])
 
   const handleSaveBlock = async (
     form: { title: string; description: string; learningObjective: string },

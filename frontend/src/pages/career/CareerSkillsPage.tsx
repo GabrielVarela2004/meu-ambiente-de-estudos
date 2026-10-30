@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { request } from '../../api/http'
 import '../../styles/pages/career.css'
 import { CodeIcon, FileTextIcon, LayersIcon, SparklesIcon } from '../../components/icons'
+import { useDeferredEffect } from '../../hooks/useDeferredEffect'
 
 type CompetencyItem = {
   skillName: string
@@ -48,9 +49,7 @@ export function CareerSkillsPage() {
     }
   }
 
-  useEffect(() => {
-    void loadProfile()
-  }, [])
+  useDeferredEffect(() => loadProfile(), [])
 
   const handleGenerateAssessment = async (skillName: string) => {
     setGenerating(true)

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { request } from '../api/http'
 import { submitExerciseAttempt } from '../api/exercises'
 import { CodeIcon, FolderIcon, SparklesIcon, CheckCircleIcon } from '../components/icons'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
+import { useDeferredEffect } from '../hooks/useDeferredEffect'
 
 const difficultyLabels: Record<string, string> = {
   EASY: 'Fácil',
@@ -97,9 +98,7 @@ export function PracticalExercisesPage({
     }
   }, [mode, selectedBlockId, blocks])
 
-  useEffect(() => {
-    void loadExercises()
-  }, [loadExercises])
+  useDeferredEffect(() => loadExercises(), [loadExercises])
 
   const handleGenerateAi = async () => {
     const targetBlockId = selectedBlockId || (blocks.length > 0 ? blocks[0].id : null)
