@@ -35,7 +35,10 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
 - [x] Etapa 11 — CI no GitHub Actions: `.github/workflows/ci.yml` (backend com Java 21 Temurin, cache Maven e
   PostgreSQL 17 `estudos_test`; frontend com Node LTS, cache npm, `npm ci`, lint, build e `test:run`); `mvnw` executável
   no Git; badge no README.
-- [ ] Etapa 12 — Telas de Metas e Sessões
+- [x] Etapa 12 — Telas de Metas e Sessões: a tela (`pages/GoalsSessionsPage.tsx`, item "Metas e Sessões" na Sidebar,
+  metas com progresso e arquivamento, sessões planejar/iniciar/concluir/cancelar com cronômetro) e `api/goals.ts`
+  já existiam desde 2026-10-29; faltavam os testes de contrato de `api/goals.ts` (9 novos em `api/contracts.test.ts`,
+  rotas e corpos conferidos em `StudyGoalController` e `StudySessionController`). Frontend 46 testes, backend 237.
 - [ ] Etapa 13 — Documentação
 - [ ] Etapa 14 — Decisões de arquitetura (só registrar)
 
