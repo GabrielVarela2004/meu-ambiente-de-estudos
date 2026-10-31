@@ -13,6 +13,10 @@ const classificationLabels: Record<AnswerClassification, string> = {
 }
 
 const criteriaLabels: Record<string, string> = {
+  conceptualPrecision: 'Precisão conceitual e lógica',
+  practicalBehavior: 'Comportamento prático e casos de borda',
+  technicalVocabulary: 'Vocabulário técnico',
+  // Critérios do modelo anterior: tentativas antigas continuam com rótulo legível.
   conceptualAccuracy: 'Exatidão conceitual',
   essentialCoverage: 'Conceitos essenciais',
   depth: 'Profundidade',

@@ -12,16 +12,17 @@ import java.util.regex.Pattern;
  */
 public final class DiscursiveEvaluationRules {
 
-	/** Pesos da nota geral (somam 100). */
+	/**
+	 * Pesos da nota geral (métrica de rigorosidade, somam 100): precisão conceitual e lógica (rigor alto,
+	 * inegociável), comportamento prático e casos de borda (rigor médio) e vocabulário técnico (rigor baixo,
+	 * flexível — sinônimos equivalentes contam).
+	 */
 	static final Map<String, Integer> WEIGHTS = Map.of(
-			"conceptualAccuracy", 30,
-			"essentialCoverage", 25,
-			"depth", 20,
-			"terminology", 15,
-			"noErrors", 10);
+			"conceptualPrecision", 50,
+			"practicalBehavior", 30,
+			"technicalVocabulary", 20);
 
-	static final List<String> CRITERIA = List.of("conceptualAccuracy", "essentialCoverage", "depth", "terminology",
-			"noErrors");
+	static final List<String> CRITERIA = List.of("conceptualPrecision", "practicalBehavior", "technicalVocabulary");
 
 	/** Penalização da nota geral quando há afirmação conceitualmente errada. */
 	static final int CONCEPTUAL_ERROR_PENALTY = 30;
@@ -104,7 +105,7 @@ public final class DiscursiveEvaluationRules {
 			// Lista de palavras-chave sem explicação nunca vale como resposta.
 			classification = QuestionEvaluationStatus.INCORRECT;
 			overall = Math.min(overall, 30);
-		} else if (hasConceptualError && scores.get("conceptualAccuracy") < PARTIAL_THRESHOLD) {
+		} else if (hasConceptualError && scores.get("conceptualPrecision") < PARTIAL_THRESHOLD) {
 			classification = QuestionEvaluationStatus.INCORRECT;
 		} else if (overall >= rigor.correctThreshold() && !capAtPartial) {
 			classification = QuestionEvaluationStatus.CORRECT;

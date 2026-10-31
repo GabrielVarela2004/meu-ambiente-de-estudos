@@ -94,6 +94,8 @@ Resumo das regras gerais do `docs/VISAO-PRODUTO.md` (leia o documento antes de c
   frontend. Só avançar com tudo passando.
 - Um commit por etapa (ou subitem), Conventional Commits em português. Não faça push manual: o hook Stop
   (`.claude/hooks/auto-commit-push.sh`) faz commit e push ao fim de cada resposta — decisão D1, mantida pelo usuário.
+- Fluxo padrão de entrega (definido pelo usuário em 2026-10-31): implementar em branch própria e, ao concluir a
+  implementação com todos os testes passando, fazer commit, merge para a `master` e push — sem pedir confirmação.
 - Nenhuma chave real em código, testes ou commits; nenhum teste chama APIs externas reais.
 - Pontos de decisão: não implementar; registrar em `docs/DECISOES-PENDENTES.md` (contexto, opções, prós/contras,
   recomendação), marcar `[!]` e seguir.

@@ -25,3 +25,6 @@ hs_err_pid*.log
 .claude-glm/
 *.dpapi
 *zai-key*
+
+# Pasta de trabalho do segundo agente (git worktree)
+.worktrees/

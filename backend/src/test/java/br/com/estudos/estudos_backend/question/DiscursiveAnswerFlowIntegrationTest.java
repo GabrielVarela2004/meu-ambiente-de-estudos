@@ -78,7 +78,7 @@ class DiscursiveAnswerFlowIntegrationTest {
 
 	private static DiscursiveEvaluationRules.Result result(QuestionEvaluationStatus status, int score) {
 		return new DiscursiveEvaluationRules.Result(status, score,
-				Map.of("conceptualAccuracy", 80, "essentialCoverage", 60, "depth", 60, "terminology", 70, "noErrors", 100),
+				Map.of("conceptualPrecision", 70, "practicalBehavior", 60, "technicalVocabulary", 70),
 				List.of("Citou o hashCode"), List.of("equals compara os objetos"), List.of("balde"), List.of(),
 				"Explique o papel do equals.", false);
 	}
@@ -91,21 +91,21 @@ class DiscursiveAnswerFlowIntegrationTest {
 				.andExpect(jsonPath("$[0].explanation").doesNotExist());
 
 		when(discursiveAnswerEvaluator.evaluate(any(), eq(EvaluationRigor.RIGOROSO)))
-				.thenReturn(result(QuestionEvaluationStatus.PARTIAL, 68));
+				.thenReturn(result(QuestionEvaluationStatus.PARTIAL, 67));
 
 		mockMvc.perform(post(questions() + "/" + questionId + "/answers").header(CurrentUserResolver.USER_HEADER, userId)
 				.contentType(MediaType.APPLICATION_JSON).content("{\"discursiveAnswer\":\"Ele usa o hashCode.\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.correct").value(false))
 				.andExpect(jsonPath("$.classification").value("PARTIAL"))
-				.andExpect(jsonPath("$.scorePercent").value(68))
+				.andExpect(jsonPath("$.scorePercent").value(67))
 				.andExpect(jsonPath("$.feedback.modelAnswer").value("O HashSet usa hashCode e equals para não inserir objetos iguais."))
 				.andExpect(jsonPath("$.feedback.explanation").value("Usa hashCode e equals."))
 				.andExpect(jsonPath("$.feedback.commonMistakes").isArray())
 				.andExpect(jsonPath("$.feedback.missingEssentialConcepts[0]").value("equals compara os objetos"))
 				.andExpect(jsonPath("$.feedback.missingTerms[0]").value("balde"))
 				.andExpect(jsonPath("$.feedback.correctPoints[0]").value("Citou o hashCode"))
-				.andExpect(jsonPath("$.feedback.criteriaScores.essentialCoverage").value(60))
+				.andExpect(jsonPath("$.feedback.criteriaScores.practicalBehavior").value(60))
 				.andExpect(jsonPath("$.feedback.improvementTip").value("Explique o papel do equals."))
 				.andExpect(jsonPath("$.feedback.rigorLevel").value("RIGOROSO"));
 

@@ -229,6 +229,31 @@ apaga dados (tabelas `knowledge_*`/`topic_*` e colunas `topic_id` ficam sem uso;
 - [x] 7. CLAUDE.md e documentação atualizados.
 - [!] Fase 2 (apagar tabelas e colunas de tópicos): aguarda decisão — D4 em `docs/DECISOES-PENDENTES.md`.
 
+## Novo modelo de avaliação das questões teóricas (pedido do usuário em 2026-10-31, fora da sequência de etapas)
+
+Métrica de rigorosidade: 50% Precisão Conceitual e Lógica (rigor alto/inegociável), 30% Comportamento Prático e
+Casos de Borda (rigor médio), 20% Vocabulário Técnico e Palavras-Chave (rigor baixo/flexível). Escala: CORRETA ≥ 80,
+PARCIAL 50–79, INCORRETA < 50. Feedback no estilo tech lead revisando dev júnior (primeiro o que acertou, depois
+refinamentos com exemplos curtos), focado na compreensão semântica e funcional, sem exigir repetição literal do
+material. Tentativas antigas continuam legíveis (rótulos dos critérios anteriores mantidos no frontend).
+
+- [x] 1. Plano gravado aqui antes de codificar.
+- [x] 2. `DiscursiveEvaluationRules`: critérios passam a `conceptualPrecision` (50), `practicalBehavior` (30) e
+      `technicalVocabulary` (20); INCORRETA também quando `conceptualPrecision` < 50 com erro conceitual; caps
+      mantidos (essencial ausente/superficial → no máximo PARCIAL; erro conceitual → penalização forte; lista de
+      palavras-chave → INCORRETA; manipulação → teto 50).
+- [x] 3. `EvaluationRigor`: CORRETA a partir de 80 nos dois níveis; RIGOROSO segue exigindo vocabulário tecnicamente
+      equivalente (sinônimos contam) para CORRETA.
+- [x] 4. `DiscursiveAnswerEvaluator`: prompt e esquema JSON com os 3 critérios e pesos, avaliação semântica
+      (sinônimos equivalentes valem), feedback direto e construtivo estilo tech lead, comportamento prático avaliado
+      conforme o que a resposta-modelo e a rubrica cobrem.
+- [x] 5. `AiQuestionGeneratorService`: rubrica pede comportamento esperado na prática e casos de borda nos
+      conceitos complementares.
+- [x] 6. Frontend: rótulos dos critérios novos em `DiscursiveFeedbackCard` (antigos mantidos para o histórico) e
+      textos da `EvaluationRigorPanel` com a nova escala e os pesos.
+- [x] 7. Testes: unitários do avaliador e de integração com os novos critérios/pesos; teste de tela atualizado.
+- [x] 8. `mvnw test` (237 testes OK), `lint` OK, `build` OK, `test:run` (46 testes OK).
+
 ## Observações
 
 - O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta.

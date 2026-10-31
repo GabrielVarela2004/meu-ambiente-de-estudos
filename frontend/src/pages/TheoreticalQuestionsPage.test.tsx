@@ -46,7 +46,7 @@ const partialAnswer: AnswerResult = {
     attemptId: 'a1',
     classification: 'PARTIAL',
     scorePercent: 68,
-    criteriaScores: { conceptualAccuracy: 80, essentialCoverage: 55 },
+    criteriaScores: { conceptualPrecision: 75, practicalBehavior: 55 },
     correctPoints: ['Citou o hashCode'],
     missingEssentialConcepts: ['equals compara os objetos'],
     missingTerms: ['balde'],
