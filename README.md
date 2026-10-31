@@ -2,316 +2,210 @@
 
 [![CI](https://github.com/GabrielVarela2004/meu-ambiente-de-estudos/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/GabrielVarela2004/meu-ambiente-de-estudos/actions/workflows/ci.yml)
 
-Plataforma pessoal para organização e aprofundamento de estudos baseada em materiais próprios (estilo *NotebookLM*). O sistema organiza os estudos em blocos independentes, importa documentos em múltiplos formatos e transcrições de vídeos do YouTube, fundamenta o chat com IA e a geração de questões exclusivamente no conteúdo ativo do estudante, rastreia retenção por repetição espaçada e mapa de tópicos.
+Plataforma pessoal de estudos fundamentada nos seus próprios materiais (estilo *NotebookLM*): blocos de estudo,
+fontes (arquivos, páginas web e vídeos do YouTube), chat com IA que só usa as fontes ativas, questões teóricas
+abertas corrigidas com rubrica, exercícios práticos com correção automática, repetição espaçada, metas e sessões,
+desempenho por bloco e um radar de vagas.
 
-O projeto foi construído sobre uma **Arquitetura Modular Inspirada em Hexagonal/Ports & Adapters**, com persistência em **PostgreSQL 17**, versionamento de schema via **Flyway** (migrações V1 a V21), backend em **Java 21 / Spring Boot 4** e frontend reativo em **React 19 / TypeScript**.
+Backend em **Java 21 / Spring Boot 4** com **PostgreSQL 17** e **Flyway** (migrações `V1` a `V32`); frontend em
+**React 19 / TypeScript / Vite**. Arquitetura em [`ARCHITECTURE.md`](ARCHITECTURE.md); estado atual em
+[`PROJECT_STATUS.md`](PROJECT_STATUS.md); problemas conhecidos em [`docs/AUDITORIA.md`](docs/AUDITORIA.md).
 
 ---
 
-## 0. Estado Atual do Projeto (auditoria de 29/10/2026)
+## 1. Funcionalidades
 
-> O relatório completo está em [`docs/AUDITORIA.md`](docs/AUDITORIA.md). Leia-o antes de evoluir o projeto.
+- **Blocos de estudo** com fontes, chat, questões, exercícios, metas e sessões.
+- **Fontes:** PDF, DOCX, PPTX, Markdown, texto e código-fonte (Java, Python, TS, SQL e outros); páginas web;
+  vídeos do YouTube. Só as fontes **ativas no chat** entram no contexto da IA.
+- **Chat** do bloco e universal (vários blocos), com histórico e citações das fontes.
+- **Questões teóricas abertas** com resposta-modelo e rubrica, corrigidas com rigor pela IA (seção 6).
+- **Exercícios práticos** com tutoria por chat e correção automática de código Java em contêiner isolado.
+- **Repetição espaçada** e tela de revisão.
+- **Desempenho Global:** KPIs, linha do tempo, detalhamento **por bloco** (tentativas, acertos, parciais, nota média,
+  precisão), análises semanais/mensais e recomendações. Todos os números são calculados no backend.
+- **Metas e Sessões** por bloco (progresso, cronômetro da sessão ativa).
+- **Carreira:** vagas reais de Remotive e Arbeitnow, compatibilidade calculada contra os seus blocos (cada bloco é
+  uma competência), análise da vaga por IA, perfil profissional e agente agendado.
+- **IA com vários provedores:** OpenAI, Anthropic (Claude) e Google Gemini, escolhidos por operação.
 
-**Funciona de ponta a ponta:** blocos de estudo; fontes por texto e YouTube; chat do bloco e universal com
-histórico e citações; geração de exercícios; responder questões teóricas; painel de Desempenho Global; mapeamento
-de tópicos; preferências e busca manual de vagas.
-
-**Problemas conhecidos (principais):**
-- O frontend chama **rotas ou formatos diferentes** dos expostos pelo backend em 11 ações: restaurar bloco, gerar
-  simulado, ativar fonte no chat, upload de arquivo, responder e adiar na tela de revisão, enviar resposta de
-  exercício prático, "buscar agora", status de vaga, avaliar competências e ativar fonte de vagas. Detalhes na tabela 4.2 da auditoria.
-- O agendamento automático de vagas está ativo (`app.scheduling.enabled`, padrão `true`).
-- Não há autenticação; o frontend não envia `X-Study-User-Id` (todo uso cai em `default-user`).
-- Upload limitado a **10 MB** para PDF, DOCX e PPTX e **2 MB** para texto e código-fonte (`UPLOAD_MAX_FILE_SIZE` / `UPLOAD_MAX_REQUEST_SIZE`).
-- **Fórum** está oculto do menu (era apenas visual). **Metas e Sessões** têm tela própria na barra lateral.
-- **IA com vários provedores:** OpenAI, Anthropic (Claude) e Google Gemini. Em Configurações › Provedores de IA escolhe-se o provedor de cada operação (chat, questões, exercícios, tópicos), o fallback, o modelo e o limite diário; o consumo dos últimos 7 dias aparece na mesma tela. As chaves ficam só no `.env` (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
-- Plataforma de **uso individual** (sem login).
-- Padronização visual concluída: tokens em `styles/tokens.css`, componentes em `styles/components.css` e estilos por página em `styles/pages/`.
+Uso individual, sem login: todo dado pertence ao usuário `default-user`.
 
 ### Estrutura do repositório
 
 ```
-backend/    Spring Boot (pacotes por domínio: studyblock, material, chat, question, exercise,
-            knowledge, learning, goal, studysession, security, career)
-frontend/   React + Vite
-  src/App.tsx              estado global e troca de páginas (sem React Router)
-  src/components/Sidebar   navegação
-  src/components/ui/       Button, IconButton, FormField, PageHeader, Spinner
-  src/styles/tokens.css    cores, espaçamentos, tipografia e camadas (fonte única)
-  src/styles/components.css design system: botões, campos, cards, abas, badges, alertas, modais, tabelas
-  src/App.css              layout (shell, sidebar, drawer do Tutor IA)
-docs/       auditoria e documentação técnica
+backend/    Spring Boot — pacotes por domínio: studyblock, material, chat, question, exercise, learning,
+            goal, studysession, career (portas e adaptadores), ai, security, config, common
+frontend/   React + Vite — App.tsx (troca de páginas, sem React Router), components/, pages/, features/,
+            api/ (funções tipadas + testes de contrato), styles/ (tokens.css, components.css, pages/)
+runner/     imagem Docker que corrige os exercícios práticos em Java
+docs/       visão do produto, plano de execução, decisões pendentes e auditoria
 ```
 
-### Design system (frontend)
-- Todas as cores ficam em `src/styles/tokens.css`. **Não use cores hexadecimais diretamente nas telas.**
-- Botões: `btn btn-primary | btn-secondary | btn-ghost | btn-danger | btn-ghost-danger`, tamanhos `btn-sm` e `btn-xs`.
-  Não existe estilo global para `<button>`: todo botão precisa de uma classe.
-- Campos: `form-input`, `form-select`, `form-textarea`, agrupados em `form-field-group`.
-- Tutor IA: botão flutuante abre um drawer lateral (440px; tela cheia no celular), que fecha com Esc ou clique fora.
-- Em telas de até 768px a Sidebar vira menu deslizante, aberto pelo botão da barra superior.
+---
+
+## 2. Pré-requisitos
+
+1. **JDK 21** ou superior.
+2. **Node.js LTS** (20 ou 22) e `npm`.
+3. **Docker Desktop** (PostgreSQL e, opcionalmente, o avaliador de exercícios).
+4. Chave de pelo menos um provedor de IA (opcional: sem chave, os recursos de IA respondem 503 e o resto funciona).
 
 ---
 
-## 1. Arquitetura da Integração com IA (OpenAI)
+## 3. Como rodar
 
-A integração com a OpenAI segue rigorosamente os princípios de baixo acoplamento e segurança:
-
-```
-[ Frontend (React/TypeScript) ]
-          │  (Apenas endpoints da aplicação - nenhuma chave secreta no cliente)
-          ▼
-[ REST Controllers (/api/chat, /api/questions, etc.) ]
-          │
-[ Application Services (OpenAiChatService, AiQuestionGeneratorService) ]
-          │
-          ▼
-[ Porta do Domínio: AiTutorProvider ]  ◄── Abstração agnóstica de provedor
-          │
-          ▼
-[ Adaptador: OpenAiTutorProvider ]
-    ├── HttpClient nativo Java (timeouts configuráveis)
-    ├── Sliding Window Rate Limiter local (thread-safe, anti-estouro de cota)
-    ├── Sanitização e delimitação de dados (anti-Prompt Injection)
-    ├── JSON Object Mode estruturado
-    └── Mapeamento resiliente de códigos de erro HTTP
-```
-
-### Características de Segurança e Resiliência
-- **Chave Oculta**: `OPENAI_API_KEY` reside exclusivamente no backend; nunca é enviada ao navegador, nunca é impressa em logs e nunca é exposta em payloads de erro.
-- **Desacoplamento Transacional**: as chamadas de rede à OpenAI são executadas **fora** de transações `@Transactional`, impedindo o bloqueio de conexões do pool JDBC do PostgreSQL durante a latência da API.
-- **Isolamento de Contexto**: o tutor e os geradores utilizam exclusivamente as fontes ativas pertencentes ao bloco de estudo autorizado.
-- **Proteção contra Injeção de Instruções**: delimitadores `[INÍCIO DOS MATERIAIS — DADOS NÃO CONFIÁVEIS]` e sanitização impedem que comandos embutidos em materiais manipulem o comportamento do sistema.
-- **Substituição Fácil de Provedores**: para adicionar novos provedores (Anthropic Claude, Google Gemini ou modelos locais como Ollama), basta criar um componente implementando a interface [`AiTutorProvider`](file:///backend/src/main/java/br/com/estudos/estudos_backend/chat/AiTutorProvider.java).
-
----
-
-## 2. Tecnologias Utilizadas
-
-- **Backend**: Java 21 LTS, Spring Boot 4, Spring Web, Spring Data JPA, Bean Validation, Apache PDFBox 3.0.3, Flyway Migration.
-- **Frontend**: React 19, TypeScript, Vite, oxlint, CSS com tokens de design (sem React Router e sem Tailwind).
-- **Banco de Dados**: PostgreSQL 17 (via Docker Compose, bancos `estudos` e `estudos_test`).
-- **Testes Automatizados**: JUnit 5, Mockito, Spring MockMvc (108 testes automatizados, 100% offline, sem custos de API). `ContractEndpointsIntegrationTest` cobre as rotas usadas pelo frontend que foram criadas na Etapa A.
-
----
-
-## 3. Pré-requisitos
-
-1. **Java Development Kit (JDK) 21** ou superior instalado (`java -version`).
-2. **Node.js LTS** (versão 20 ou 22) e `npm` (`node -v`).
-3. **Docker Desktop** ativo para execução do container PostgreSQL.
-4. **Chave de API da OpenAI** (opcional para testes e desenvolvimento; necessária apenas para respostas ao vivo).
-
----
-
-## 4. Configuração Passo a Passo
-
-### 4.1. Subir o Banco de Dados (PostgreSQL)
-
-Na raiz do projeto, inicie o container PostgreSQL:
+### 3.1. Tudo de uma vez (Windows)
 
 ```powershell
-docker compose up -d postgres
+.\start-dev.ps1      # ou start-dev.bat
 ```
 
-O container inicializará na porta `5432` com usuário `estudos` e senha `estudos-dev-only`.
+Abre o Docker Desktop se preciso, sobe o PostgreSQL, inicia backend e frontend em janelas próprias com reinício
+automático (`dev-restart-loop.ps1`; o backend roda com `-Xmx768m`) e espera o `/actuator/health` antes de abrir o
+navegador em `http://localhost:5173`.
 
-### 4.1.1. Construir o avaliador de exercícios práticos (Docker)
+### 3.2. Passo a passo
 
-Os exercícios em Java são corrigidos automaticamente: o código roda num contêiner descartável, sem rede e com limites de memória, CPU e tempo, contra os testes JUnit gerados com o exercício. O avaliador também verifica a aplicação do conceito (ex.: `@Override`) e regras de boas práticas. Construa a imagem uma vez:
+```powershell
+docker compose up -d postgres          # porta 5432, usuário estudos
+copy .env.example .env                 # depois preencha as chaves (seção 4)
+
+cd backend
+.\mvnw.cmd spring-boot:run             # porta 8080; aplica as migrações Flyway
+
+cd ..\frontend
+npm install
+npm run dev                            # porta 5173; proxy /api → 8080
+```
+
+### 3.3. Avaliador de exercícios práticos (opcional)
 
 ```powershell
 docker build -t estudos-java-runner:1 runner/java
 ```
 
-Sem a imagem (ou com o Docker parado), os exercícios continuam funcionando com autoavaliação. Para desativar a correção automática, use `RUNNER_ENABLED=false`.
+O código roda num contêiner descartável, sem rede e com limites de memória, CPU e tempo, contra os testes JUnit
+gerados com o exercício (a solução de referência é executada antes de liberar a correção). Nota: corretude 50%,
+conceito 25% e boas práticas 25%, multiplicada pela autonomia (cai com as ajudas pedidas à tutora). Sem a imagem,
+com o Docker parado ou com `RUNNER_ENABLED=false`, o exercício usa autoavaliação.
 
-A IA gera os testes e a solução de referência junto com o exercício, e a solução é executada antes de liberar a correção automática. O Gemini (gratuito) já tem limite de resposta suficiente; com a OpenAI, aumente `OPENAI_MAX_OUTPUT_TOKENS` para ~4000.
+---
 
-Nota de cada tentativa prática: corretude pelos testes (50%), conceito (25%) e boas práticas (25%), multiplicada pela autonomia, que cai conforme as ajudas pedidas à tutora no chat do exercício. O desempenho de um tópico é 70% prática + 30% teoria.
+## 4. Configuração da IA (`.env` na raiz)
 
-### 4.2. Configurar Variáveis de Ambiente
+As chaves ficam só no `.env` (fora do Git) e nunca vão ao navegador. Em **Configurações › Provedores de IA** você
+escolhe o provedor e o modelo de cada operação, liga o fallback, define um limite diário e vê o consumo dos últimos
+7 dias. `AI_PROVIDER` define o provedor padrão das operações sem escolha na tela.
 
-Copie o arquivo de exemplo na raiz do projeto:
+| Provedor | Variáveis principais |
+|---|---|
+| OpenAI | `OPENAI_ENABLED`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_MAX_OUTPUT_TOKENS`, `OPENAI_MAX_REQUESTS_PER_MINUTE` |
+| Anthropic | `ANTHROPIC_ENABLED`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT` |
+| Gemini | `GEMINI_ENABLED`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_REQUEST_TIMEOUT_SECONDS`, `GEMINI_MAX_REQUESTS_PER_MINUTE` |
 
-```powershell
-copy .env.example .env
-```
+### Google Gemini (chave gratuita)
 
-Abra o arquivo `.env` e configure suas preferências:
-
-```env
-# Ativação e Chave da API
-OPENAI_ENABLED=true
-OPENAI_API_KEY=sk-proj-sua-chave-aqui
-
-# Modelo padrão recomendado (baixo custo, alta velocidade e JSON mode)
-OPENAI_MODEL=gpt-4o-mini
-
-# Limites e Timeouts
-OPENAI_CONNECT_TIMEOUT_SECONDS=10
-OPENAI_REQUEST_TIMEOUT_SECONDS=45
-OPENAI_MAX_OUTPUT_TOKENS=1200
-OPENAI_MAX_INPUT_CHARS=40000
-OPENAI_MAX_REQUESTS_PER_MINUTE=20
-```
-
-> **Nota de Degradação Segura:** Se a `OPENAI_API_KEY` permanecer em branco, a plataforma iniciará normalmente em modo offline. As funcionalidades de IA retornarão HTTP 503 com mensagem informativa amigável na interface, e a geração de simulados utilizará a extração heurística baseada nos materiais locais.
-
-### 4.3. Usar o Google Gemini (chave gratuita)
-
-O Gemini tem plano gratuito, suficiente para estudar com o chat, gerar questões e extrair tópicos.
-
-1. Acesse [Google AI Studio › API keys](https://aistudio.google.com/apikey) com sua conta Google.
-2. Clique em **Create API key** (crie ou escolha um projeto do Google Cloud quando pedir) e copie a chave.
-3. No arquivo `.env` **da raiz do projeto** (o mesmo copiado do `.env.example`), preencha:
+1. Gere a chave em [Google AI Studio › API keys](https://aistudio.google.com/apikey).
+2. No `.env`:
    ```env
    GEMINI_API_KEY=cole-a-chave-aqui
-   # Para usar o Gemini em todas as operações que não têm provedor escolhido na tela de Configurações:
    AI_PROVIDER=gemini
    ```
-4. Reinicie o backend. Em **Configurações › Provedores de IA** o Gemini aparece como disponível; ali dá para
-   escolher o provedor de cada operação, ligar o fallback e definir um limite diário de chamadas.
+3. Reinicie o backend; o Gemini aparece como disponível em Configurações › Provedores de IA.
 
-Observações:
-- A chave fica só no `.env` (que não vai para o Git) e é enviada ao Google no cabeçalho `x-goog-api-key`,
-  nunca na URL nem ao navegador.
-- Modelo padrão: `gemini-3.8-flash` (`GEMINI_MODEL`); o `gemini-3.5-flash-lite` é mais leve. Os limites do plano
-  gratuito (requisições por minuto e por dia) variam por modelo e aparecem em
-  [AI Studio › Rate limits](https://aistudio.google.com/rate-limit). O backend limita a 10 chamadas por minuto
-  (`GEMINI_MAX_REQUESTS_PER_MINUTE`).
-- Quando a cota acaba, a tela mostra se foi o limite por minuto (aguarde um minuto) ou a cota diária, que é
-  renovada à meia-noite do horário do Pacífico (por volta das 4h ou 5h em Brasília).
-- A IA só usa as fontes do bloco que estão **ativas no chat**, e o conteúdo delas vai marcado como dado, nunca
-  como instrução.
+Modelo padrão `gemini-3.8-flash`. O backend limita o Gemini a 10 chamadas por minuto; a tela diz se o erro foi o
+limite por minuto ou a cota diária (renovada à meia-noite do Pacífico). A chave vai no cabeçalho
+`x-goog-api-key`, nunca na URL.
+
+Respostas repetíveis (resumos, correções, análises) vêm de um cache; geração de questões e chat não usam cache.
+Chamadas de IA ficam fora de transações e o conteúdo das fontes vai delimitado como dado não confiável.
 
 ---
 
-## 5. Execução do Projeto
+## 5. Vídeos do YouTube
 
-### 5.1. Iniciar o Backend
+Em **Adicionar Conteúdo › YouTube**, cole um ou vários links (há prévia com miniatura, título e canal). O vídeo é
+processado em segundo plano:
 
-```powershell
-cd backend
-.\mvnw.cmd spring-boot:run
-```
+1. **Análise por IA (Gemini):** o vídeo é analisado **uma única vez** (resumo, assuntos principais e anotações com
+   o minuto de cada trecho, inclusive código mostrado na tela).
+2. **Plano B, transcrição:** sem Gemini configurado, sem cota ou com o vídeo indisponível para análise, usa as
+   legendas do vídeo.
+3. Sem análise nem legendas, a fonte fica com erro e uma mensagem explicando o motivo (é possível reprocessar).
 
-O backend executará as migrações Flyway automaticamente e subirá na porta `http://localhost:8080`.
-
-### 5.2. Iniciar o Frontend
-
-Em outro terminal:
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-A interface abrirá em `http://localhost:5173`, com proxy reverso configurado para repassar chamadas `/api` ao backend.
+Limites: só vídeos **públicos** podem ser analisados pelo Gemini; o plano gratuito permite cerca de 8 horas de vídeo
+por dia. Playlists inteiras não são importadas (decisão D2 em `docs/DECISOES-PENDENTES.md`).
 
 ---
 
-## 6. Testes Automatizados
+## 6. Correção das questões teóricas
 
-A suíte de testes foi projetada para ser **100% offline e segura**, simulando o comportamento da OpenAI por meio de mocks sem realizar chamadas pagas à internet.
+As questões teóricas são sempre **abertas**. Na geração, a IA grava, antes de a questão ser exibida, a
+resposta-modelo e a **rubrica** (conceitos essenciais e complementares, termos do material e erros comuns), e cita
+um trecho que precisa existir no material; questão sem fundamento no material é descartada.
 
-**Integração contínua:** a cada push e pull request na `master`, o GitHub Actions (`.github/workflows/ci.yml`) roda os
-testes do backend contra um PostgreSQL 17 (banco `estudos_test`) e, no frontend, `npm ci`, lint, build e
-`npm run test:run`. Nenhuma chave de IA é usada no CI.
+Na resposta, a IA compara o texto com a rubrica e o backend classifica:
 
-### Executar todos os testes do backend (108 testes):
+| Rigor (Configurações) | CORRETA quando |
+|---|---|
+| **Rigoroso** (padrão) | nota ≥ 85, todos os conceitos essenciais e a terminologia do material |
+| **Moderado** | nota ≥ 75 e todos os conceitos essenciais |
 
-> Os testes usam o banco `estudos_test` e **apagam as tabelas** dele. Crie-o uma única vez com:
+O resultado pode ser CORRETA, PARCIAL ou INCORRETA, com o que faltou e os equívocos. Sem IA disponível, a tentativa
+fica **pendente** e pode ser corrigida depois (nunca é corrigida por palavras-chave). Notas, percentuais e médias são
+sempre calculados no backend.
+
+---
+
+## 7. Testes
+
+> Os testes do backend usam o banco `estudos_test` e **apagam as tabelas** dele. Crie-o uma vez:
 > `docker exec programa-estudos-ia-postgres psql -U estudos -d postgres -c "CREATE DATABASE estudos_test OWNER estudos;"`
 
 ```powershell
-cd backend
-.\mvnw.cmd test
+cd backend;  .\mvnw.cmd test        # 237 testes (1 ignorado), contra o PostgreSQL real
+cd frontend; npm run lint; npm run build; npm run test:run   # 46 testes (Vitest + Testing Library)
 ```
 
-### Principais suítes de teste:
-- `Etapa7CompletePlatformE2EIntegrationTest`: Teste E2E cobrindo ciclo de vida completo (Bloco -> Material -> Tópicos -> Questão HARD e Discursiva -> Snapshots Imutáveis -> Desempenho Global -> Repetição Espaçada -> Isolamento Multi-Inquilino).
-- `Etapa6SpacedRepetitionIntegrationTest`: Validação do algoritmo adaptativo baseado em dificuldade e priorização na bateria de revisão.
-- `Etapa5GlobalPerformanceIntegrationTest`: Cálculo de KPIs agregados, métricas por bloco/tópico e histórico temporal.
-- `UniversalMultiBlockChatIntegrationTest`: Síntese cruzada entre múltiplos blocos autorizados.
-- `OpenAiSecurityAndErrorsTest`: 10 testes cobrindo rate limit, mapeamento de códigos HTTP (200, 401, 429, 500, 502, 504), sanitização e proteção de credenciais.
-- `MaterialFileStorageTest`: 10 testes cobrindo extração de PDF (PDFBox), DOCX (XML anti-XXE e zip-bomb), Markdown, TXT e higienização de tokens.
+Nenhum teste chama APIs externas reais: provedores de IA, YouTube, Remotive e Arbeitnow são simulados. No frontend,
+`api/contracts.test.ts` confere a rota, o método e o corpo de cada função tipada contra os controllers.
 
-### Validar build e lint do frontend:
+**CI:** a cada push e pull request na `master`, o GitHub Actions (`.github/workflows/ci.yml`) roda os testes do
+backend contra um PostgreSQL 17 e, no frontend, `npm ci`, lint, build e `npm run test:run`. Nenhuma chave de IA é
+usada no CI.
 
-```powershell
-cd frontend
-cmd /c "npm run lint && npm run build"
+Com o Cloudflare WARP ativo, o Maven falha em TLS ao baixar dependências: use
+`$env:MAVEN_OPTS='-Djavax.net.ssl.trustStoreType=Windows-ROOT'` uma vez e depois `.\mvnw.cmd -o test`.
+
+---
+
+## 8. Verificar a API
+
+```bash
+curl http://localhost:8080/actuator/health     # banco e provedores de IA (sem chaves)
+curl http://localhost:8080/api/chat/status     # {"providerName": "...", "configured": true|false, "model": "..."}
 ```
 
 ---
 
-## 7. Como Testar a Conexão e a API
+## 9. Erros comuns
 
-### 7.1. Verificar o Status do Provedor de IA
-
-```bash
-curl http://localhost:8080/api/chat/status
-```
-
-Resposta quando não configurado:
-```json
-{
-  "providerName": "OpenAI",
-  "configured": false,
-  "model": "gpt-4o-mini"
-}
-```
-
-Resposta quando configurado:
-```json
-{
-  "providerName": "OpenAI",
-  "configured": true,
-  "model": "gpt-4o-mini"
-}
-```
-
-### 7.2. Fazer uma Pergunta ao Tutor via API
-
-```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "Explique o conceito de injeção de dependências.",
-    "studyBlockId": "ID-DO-BLOCO-AQUI"
-  }'
-```
-
----
-
-## 8. Tratamento de Erros Comuns e Soluções
-
-| Código HTTP | Causa Provável | Solução |
+| Código | Causa provável | Solução |
 | :--- | :--- | :--- |
-| **503 Service Unavailable** | `OPENAI_API_KEY` ausente, em branco ou chave revogada pela OpenAI. | Verifique o `.env`, certifique-se de que a variável `OPENAI_API_KEY` contém uma chave válida e reinicie o backend. |
-| **429 Too Many Requests** | Limite de requisições por minuto atingido (local: 20 req/min na OpenAI, 10 no Gemini) ou cota do provedor. | Aguarde alguns segundos antes de enviar nova mensagem. Na OpenAI, verifique os créditos em platform.openai.com. No Gemini gratuito, a mensagem indica se é o limite por minuto ou a cota diária (renovada à meia-noite do Pacífico). |
-| **502 Bad Gateway** | Resposta da OpenAI malformada ou instabilidade no serviço da OpenAI. | Tente novamente em instantes. O backend descarta respostas corrompidas para não persistir dados inválidos. |
-| **504 Gateway Timeout** | A OpenAI demorou mais do que o tempo limite configurado (padrão 45s). | Reduza o tamanho do texto enviado ou divida o material em fontes menores. |
-| **400 Bad Request** | Arquivo corrompido, encriptado ou mensagem excedeu o limite máximo (40.000 caracteres). | Envie um arquivo legível e não protegido por senha. |
-| **413 Content Too Large** | Arquivo maior que o limite de upload (**10 MB** por padrão; 2 MB para texto e código-fonte). A resposta traz a mensagem em português. | Divida o arquivo ou ajuste `UPLOAD_MAX_FILE_SIZE` e `UPLOAD_MAX_REQUEST_SIZE` no `.env`. |
-| **415 Unsupported Media Type** | Extensão não suportada. | Utilize apenas `.txt`, `.md`, `.pdf` ou `.docx`. |
-| **422 Unprocessable Entity** | Bloco sem materiais cadastrados para gerar questões com IA ou vídeo YouTube sem legendas. | Adicione materiais com conteúdo de texto ao bloco antes de solicitar a geração. |
+| **503** | Nenhum provedor de IA configurado para a operação. | Preencha a chave no `.env` e reinicie o backend. |
+| **429** | Limite por minuto, limite diário definido na tela ou cota do provedor. | Aguarde; a mensagem indica qual limite foi atingido. |
+| **502** | Resposta do provedor malformada ou instável. | Tente de novo; respostas inválidas não são gravadas. |
+| **504** | O provedor passou do tempo limite. | Tente de novo ou use fontes menores. |
+| **413** | Arquivo acima do limite (10 MB por padrão; 2 MB para texto e código). | Divida o arquivo ou ajuste `UPLOAD_MAX_FILE_SIZE` e `UPLOAD_MAX_REQUEST_SIZE`. |
+| **415** | Extensão não suportada. | Use PDF, DOCX, PPTX, Markdown, texto ou código-fonte. |
+| **422** | Bloco sem fonte concluída e ativa no chat, ou vídeo sem análise nem legendas. | Adicione ou ative uma fonte no bloco. |
 
 ---
 
-## 9. Extensão para Novos Provedores de IA
+## 10. Limitações conhecidas
 
-Para adicionar outro provedor no futuro sem alterar o domínio:
-
-1. Implemente a interface [`AiTutorProvider`](file:///backend/src/main/java/br/com/estudos/estudos_backend/chat/AiTutorProvider.java):
-   ```java
-   public class ClaudeTutorProvider implements AiTutorProvider {
-       @Override public String providerName() { return "Claude"; }
-       @Override public boolean isConfigured() { return apiKey != null && !apiKey.isBlank(); }
-       @Override public AiTutorReply generateReply(AiTutorRequest request) { ... }
-   }
-   ```
-2. Registre o novo adaptador no Spring (`@Component` ou via configuração condicional).
-3. Toda a aplicação continuará funcionando sem qualquer alteração em entidades, migrações ou controllers.
+- Sem autenticação: o cabeçalho `X-Study-User-Id` existe no backend, mas o frontend não o envia (decisão pendente).
+- O Fórum é só visual e está fora do menu (decisão pendente).
+- O agendamento de vagas fica ligado por padrão (`SCHEDULING_ENABLED`).
+- As tabelas do antigo Mapeamento de Fontes continuam no banco sem uso (decisão D4).

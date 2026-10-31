@@ -39,7 +39,9 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
   metas com progresso e arquivamento, sessões planejar/iniciar/concluir/cancelar com cronômetro) e `api/goals.ts`
   já existiam desde 2026-10-29; faltavam os testes de contrato de `api/goals.ts` (9 novos em `api/contracts.test.ts`,
   rotas e corpos conferidos em `StudyGoalController` e `StudySessionController`). Frontend 46 testes, backend 237.
-- [ ] Etapa 13 — Documentação
+- [x] Etapa 13 — Documentação: `README.md`, `ARCHITECTURE.md` e `PROJECT_STATUS.md` reescritos conferindo o código
+  (módulos, provedores OpenAI/Anthropic/Gemini, fluxo do YouTube, correção com rubrica, Remotive/Arbeitnow,
+  V1–V32, 237 + 46 testes, `start-dev`, limites e remoção do Mapeamento de Fontes).
 - [ ] Etapa 14 — Decisões de arquitetura (só registrar)
 
 ## Plano da Etapa 6 — Gemini

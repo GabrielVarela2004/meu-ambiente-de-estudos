@@ -1,220 +1,101 @@
 # Arquitetura
 
-## Estado da decisão
+Estado em 2026-10-31. Descreve o que está implementado; ideias não implementadas ficam em
+`docs/DECISOES-PENDENTES.md`.
 
-A arquitetura proposta para a primeira implementação é um monólito modular com frontend web separado logicamente do backend e princípios de Ports and Adapters. Microsserviços não serão adotados inicialmente, pois aumentariam a complexidade operacional antes de existirem fluxos funcionais estáveis.
+## Visão geral
 
-As decisões iniciais foram aprovadas: Java 21 e Spring Boot, React/TypeScript/Vite, PostgreSQL via Docker Compose, OpenAI como primeiro provedor, uso local para um único usuário sem login inicial e armazenamento local de arquivos por meio de uma abstração. A inicialização do Git foi autorizada sem criação automática de commit.
-
-## Tecnologias propostas
-
-### Backend
-
-- Java 21 LTS.
-- Spring Boot.
-- Spring Web e Validation.
-- Spring Data JPA.
-- Spring Security preparado para evolução.
-- Flyway para migrações.
-
-Java foi priorizado porque o projeto já é reconhecido pelo IntelliJ como um módulo Java genérico, oferece tipagem forte e possui ecossistema maduro para APIs, persistência, segurança e testes.
-
-### Frontend
-
-- React.
-- TypeScript.
-- Vite.
-- React Router.
-- Componentes acessíveis e reutilizáveis.
-
-### Persistência
-
-- PostgreSQL como banco principal.
-- Armazenamento de arquivos abstraído por uma porta `FileStorage`.
-- Armazenamento local apenas para desenvolvimento inicial, se aprovado.
-- `pgvector` como opção para embeddings quando a recuperação semântica for implementada.
-
-## Organização lógica
-
-```text
-Interface/API
-    ↓
-Aplicação
-    ↓
-Domínio
-    ↓
-Portas
-    ↓
-Adaptadores de persistência e integrações externas
+```
+[ Frontend React 19 + TS (Vite, :5173) ]  ── /api (proxy) ──►  [ Backend Spring Boot 4 (:8080) ]
+                                                                   │            │
+                                                     PostgreSQL 17 (Flyway V1–V32)   Provedores externos
+                                                                                  (IA, YouTube, Remotive, Arbeitnow,
+                                                                                   Docker do avaliador)
 ```
 
-### Interface/API
+- **Backend:** Java 21, Spring Web, Spring Data JPA, Bean Validation, Flyway, Actuator (health com banco e
+  provedores de IA), PDFBox/POI para extração de arquivos, `HttpClient` nativo para as APIs externas.
+- **Frontend:** React 19 + TypeScript, sem React Router (`App.tsx` guarda página e bloco selecionado;
+  `components/Sidebar.tsx` define o menu). HTTP via `api/http.ts` (`request<T>()`, `ApiError` com a mensagem do
+  backend). Estilo por tokens (`styles/tokens.css`) e componentes (`styles/components.css`).
+- **Usuário:** sem login. `security/CurrentUserResolver` lê `X-Study-User-Id` (o frontend não envia; cai em
+  `default-user`) e todos os services filtram os dados por esse usuário.
 
-Controllers REST, DTOs, validação de entrada, respostas HTTP e tratamento padronizado de erros.
+## Módulos do backend (`br.com.estudos.estudos_backend`)
 
-### Aplicação
+| Pacote | Responsabilidade |
+|---|---|
+| `studyblock` | Blocos de estudo (criar, editar, arquivar, restaurar). |
+| `material` | Fontes: upload (`MaterialFileStorage`: PDF, DOCX, PPTX, Markdown, texto, código), página web (`WebPageExtractor`), YouTube (`YoutubeImportService`), resumo por IA, ativação no chat. |
+| `chat` | Chat do bloco e universal; porta `AiTutorProvider`; `SourceContextSelector` escolhe trechos das fontes ativas. |
+| `question` | Questões abertas com rubrica, correção (`DiscursiveAnswerService`), rigor (`EvaluationPreference`), repetição espaçada e simulados. |
+| `exercise` | Exercícios práticos, tutoria por chat, autonomia e correção automática (`CodeRunner` + Docker). |
+| `learning` | Histórico central de tentativas (`LearningHistoryService`), Desempenho Global por bloco e análises (`LearningInsightsService`). |
+| `goal`, `studysession` | Metas com progresso; sessões planejadas, iniciadas, concluídas ou canceladas. |
+| `career` | Vagas, perfil, compatibilidade e agente agendado — portas e adaptadores (`adapter/in/web`, `adapter/out/persistence`, `adapter/out/jobprovider`, `domain`, `service`). |
+| `ai` | `AiProviderRouter` (roteamento por operação, fallback, limite diário, consumo, cache), provedores e health. |
+| `security`, `config`, `common` | Usuário atual, agendamento/executores, tratamento de erros padronizado. |
 
-Casos de uso, orquestração, transações e coordenação entre domínio, persistência e integrações.
+Os demais pacotes seguem o formato plano (entidade + repository + service + controller).
 
-### Domínio
+## IA: provedores e roteamento
 
-Entidades, objetos de valor e regras independentes de framework, interface ou fornecedor externo.
-
-### Adaptadores
-
-Implementações para PostgreSQL, armazenamento de arquivos, processamento de documentos, provedores de IA e mecanismos de recuperação.
-
-## Módulos previstos
-
-```text
-backend/
-├── studyblock
-├── material
-├── documentprocessing
-├── conversation
-├── ai
-├── question
-├── exercise
-├── performance
-├── review
-├── knowledge
-├── studysession
-├── goal
-├── planning
-└── common
+```
+Services (chat, questões, exercícios, resumo, correção, análises, carreira)
+        │  AiOperationContext.call(AiOperation.X, …)
+        ▼
+  AiTutorProvider  ◄── bean principal: AiProviderRouter
+        │  rota da operação (tela Configurações › Provedores de IA, gravada em banco)
+        ├── OpenAI    (OpenAiTutorProvider)
+        ├── Anthropic (AnthropicModelProvider)
+        └── Gemini    (GeminiModelProvider; GeminiYoutubeVideoAnalyzer para vídeos)
 ```
 
-Cada módulo deverá possuir somente componentes necessários ao seu domínio. A separação não deverá criar camadas vazias ou abstrações sem uso real.
+- Cada `AiOperation` (chat, geração de questões e exercícios, tutoria, resumo, correção de respostas, análise de
+  desempenho, análise de vagas) tem provedor, modelo e fallback próprios; há limite diário e registro de consumo
+  (`ai_usage_records`).
+- Operações determinísticas usam cache de respostas (`ai_response_cache`); geração e chat não.
+- Chaves só em variáveis de ambiente; sem chave, os endpoints de IA respondem 503.
+- Chamadas de IA ficam fora de `@Transactional`; fontes, vagas e respostas do aluno vão delimitadas como dado não
+  confiável (proteção contra prompt injection).
+- A IA só gera conteúdo, avalia e interpreta: notas, percentuais e médias são calculados no backend. Vários
+  recursos têm fallback sem IA (questões extraídas das fontes, análise de desempenho e de vagas por regras).
 
 ## Fluxos principais
 
-### Importação de material
+### Vídeo do YouTube
+1. `POST …/materials/youtube` grava a fonte como "em processamento" (prévia por oEmbed).
+2. Em segundo plano (`youtubeProcessingExecutor`): **análise por IA** do Gemini, uma única vez, com resumo,
+   assuntos e anotações com minuto; se indisponível, **transcrição** das legendas (`YoutubeTranscriptExtractor`).
+3. Sem nenhum dos dois, a fonte fica com erro e mensagem; pode ser reprocessada.
 
-```text
-Upload ou texto
-    ↓
-Validação do arquivo e do bloco
-    ↓
-Armazenamento da versão
-    ↓
-Extração do conteúdo
-    ↓
-Divisão em trechos com metadados de origem
-    ↓
-Identificação ou associação de tópicos
-    ↓
-Status persistido do processamento
-```
+### Questão teórica aberta
+1. Geração: a IA recebe as fontes ativas do bloco (delimitadas) e os enunciados já existentes; devolve enunciado,
+   resposta-modelo, rubrica e trecho do material. Questão cujo trecho não está no material é descartada.
+2. Resposta: `DiscursiveAnswerService` pede à IA a avaliação contra a rubrica; `DiscursiveEvaluationRules` aplica o
+   rigor (Rigoroso: nota ≥ 85, essenciais e terminologia; Moderado: nota ≥ 75 e essenciais) e classifica em
+   CORRETA, PARCIAL ou INCORRETA. Sem IA, a tentativa fica pendente.
+3. A tentativa entra no histórico com snapshots (enunciado, resposta, gabarito, fonte) e alimenta a repetição
+   espaçada e o desempenho por bloco.
 
-Falhas devem ser registradas explicitamente. OCR só será considerado suportado após implementação e testes reais.
+### Vagas (Remotive e Arbeitnow)
+1. `CareerAgentSchedulerService` (`@Scheduled`, liga com `app.scheduling.enabled`) busca vagas pelos adaptadores
+   `RemotiveJobProviderAdapter` e `ArbeitnowJobProviderAdapter`, conforme as preferências e fontes ativas.
+2. `CareerJobCompatibilityService` calcula a compatibilidade de forma determinística: termos técnicos da vaga contra
+   o perfil de habilidades (`CareerSkillsProfileService`), em que cada bloco de estudo é uma competência
+   (demonstrada, em desenvolvimento ou estudada, pelas tentativas no bloco).
+3. Análise da vaga por IA (descrição delimitada como dado; fallback por regras) e "vaga → bloco de estudo".
 
-### Chat fundamentado em materiais
+## Persistência
 
-```text
-Pergunta
-    ↓
-Validação do bloco e dos materiais autorizados
-    ↓
-Recuperação de trechos relevantes
-    ↓
-Construção de contexto limitado
-    ↓
-Aplicação das instruções da aplicação
-    ↓
-Chamada ao provedor selecionado
-    ↓
-Validação da resposta e das referências
-    ↓
-Persistência da conversa
-```
+- PostgreSQL 17; schema só por migrações Flyway novas (`V1`…`V32`).
+- Tentativas guardam snapshots imutáveis para o histórico sobreviver à edição ou arquivamento de questões e fontes.
+- As tabelas `knowledge_*`, `topic_review_decisions` e as colunas `topic_id` são do antigo Mapeamento de Fontes,
+  removido em 2026-10-31; ficam sem uso até a decisão D4.
 
-O conteúdo importado é dado não confiável. Ele não poderá substituir ou alterar as instruções de sistema da aplicação.
+## Testes
 
-## Estratégia de persistência
-
-As entidades previstas incluem:
-
-- Blocos de estudo.
-- Materiais, versões e trechos.
-- Tópicos, subtópicos e relações.
-- Conversas, mensagens e referências.
-- Questões, alternativas, respostas e tentativas.
-- Exercícios e tentativas.
-- Registros de desempenho e dificuldades.
-- Revisões.
-- Sessões e etapas.
-- Metas e atividades planejadas.
-- Configurações de provedores e modelos.
-- Registros de auditoria.
-
-Materiais deverão ser versionados. Respostas, avaliações e referências devem apontar para a versão do material utilizada, evitando alteração histórica silenciosa. Arquivamento ou exclusão lógica deverá ser usado quando a exclusão física ameaçar a integridade do histórico.
-
-Migrações serão versionadas com Flyway. Índices, paginação e consultas específicas serão considerados conforme os fluxos forem implementados.
-
-## Abstração de IA
-
-As funcionalidades dependerão de interfaces internas, não de SDKs espalhados pelo domínio. A camada deverá contemplar:
-
-- Geração de texto.
-- Geração estruturada.
-- Embeddings.
-- Consulta de modelos.
-- Limites de contexto.
-- Timeout.
-- Retentativas com backoff.
-- Classificação de erros.
-- Registro técnico sem segredos.
-
-Implementações de provedores serão adaptadores substituíveis. Fallback automático será opcional, configurável e informado ao usuário.
-
-## Processamento e recuperação
-
-Apache Tika, PDFBox e Apache POI serão avaliados para os formatos suportados. O pipeline deverá validar tipo e tamanho, extrair texto, preservar página/seção/posição quando possível, dividir documentos extensos e registrar falhas.
-
-A recuperação deverá filtrar por bloco e materiais autorizados, combinar relevância textual e, quando aprovado, semântica vetorial. O sistema não deverá enviar documentos inteiros ao modelo sem necessidade.
-
-## Segurança
-
-- Segredos somente em variáveis de ambiente ou mecanismo seguro.
-- Validação de uploads, tamanho, tipo e conteúdo.
-- Armazenamento de arquivos fora da área pública.
-- Separação entre instruções do sistema e conteúdo externo.
-- Mensagens de erro sem dados sensíveis.
-- Controle de acesso por bloco quando houver múltiplos usuários.
-- Nenhuma execução de código de usuário no ambiente principal.
-- Execução de código somente após infraestrutura isolada, com limites de recursos e autorização arquitetural.
-
-## Estratégia de testes
-
-- Unitários para regras de domínio e cálculos.
-- Integração para banco, migrações, arquivos e API.
-- Contrato para respostas estruturadas e API.
-- Frontend para componentes, navegação e estados.
-- Segurança para uploads, credenciais, conteúdo externo e isolamento.
-- End-to-end para fluxos completos depois que houver funcionalidades reais.
-
-## Estrutura prevista do repositório
-
-```text
-backend/
-frontend/
-docs/
-README.md
-ARCHITECTURE.md
-PROJECT_STATUS.md
-.env.example
-.gitignore
-```
-
-A estrutura física será criada somente na fase de preparação, após aprovação das decisões pendentes.
-
-## Decisões pendentes
-
-- Escopo inicial de usuário único ou preparação imediata para múltiplos usuários.
-- Primeiro provedor de IA.
-- Estratégia inicial de armazenamento de arquivos.
-- Execução local do PostgreSQL ou Docker.
-- Estratégia de autenticação.
-- Biblioteca visual do frontend.
-- Formatos priorizados na primeira entrega.
-- Necessidade inicial de busca vetorial.
+- Backend: `@SpringBootTest` + MockMvc + perfil `test` contra o PostgreSQL real (`estudos_test`); serviços de IA
+  com `AiTutorProvider` simulado; nenhuma chamada a APIs externas.
+- Frontend: Vitest + Testing Library (jsdom); `api/contracts.test.ts` confere rotas, métodos e corpos.
+- CI no GitHub Actions (`.github/workflows/ci.yml`).
