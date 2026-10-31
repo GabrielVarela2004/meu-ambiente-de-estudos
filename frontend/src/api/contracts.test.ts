@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { jsonResponse, mockFetch } from '../test/fetchMock'
 import { runCareerAgent, toggleCareerSource } from './career'
 import { submitExerciseAttempt } from './exercises'
+import { addGoalProgress, archiveGoal, changeSessionState, createGoal, listGoals, listSessions, planSession } from './goals'
 import { importMaterialFile, importYoutubeVideo, previewYoutube, reprocessMaterial, toggleMaterialChat } from './materials'
 import {
   answerQuestion,
@@ -118,5 +119,55 @@ describe('api/career (CareerAgentController, CareerSourceController)', () => {
     await toggleCareerSource('s1', false)
     expect(calls[0]).toMatchObject({ url: '/api/career/sources/s1/toggle', method: 'PATCH' })
     expect(json(calls[0].body)).toEqual({ enabled: false })
+  })
+})
+
+describe('api/goals (StudyGoalController)', () => {
+  it('listGoals → GET …/goals', async () => {
+    const { calls } = mockFetch(() => jsonResponse([]))
+    await listGoals('b1')
+    expect(calls[0]).toMatchObject({ url: '/api/study-blocks/b1/goals', method: 'GET' })
+  })
+
+  it('createGoal → POST …/goals com título, descrição e unidades', async () => {
+    const { calls } = mockFetch()
+    await createGoal('b1', { title: 'Ler 5 capítulos', description: null, targetUnits: 5 })
+    expect(calls[0]).toMatchObject({ url: '/api/study-blocks/b1/goals', method: 'POST' })
+    expect(json(calls[0].body)).toEqual({ title: 'Ler 5 capítulos', description: null, targetUnits: 5 })
+  })
+
+  it('addGoalProgress → POST …/goals/{id}/progress com { units }', async () => {
+    const { calls } = mockFetch()
+    await addGoalProgress('b1', 'g1', 2)
+    expect(calls[0]).toMatchObject({ url: '/api/study-blocks/b1/goals/g1/progress', method: 'POST' })
+    expect(json(calls[0].body)).toEqual({ units: 2 })
+  })
+
+  it('archiveGoal → DELETE …/goals/{id} e aceita 204 sem corpo', async () => {
+    const { calls } = mockFetch(() => new Response(null, { status: 204 }))
+    await expect(archiveGoal('b1', 'g1')).resolves.toBeUndefined()
+    expect(calls[0]).toMatchObject({ url: '/api/study-blocks/b1/goals/g1', method: 'DELETE' })
+  })
+})
+
+describe('api/goals (StudySessionController)', () => {
+  it('listSessions → GET …/sessions', async () => {
+    const { calls } = mockFetch(() => jsonResponse([]))
+    await listSessions('b1')
+    expect(calls[0]).toMatchObject({ url: '/api/study-blocks/b1/sessions', method: 'GET' })
+  })
+
+  it('planSession → POST …/sessions com minutos planejados e notas', async () => {
+    const { calls } = mockFetch()
+    await planSession('b1', { plannedMinutes: 25, notes: 'Revisar coleções' })
+    expect(calls[0]).toMatchObject({ url: '/api/study-blocks/b1/sessions', method: 'POST' })
+    expect(json(calls[0].body)).toEqual({ plannedMinutes: 25, notes: 'Revisar coleções' })
+  })
+
+  it.each(['start', 'complete', 'cancel'] as const)('changeSessionState(%s) → POST …/sessions/{id}/%s', async (action) => {
+    const { calls } = mockFetch()
+    await changeSessionState('b1', 's1', action)
+    expect(calls[0]).toMatchObject({ url: `/api/study-blocks/b1/sessions/s1/${action}`, method: 'POST' })
+    expect(calls[0].body).toBeUndefined()
   })
 })
