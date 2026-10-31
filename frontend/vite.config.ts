@@ -6,6 +6,8 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Escuta na rede local para abrir o site pelo celular (http://<IP do PC>:5173)
+    host: true,
     proxy: {
       '/api': 'http://localhost:8080',
     },
