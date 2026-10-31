@@ -9,6 +9,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,7 +51,7 @@ public class LearningInsightsService {
 	private static final Logger log = LoggerFactory.getLogger(LearningInsightsService.class);
 	private static final int WEEK_BUCKETS = 8;
 	private static final int MONTH_BUCKETS = 6;
-	private static final int MIN_TOPIC_ATTEMPTS = 3;
+	private static final int MIN_BLOCK_ATTEMPTS = 3;
 	private static final DateTimeFormatter DAY_MONTH = DateTimeFormatter.ofPattern("dd/MM");
 	private static final DateTimeFormatter MONTH_YEAR = DateTimeFormatter.ofPattern("MMM/yy", Locale.forLanguageTag("pt-BR"));
 
@@ -60,7 +61,7 @@ public class LearningInsightsService {
 			Diagnóstico: 2 a 3 frases sobre a evolução e o ponto mais importante.
 			Pontos fortes: 1 a 3 marcadores.
 			Atenção: 1 a 3 marcadores com os pontos fracos.
-			Plano para os próximos 7 dias: 3 a 5 marcadores concretos (tópicos, dificuldade, tipo de exercício, tempo).
+			Plano para os próximos 7 dias: 3 a 5 marcadores concretos (blocos, dificuldade, tipo de exercício, tempo).
 			Não invente dados que não estão nas estatísticas.""";
 
 	public enum Period { WEEK, MONTH }
@@ -100,13 +101,18 @@ public class LearningInsightsService {
 		ZoneId zone = clock.getZone();
 		LocalDate today = LocalDate.now(clock);
 
+		List<StudyBlock> blocks = blockRepository.findAllByOwnerIdOrderByUpdatedAtDesc(ownerId);
+		Map<UUID, String> blockTitles = new HashMap<>();
+		blocks.forEach(block -> blockTitles.put(block.getId(), block.getTitle()));
+
 		List<Activity> activities = new ArrayList<>();
 		for (StudyQuestionAttempt attempt : questionAttemptRepository.findAllByOwnerIdOrderByAnsweredAtDesc(ownerId)) {
 			if ((attempt.getEvaluationStatus() != null && !attempt.getEvaluationStatus().isGraded()) || attempt.getAnsweredAt() == null) {
 				continue;
 			}
 			activities.add(new Activity(attempt.getAnsweredAt().atZoneSameInstant(zone).toLocalDate(), false,
-					attempt.isCorrect(), normalizeDifficulty(attempt.getDifficultySnapshot()), attempt.getTopicTitleSnapshot()));
+					attempt.isCorrect(), normalizeDifficulty(attempt.getDifficultySnapshot()),
+					blockTitles.getOrDefault(attempt.getStudyBlockId(), attempt.getStudyBlockTitleSnapshot())));
 		}
 		for (PracticalExerciseAttempt attempt : exerciseAttemptRepository.findAllByOwnerIdOrderByCreatedAtDesc(ownerId)) {
 			if (attempt.getCreatedAt() == null) {
@@ -117,10 +123,10 @@ public class LearningInsightsService {
 			// A nota já inclui o desconto da autonomia; solução revelada nunca conta como acerto.
 			boolean passed = attempt.getScorePercent() >= 70 && !attempt.isSolutionRevealed();
 			activities.add(new Activity(attempt.getCreatedAt().atZoneSameInstant(zone).toLocalDate(), true, passed,
-					difficulty, null));
+					difficulty, blockTitles.get(attempt.getStudyBlockId())));
 		}
 
-		List<UUID> blockIds = blockRepository.findAllByOwnerIdOrderByUpdatedAtDesc(ownerId).stream().map(StudyBlock::getId).toList();
+		List<UUID> blockIds = blocks.stream().map(StudyBlock::getId).toList();
 		Map<LocalDate, Long> minutesByDay = new LinkedHashMap<>();
 		if (!blockIds.isEmpty()) {
 			for (StudySession session : sessionRepository.findAllByStudyBlockIdIn(blockIds)) {
@@ -134,13 +140,13 @@ public class LearningInsightsService {
 
 		List<Bucket> buckets = buckets(period, today, activities, minutesByDay);
 		List<DifficultyStat> byDifficulty = byDifficulty(activities);
-		List<TopicStat> topicStats = topicStats(activities);
-		List<TopicStat> weakest = topicStats.stream()
-				.sorted(Comparator.comparingInt(TopicStat::accuracyPercent).thenComparing(TopicStat::attempts, Comparator.reverseOrder()))
+		List<BlockStat> blockStats = blockStats(activities);
+		List<BlockStat> weakest = blockStats.stream()
+				.sorted(Comparator.comparingInt(BlockStat::accuracyPercent).thenComparing(BlockStat::attempts, Comparator.reverseOrder()))
 				.limit(5).toList();
-		List<TopicStat> strongest = topicStats.stream()
+		List<BlockStat> strongest = blockStats.stream()
 				.filter(t -> t.accuracyPercent() >= 70)
-				.sorted(Comparator.comparingInt(TopicStat::accuracyPercent).reversed().thenComparing(TopicStat::attempts, Comparator.reverseOrder()))
+				.sorted(Comparator.comparingInt(BlockStat::accuracyPercent).reversed().thenComparing(BlockStat::attempts, Comparator.reverseOrder()))
 				.limit(3).toList();
 
 		Set<LocalDate> activeDays = new HashSet<>();
@@ -227,16 +233,16 @@ public class LearningInsightsService {
 		return result;
 	}
 
-	private static List<TopicStat> topicStats(List<Activity> activities) {
-		Map<String, List<Activity>> byTopic = activities.stream()
-				.filter(a -> a.topic() != null && !a.topic().isBlank())
-				.collect(Collectors.groupingBy(Activity::topic));
-		return byTopic.entrySet().stream()
-				.filter(e -> e.getValue().size() >= MIN_TOPIC_ATTEMPTS)
+	private static List<BlockStat> blockStats(List<Activity> activities) {
+		Map<String, List<Activity>> byBlock = activities.stream()
+				.filter(a -> a.block() != null && !a.block().isBlank())
+				.collect(Collectors.groupingBy(Activity::block));
+		return byBlock.entrySet().stream()
+				.filter(e -> e.getValue().size() >= MIN_BLOCK_ATTEMPTS)
 				.map(e -> {
 					long successes = e.getValue().stream().filter(Activity::success).count();
 					Integer accuracy = percent(successes, e.getValue().size());
-					return new TopicStat(e.getKey(), e.getValue().size(), accuracy == null ? 0 : accuracy);
+					return new BlockStat(e.getKey(), e.getValue().size(), accuracy == null ? 0 : accuracy);
 				})
 				.toList();
 	}
@@ -259,7 +265,7 @@ public class LearningInsightsService {
 
 	// ---------------------------------------------------------------- recomendações
 
-	static List<String> recommendations(Consistency consistency, List<DifficultyStat> byDifficulty, List<TopicStat> weakest,
+	static List<String> recommendations(Consistency consistency, List<DifficultyStat> byDifficulty, List<BlockStat> weakest,
 			Integer trend, long totalAttempts, long practicalAttempts) {
 		List<String> tips = new ArrayList<>();
 		if (totalAttempts == 0) {
@@ -283,8 +289,8 @@ public class LearningInsightsService {
 				.findFirst().ifPresent(d -> tips.add("Você domina as questões fáceis (" + d.accuracyPercent()
 						+ "%). Gere simulados com dificuldade intermediária ou difícil."));
 		weakest.stream().filter(t -> t.accuracyPercent() < 60).limit(2)
-				.forEach(t -> tips.add("Revise o tópico \"" + t.topic() + "\" (" + t.accuracyPercent() + "% de acerto em "
-						+ t.attempts() + " tentativas): releia a fonte e gere novas questões sobre ele."));
+				.forEach(t -> tips.add("Revise o bloco \"" + t.block() + "\" (" + t.accuracyPercent() + "% de acerto em "
+						+ t.attempts() + " tentativas): releia as fontes e gere novas questões sobre ele."));
 		if (totalAttempts >= 10 && practicalAttempts * 5 < totalAttempts) {
 			tips.add("Menos de 20% da sua prática é aplicada. Inclua exercícios práticos para fixar o conteúdo.");
 		}
@@ -311,14 +317,14 @@ public class LearningInsightsService {
 		}
 		out.append("Dias de estudo nos últimos 7 dias: ").append(data.consistency().activeDaysLast7())
 				.append("; sequência atual: ").append(data.consistency().currentStreakDays()).append(" dia(s).\n");
-		if (!data.strongestTopics().isEmpty()) {
+		if (!data.strongestBlocks().isEmpty()) {
 			out.append("Pontos fortes:\n");
-			data.strongestTopics().forEach(t -> out.append("• ").append(t.topic()).append(" (").append(t.accuracyPercent()).append("%)\n"));
+			data.strongestBlocks().forEach(t -> out.append("• ").append(t.block()).append(" (").append(t.accuracyPercent()).append("%)\n"));
 		}
-		List<TopicStat> weak = data.weakestTopics().stream().filter(t -> t.accuracyPercent() < 70).toList();
+		List<BlockStat> weak = data.weakestBlocks().stream().filter(t -> t.accuracyPercent() < 70).toList();
 		if (!weak.isEmpty()) {
 			out.append("Atenção:\n");
-			weak.forEach(t -> out.append("• ").append(t.topic()).append(" (").append(t.accuracyPercent()).append("%)\n"));
+			weak.forEach(t -> out.append("• ").append(t.block()).append(" (").append(t.accuracyPercent()).append("%)\n"));
 		}
 		out.append("Plano para os próximos 7 dias:\n");
 		data.recommendations().forEach(r -> out.append("• ").append(r).append('\n'));
@@ -337,10 +343,10 @@ public class LearningInsightsService {
 		sb.append("Por dificuldade:\n");
 		data.byDifficulty().forEach(d -> sb.append("- ").append(d.difficulty()).append(": ").append(d.attempts()).append(" tentativas, ")
 				.append(d.accuracyPercent() == null ? "sem dados" : d.accuracyPercent() + "%").append('\n'));
-		sb.append("Tópicos mais fracos: ").append(data.weakestTopics().stream()
-				.map(t -> t.topic() + " " + t.accuracyPercent() + "% (" + t.attempts() + ")").collect(Collectors.joining("; "))).append('\n');
-		sb.append("Tópicos mais fortes: ").append(data.strongestTopics().stream()
-				.map(t -> t.topic() + " " + t.accuracyPercent() + "%").collect(Collectors.joining("; "))).append('\n');
+		sb.append("Blocos mais fracos: ").append(data.weakestBlocks().stream()
+				.map(t -> t.block() + " " + t.accuracyPercent() + "% (" + t.attempts() + ")").collect(Collectors.joining("; "))).append('\n');
+		sb.append("Blocos mais fortes: ").append(data.strongestBlocks().stream()
+				.map(t -> t.block() + " " + t.accuracyPercent() + "%").collect(Collectors.joining("; "))).append('\n');
 		sb.append("Constância: ").append(data.consistency().activeDaysLast7()).append(" dias ativos em 7, ")
 				.append(data.consistency().activeDaysLast30()).append(" em 30, sequência de ")
 				.append(data.consistency().currentStreakDays()).append(" dias\n");
@@ -366,19 +372,19 @@ public class LearningInsightsService {
 
 	// ---------------------------------------------------------------- tipos
 
-	private record Activity(LocalDate day, boolean practical, boolean success, String difficulty, String topic) {}
+	private record Activity(LocalDate day, boolean practical, boolean success, String difficulty, String block) {}
 
 	public record Bucket(String label, LocalDate startDate, LocalDate endDate, long questionAttempts, long questionCorrect,
 			long practicalAttempts, long practicalPassed, Integer accuracyPercent, long studyMinutes, int activeDays) {}
 
 	public record DifficultyStat(String difficulty, long attempts, long successes, Integer accuracyPercent) {}
 
-	public record TopicStat(String topic, int attempts, int accuracyPercent) {}
+	public record BlockStat(String block, int attempts, int accuracyPercent) {}
 
 	public record Consistency(int activeDaysLast7, int activeDaysLast30, int currentStreakDays, LocalDate lastActiveDay) {}
 
 	public record Insights(Period period, List<Bucket> buckets, List<DifficultyStat> byDifficulty,
-			List<TopicStat> weakestTopics, List<TopicStat> strongestTopics, Consistency consistency, Integer trend,
+			List<BlockStat> weakestBlocks, List<BlockStat> strongestBlocks, Consistency consistency, Integer trend,
 			long totalAttempts, long practicalAttempts, List<String> recommendations) {}
 
 	public record Analysis(String text, String source, OffsetDateTime generatedAt) {}

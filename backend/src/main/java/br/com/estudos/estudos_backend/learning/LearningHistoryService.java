@@ -16,10 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import br.com.estudos.estudos_backend.exercise.ExerciseEvaluationStatus;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttempt;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttemptRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicQuestion;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicQuestionRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.question.QuestionEvaluationStatus;
 import br.com.estudos.estudos_backend.question.StudyQuestionAttempt;
 import br.com.estudos.estudos_backend.question.StudyQuestionAttemptRepository;
@@ -39,8 +35,6 @@ public class LearningHistoryService {
 	private final StudyBlockService studyBlockService;
 	private final StudyQuestionAttemptRepository questionAttemptRepository;
 	private final PracticalExerciseAttemptRepository exerciseAttemptRepository;
-	private final KnowledgeTopicRepository topicRepository;
-	private final KnowledgeTopicQuestionRepository topicQuestionRepository;
 	private final CurrentUserResolver currentUserResolver;
 	private final LearningCriteriaProperties criteriaProperties;
 
@@ -48,27 +42,22 @@ public class LearningHistoryService {
 			StudyBlockService studyBlockService,
 			StudyQuestionAttemptRepository questionAttemptRepository,
 			PracticalExerciseAttemptRepository exerciseAttemptRepository,
-			KnowledgeTopicRepository topicRepository,
-			KnowledgeTopicQuestionRepository topicQuestionRepository,
 			CurrentUserResolver currentUserResolver,
 			LearningCriteriaProperties criteriaProperties) {
 		this.studyBlockService = studyBlockService;
 		this.questionAttemptRepository = questionAttemptRepository;
 		this.exerciseAttemptRepository = exerciseAttemptRepository;
-		this.topicRepository = topicRepository;
-		this.topicQuestionRepository = topicQuestionRepository;
 		this.currentUserResolver = currentUserResolver;
 		this.criteriaProperties = criteriaProperties;
 	}
 
 	@Transactional(readOnly = true)
 	public List<LearningAttemptRecord> listBlockHistory(UUID studyBlockId) {
-		StudyBlock block = studyBlockService.get(studyBlockId);
-		Map<UUID, UUID> questionTopicFallback = loadQuestionTopicFallback(List.of(block.getId()));
+		studyBlockService.get(studyBlockId);
 
 		List<LearningAttemptRecord> records = new ArrayList<>();
 		for (StudyQuestionAttempt qAttempt : questionAttemptRepository.findAllByStudyBlockIdOrderByAnsweredAtDesc(studyBlockId)) {
-			records.add(fromQuestionAttempt(qAttempt, questionTopicFallback));
+			records.add(fromQuestionAttempt(qAttempt));
 		}
 		for (PracticalExerciseAttempt eAttempt : exerciseAttemptRepository.findAllByStudyBlockIdOrderByCreatedAtDesc(studyBlockId)) {
 			records.add(fromExerciseAttempt(eAttempt));
@@ -85,12 +74,11 @@ public class LearningHistoryService {
 			return List.of();
 		}
 		List<UUID> blockIds = ownedBlocks.stream().map(StudyBlock::getId).toList();
-		Map<UUID, UUID> questionTopicFallback = loadQuestionTopicFallback(blockIds);
 
 		List<LearningAttemptRecord> records = new ArrayList<>();
 		for (StudyQuestionAttempt qAttempt : questionAttemptRepository.findAllByStudyBlockIdInOrderByAnsweredAtDesc(blockIds)) {
 			if (ownerId.equals(qAttempt.getOwnerId())) {
-				records.add(fromQuestionAttempt(qAttempt, questionTopicFallback));
+				records.add(fromQuestionAttempt(qAttempt));
 			}
 		}
 		for (PracticalExerciseAttempt eAttempt : exerciseAttemptRepository.findAllByStudyBlockIdInOrderByCreatedAtDesc(blockIds)) {
@@ -160,7 +148,7 @@ public class LearningHistoryService {
 
 	@Transactional(readOnly = true)
 	public GlobalPerformanceDashboardResponse getGlobalPerformance(
-			Integer days, UUID filterBlockId, UUID filterTopicId, StudyQuestionDifficulty filterDifficulty) {
+			Integer days, UUID filterBlockId, StudyQuestionDifficulty filterDifficulty) {
 		String ownerId = currentUserResolver.currentUserId();
 		List<StudyBlock> ownedBlocks = studyBlockService.list(true);
 		if (ownedBlocks.isEmpty()) {
@@ -176,9 +164,6 @@ public class LearningHistoryService {
 			blockMap.put(b.getId(), b);
 		}
 
-		List<UUID> blockIds = ownedBlocks.stream().map(StudyBlock::getId).toList();
-		Map<UUID, UUID> questionTopicFallback = loadQuestionTopicFallback(blockIds);
-
 		List<StudyQuestionAttempt> allAttempts = questionAttemptRepository.findAllByOwnerIdOrderByAnsweredAtDesc(ownerId);
 		OffsetDateTime cutoff = (days != null && days > 0) ? OffsetDateTime.now().minusDays(days) : null;
 
@@ -186,11 +171,6 @@ public class LearningHistoryService {
 				.filter(a -> blockMap.containsKey(a.getStudyBlockId()))
 				.filter(a -> cutoff == null || !a.getAnsweredAt().isBefore(cutoff))
 				.filter(a -> filterBlockId == null || a.getStudyBlockId().equals(filterBlockId))
-				.filter(a -> {
-					if (filterTopicId == null) return true;
-					UUID resolvedTopic = a.getTopicId() != null ? a.getTopicId() : questionTopicFallback.get(a.getQuestionId());
-					return filterTopicId.equals(resolvedTopic);
-				})
 				.filter(a -> filterDifficulty == null || (a.getDifficultySnapshot() != null
 						&& a.getDifficultySnapshot().equalsIgnoreCase(filterDifficulty.name())))
 				.toList();
@@ -222,7 +202,7 @@ public class LearningHistoryService {
 						accuracyPercent,
 						errorPercent);
 
-		// Performance by Block and Topic
+		// Desempenho por bloco
 		List<GlobalPerformanceDashboardResponse.BlockPerformanceSummary> blockSummaries = new ArrayList<>();
 		List<StudyBlock> targetBlocks = filterBlockId != null
 				? (blockMap.containsKey(filterBlockId) ? List.of(blockMap.get(filterBlockId)) : List.of())
@@ -244,50 +224,10 @@ public class LearningHistoryService {
 			long bIncorrect = bEvalCount - bCorrect;
 			Integer bAcc = bEvalCount == 0 ? null : (int) Math.round(bCorrect * 100.0 / bEvalCount);
 			Integer bErr = bEvalCount == 0 ? null : (int) Math.round(bIncorrect * 100.0 / bEvalCount);
-
-			List<KnowledgeTopic> topics = topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(block.getId());
-			List<GlobalPerformanceDashboardResponse.TopicPerformanceSummary> topicSummaries = new ArrayList<>();
-
-			for (KnowledgeTopic topic : topics) {
-				if (topic.isPendingReview() || (filterTopicId != null && !topic.getId().equals(filterTopicId))) {
-					continue;
-				}
-				List<StudyQuestionAttempt> tAttempts = blockAttempts.stream()
-						.filter(a -> {
-							UUID rTopic = a.getTopicId() != null ? a.getTopicId() : questionTopicFallback.get(a.getQuestionId());
-							return topic.getId().equals(rTopic);
-						})
-						.toList();
-
-				long tTotal = tAttempts.size();
-				long tUnique = tAttempts.stream()
-						.map(a -> a.getQuestionId() != null ? a.getQuestionId().toString() : a.getPromptSnapshot())
-						.filter(Objects::nonNull).distinct().count();
-				List<StudyQuestionAttempt> tEval = tAttempts.stream()
-						.filter(a -> a.getEvaluationStatus() == null || a.getEvaluationStatus().isGraded()).toList();
-				long tEvalCount = tEval.size();
-				long tCorrect = tEval.stream().filter(StudyQuestionAttempt::isCorrect).count();
-				long tIncorrect = tEvalCount - tCorrect;
-				Integer tAcc = tEvalCount == 0 ? null : (int) Math.round(tCorrect * 100.0 / tEvalCount);
-				Integer tErr = tEvalCount == 0 ? null : (int) Math.round(tIncorrect * 100.0 / tEvalCount);
-				long tPartial = tEval.stream()
-						.filter(a -> a.getEvaluationStatus() == br.com.estudos.estudos_backend.question.QuestionEvaluationStatus.PARTIAL).count();
-				Integer tAvgScore = tEvalCount == 0 ? null
-						: (int) Math.round(tEval.stream().mapToInt(StudyQuestionAttempt::getScorePercent).average().orElse(0));
-
-				topicSummaries.add(new GlobalPerformanceDashboardResponse.TopicPerformanceSummary(
-						topic.getId(),
-						topic.getTitle(),
-						tTotal,
-						tUnique,
-						tEvalCount,
-						tCorrect,
-						tIncorrect,
-						tAcc,
-						tErr,
-						tPartial,
-						tAvgScore));
-			}
+			long bPartial = bEval.stream()
+					.filter(a -> a.getEvaluationStatus() == QuestionEvaluationStatus.PARTIAL).count();
+			Integer bAvgScore = bEvalCount == 0 ? null
+					: (int) Math.round(bEval.stream().mapToInt(StudyQuestionAttempt::getScorePercent).average().orElse(0));
 
 			blockSummaries.add(new GlobalPerformanceDashboardResponse.BlockPerformanceSummary(
 					block.getId(),
@@ -299,7 +239,8 @@ public class LearningHistoryService {
 					bIncorrect,
 					bAcc,
 					bErr,
-					topicSummaries));
+					bPartial,
+					bAvgScore));
 		}
 
 		// Timeline aggregation (chronological ascending)
@@ -325,7 +266,6 @@ public class LearningHistoryService {
 		// Detailed Attempts (newest first)
 		List<GlobalPerformanceDashboardResponse.HistoricalAttemptDetail> recentAttempts = filtered.stream()
 				.map(a -> {
-					UUID resolvedTopic = a.getTopicId() != null ? a.getTopicId() : questionTopicFallback.get(a.getQuestionId());
 					String bTitle = a.getStudyBlockTitleSnapshot() != null
 							? a.getStudyBlockTitleSnapshot()
 							: (blockMap.containsKey(a.getStudyBlockId()) ? blockMap.get(a.getStudyBlockId()).getTitle() : "Bloco");
@@ -341,8 +281,6 @@ public class LearningHistoryService {
 							a.getAnsweredAt(),
 							a.getStudyBlockId(),
 							bTitle,
-							resolvedTopic,
-							a.getTopicTitleSnapshot(),
 							a.getQuestionId(),
 							diff,
 							fmt,
@@ -361,25 +299,7 @@ public class LearningHistoryService {
 		return new GlobalPerformanceDashboardResponse(overall, blockSummaries, timeline, recentAttempts);
 	}
 
-	private Map<UUID, UUID> loadQuestionTopicFallback(List<UUID> blockIds) {
-		Map<UUID, UUID> fallback = new HashMap<>();
-		for (UUID blockId : blockIds) {
-			List<KnowledgeTopic> topics = topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(blockId);
-			if (!topics.isEmpty()) {
-				List<UUID> topicIds = topics.stream().map(KnowledgeTopic::getId).toList();
-				for (KnowledgeTopicQuestion link : topicQuestionRepository.findAllByTopicIdIn(topicIds)) {
-					fallback.putIfAbsent(link.getQuestionId(), link.getTopicId());
-				}
-			}
-		}
-		return fallback;
-	}
-
-	private LearningAttemptRecord fromQuestionAttempt(
-			StudyQuestionAttempt attempt, Map<UUID, UUID> questionTopicFallback) {
-		UUID resolvedTopicId = attempt.getTopicId() != null
-				? attempt.getTopicId()
-				: questionTopicFallback.get(attempt.getQuestionId());
+	private LearningAttemptRecord fromQuestionAttempt(StudyQuestionAttempt attempt) {
 		QuestionEvaluationStatus status = attempt.getEvaluationStatus() == null
 				? (attempt.isCorrect() ? QuestionEvaluationStatus.CORRECT : QuestionEvaluationStatus.INCORRECT)
 				: attempt.getEvaluationStatus();
@@ -389,7 +309,6 @@ public class LearningHistoryService {
 				attempt.getOwnerId(),
 				attempt.getAnsweredAt(),
 				attempt.getStudyBlockId(),
-				resolvedTopicId,
 				attempt.getStudySessionId(),
 				LearningModality.THEORETICAL,
 				attempt.getQuestionId(),
@@ -419,15 +338,11 @@ public class LearningHistoryService {
 		UUID blockId = attempt.getStudyBlockId() != null
 				? attempt.getStudyBlockId()
 				: attempt.getExercise().getStudyBlock().getId();
-		UUID topicId = attempt.getTopicId() != null
-				? attempt.getTopicId()
-				: attempt.getExercise().getTopicId();
 		return new LearningAttemptRecord(
 				attempt.getId(),
 				attempt.getOwnerId(),
 				attempt.getCreatedAt(),
 				blockId,
-				topicId,
 				attempt.getStudySessionId(),
 				LearningModality.PRACTICAL,
 				attempt.getExercise().getId(),

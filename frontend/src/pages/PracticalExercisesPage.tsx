@@ -22,7 +22,7 @@ const exerciseTypeLabels: Record<string, string> = {
   CODE_ANALYSIS: 'Analisar código',
   SMALL_SOLUTION: 'Solução curta',
   SQL_QUERY: 'Consulta SQL',
-  MULTI_TOPIC_INTEGRATION: 'Integrar vários tópicos',
+  MULTI_TOPIC_INTEGRATION: 'Integrar vários conceitos',
 }
 
 type SourceOption = { id: string; title: string }
@@ -83,16 +83,14 @@ export function PracticalExercisesPage({
   // Visualização de excerto / dicas
   const [viewingExcerpt, setViewingExcerpt] = useState<Record<string, boolean>>({})
 
-  // Geração com IA: qualquer bloco ativo, opcionalmente focada num material ou tópico
+  // Geração com IA: qualquer bloco ativo, opcionalmente focada num material
   const [generating, setGenerating] = useState(false)
   const [genBlockId, setGenBlockId] = useState<string>('')
   const [genMaterialId, setGenMaterialId] = useState('')
-  const [genTopicId, setGenTopicId] = useState('')
   const [genDifficulty, setGenDifficulty] = useState('INTERMEDIATE')
   // Vazio: o backend escolhe o formato menos praticado no bloco, para variar os exercícios.
   const [genType, setGenType] = useState('')
   const [genMaterials, setGenMaterials] = useState<SourceOption[]>([])
-  const [genTopics, setGenTopics] = useState<SourceOption[]>([])
 
   const activeBlock = blocks.find((b) => b.id === selectedBlockId)
   const activeBlocks = blocks.filter((b) => b.status === 'ACTIVE')
@@ -100,20 +98,17 @@ export function PracticalExercisesPage({
 
   // Seleções de outro bloco são ignoradas até o usuário escolher de novo.
   const effectiveMaterialId = genMaterials.some((m) => m.id === genMaterialId) ? genMaterialId : ''
-  const effectiveTopicId = genTopics.some((t) => t.id === genTopicId) ? genTopicId : ''
 
   useEffect(() => {
     if (!targetBlockId) return
     let cancelled = false
-    void Promise.all([
-      request<SourceOption[]>(`/api/study-blocks/${targetBlockId}/materials?includeArchived=false`).catch(() => []),
-      request<SourceOption[]>(`/api/study-blocks/${targetBlockId}/topics`).catch(() => []),
-    ]).then(([materials, topics]) => {
-      if (!cancelled) {
-        setGenMaterials(materials)
-        setGenTopics(topics)
-      }
-    })
+    void request<SourceOption[]>(`/api/study-blocks/${targetBlockId}/materials?includeArchived=false`)
+      .catch(() => [])
+      .then((materials) => {
+        if (!cancelled) {
+          setGenMaterials(materials)
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -172,7 +167,6 @@ export function PracticalExercisesPage({
           method: 'POST',
           body: JSON.stringify({
             materialId: effectiveMaterialId || null,
-            topicId: effectiveTopicId || null,
             difficulty: genDifficulty,
             exerciseType: genType || null,
           }),
@@ -278,7 +272,7 @@ export function PracticalExercisesPage({
         </div>
       )}
 
-      {/* Conteúdo do exercício: qualquer bloco cadastrado, com foco opcional em material ou tópico */}
+      {/* Conteúdo do exercício: qualquer bloco cadastrado, com foco opcional em um material */}
       <div className="card exercise-generator-card mb-6">
         <div className="exercise-generator-grid">
           {mode === 'global' && (
@@ -294,17 +288,6 @@ export function PracticalExercisesPage({
               </select>
             </label>
           )}
-          <label className="exercise-generator-field">
-            <span className="text-xs text-muted">Tópico</span>
-            <select className="form-select" value={effectiveTopicId} onChange={(e) => setGenTopicId(e.target.value)} disabled={!targetBlockId}>
-              <option value="">Qualquer tópico do bloco</option>
-              {genTopics.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="exercise-generator-field">
             <span className="text-xs text-muted">Material</span>
             <select className="form-select" value={effectiveMaterialId} onChange={(e) => setGenMaterialId(e.target.value)} disabled={!targetBlockId}>

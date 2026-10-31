@@ -53,7 +53,7 @@ public class CareerDto {
 		}
 	}
 
-	public record JobStudyBlockResponse(UUID studyBlockId, String title, List<String> topics, boolean created) {}
+	public record JobStudyBlockResponse(UUID studyBlockId, String title, List<String> skills, boolean created) {}
 
 	public record JobItemResponse(
 			UUID id,

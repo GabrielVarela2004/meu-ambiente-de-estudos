@@ -86,7 +86,7 @@ export function AttemptResultPanel({ result }: { result: AttemptResult }) {
         <p className="text-sm">{result.hintsUsedCount} ajuda(s) da tutora entraram no cálculo da autonomia.</p>
       )}
       {result.solutionRevealed && (
-        <p className="text-sm">A solução foi revelada: esta tentativa não conta para o domínio do tópico.</p>
+        <p className="text-sm">A solução foi revelada: esta tentativa não conta como acerto no desempenho do bloco.</p>
       )}
 
       {report?.compileErrors && report.compileErrors.length > 0 && (

@@ -386,7 +386,7 @@ export function TutorChatPanel({
           onChange={(event) => setMessage(event.target.value)}
           placeholder={
             chatMode === 'block'
-              ? 'Ex.: Com base nas fontes deste bloco, explique os conceitos principais ou compare os tópicos abordados...'
+              ? 'Ex.: Com base nas fontes deste bloco, explique os conceitos principais ou compare os assuntos abordados...'
               : 'Ex.: Compare a abordagem dos blocos selecionados, destacando como eles se relacionam e os pontos críticos de cada um...'
           }
         />

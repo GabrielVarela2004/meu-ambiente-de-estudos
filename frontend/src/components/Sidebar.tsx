@@ -10,7 +10,6 @@ import {
   FolderIcon,
   LayersIcon,
   LogoIcon,
-  NetworkIcon,
   ClockIcon,
   PlusCircleIcon,
   SettingsIcon,
@@ -26,7 +25,6 @@ export type PageId =
   | 'practical-global'
   | 'theoretical-block'
   | 'theoretical-global'
-  | 'source-mapping'
   | 'goals-sessions'
   | 'career-job-feed'
   | 'career-profile'
@@ -311,17 +309,6 @@ export function Sidebar({
             </div>
           )}
         </div>
-
-        {/* Item 7: Mapeamento de Fontes */}
-        <button
-          type="button"
-          className={`nav-item ${currentPage === 'source-mapping' ? 'active' : ''}`}
-          onClick={() => onSelectPage('source-mapping')}
-          title={isCollapsed ? 'Mapeamento de Fontes' : undefined}
-        >
-          <NetworkIcon className="nav-item-icon" />
-          {!isCollapsed && <span className="nav-item-text">Mapeamento de Fontes</span>}
-        </button>
 
         {/* Metas e Sessões de estudo (por bloco) */}
         <button

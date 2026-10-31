@@ -7,7 +7,9 @@ public enum AiOperation {
 	QUESTION_GENERATION("Geração de questões"),
 	EXERCISE_GENERATION("Geração de exercícios práticos"),
 	EXERCISE_TUTOR("Tutoria nos exercícios práticos"),
-	TOPIC_EXTRACTION("Extração de tópicos das fontes", true, true),
+	/** Legado: a extração de tópicos foi removida; o valor fica para ler rotas, cache e consumo já gravados. */
+	@Deprecated
+	TOPIC_EXTRACTION("Extração de tópicos das fontes (desativada)", false, false),
 	MATERIAL_SUMMARY("Resumo de materiais", true, true),
 	PERFORMANCE_ANALYSIS("Análise de desempenho", true, true),
 	CAREER_ANALYSIS("Análise de vagas", true, true),

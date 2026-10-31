@@ -13,7 +13,6 @@ public record LearningAttemptRecord(
 		String ownerId,
 		OffsetDateTime timestamp,
 		UUID studyBlockId,
-		UUID topicId,
 		UUID studySessionId,
 		LearningModality modality,
 		UUID activityId,

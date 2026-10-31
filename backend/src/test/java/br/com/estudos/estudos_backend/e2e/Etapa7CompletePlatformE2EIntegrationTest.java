@@ -18,18 +18,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.estudos.estudos_backend.LegacyTopicTables;
 import br.com.estudos.estudos_backend.chat.ChatConversationRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttemptRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseRepository;
 import br.com.estudos.estudos_backend.goal.StudyGoalRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicQuestionRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
 import br.com.estudos.estudos_backend.question.StudyQuestion;
 import br.com.estudos.estudos_backend.question.StudyQuestionAttempt;
@@ -75,15 +75,12 @@ class Etapa7CompletePlatformE2EIntegrationTest {
 	private StudyGoalRepository goalRepository;
 
 	@Autowired
-	private KnowledgeTopicQuestionRepository topicQuestionRepository;
-
-	@Autowired
-	private KnowledgeTopicRepository topicRepository;
-
-	@Autowired
 	private ChatConversationRepository chatConversationRepository;
 
 	private final ObjectMapper mapper = new ObjectMapper();
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
 	void cleanDatabase() {
@@ -95,10 +92,9 @@ class Etapa7CompletePlatformE2EIntegrationTest {
 		chatConversationRepository.deleteAllInBatch();
 		exerciseAttemptRepository.deleteAllInBatch();
 		exerciseRepository.deleteAllInBatch();
-		topicQuestionRepository.deleteAllInBatch();
+		LegacyTopicTables.clear(jdbcTemplate);
 		questionAttemptRepository.deleteAllInBatch();
 		questionRepository.deleteAllInBatch();
-		topicRepository.deleteAllInBatch();
 		goalRepository.deleteAllInBatch();
 		sessionRepository.deleteAllInBatch();
 		materialRepository.deleteAllInBatch();
@@ -141,23 +137,6 @@ class Etapa7CompletePlatformE2EIntegrationTest {
 
 		String materialId = mapper.readTree(materialRes).get("id").asText();
 
-		// 3. Criação de Tópico de Conhecimento associado ao Bloco
-		String topicRes = mockMvc.perform(post("/api/study-blocks/" + blockId + "/topics")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
-					{
-						"title": "Resilience4j Circuit Breaker",
-						"description": "Estados de transição do disjuntor de circuito em microsserviços",
-						"orderIndex": 1
-					}
-				"""))
-				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.id").isNotEmpty())
-				.andExpect(jsonPath("$.title").value("Resilience4j Circuit Breaker"))
-				.andReturn().getResponse().getContentAsString();
-
-		String topicId = mapper.readTree(topicRes).get("id").asText();
-
 		// 4. Criação de Questão de Múltipla Escolha (HARD) vinculada ao Material
 		String q1Res = mockMvc.perform(post("/api/study-blocks/" + blockId + "/questions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -189,10 +168,6 @@ class Etapa7CompletePlatformE2EIntegrationTest {
 				break;
 			}
 		}
-
-		// Associação da Questão 1 ao Tópico de Conhecimento (204 No Content)
-		mockMvc.perform(post("/api/study-blocks/" + blockId + "/topics/" + topicId + "/questions/" + q1Id))
-				.andExpect(status().isNoContent());
 
 		// 5. Criação de Questão Discursiva (INTERMEDIATE)
 		String q2Res = mockMvc.perform(post("/api/study-blocks/" + blockId + "/questions")
@@ -255,8 +230,9 @@ class Etapa7CompletePlatformE2EIntegrationTest {
 				.andExpect(jsonPath("$.overall.accuracyPercent").value(100))
 				.andExpect(jsonPath("$.blocks", hasSize(1)))
 				.andExpect(jsonPath("$.blocks[0].blockTitle").value("Arquitetura Cloud & Resiliência"))
-				.andExpect(jsonPath("$.blocks[0].topics", hasSize(greaterThanOrEqualTo(1))))
-				.andExpect(jsonPath("$.blocks[0].topics[?(@.topicTitle == 'Resilience4j Circuit Breaker')]").isNotEmpty())
+				.andExpect(jsonPath("$.blocks[0].totalAttempts").value(2))
+				.andExpect(jsonPath("$.blocks[0].accuracyPercent").value(100))
+				.andExpect(jsonPath("$.blocks[0].topics").doesNotExist())
 				.andExpect(jsonPath("$.timeline", hasSize(greaterThanOrEqualTo(1))))
 				.andExpect(jsonPath("$.recentAttempts", hasSize(2)));
 

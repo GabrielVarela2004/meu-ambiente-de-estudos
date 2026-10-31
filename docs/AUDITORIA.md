@@ -10,6 +10,10 @@ Legenda: ✅ funciona de ponta a ponta · 🟡 parcial · 🔴 quebrado na inter
 
 ---
 
+> **Atualização 2026-10-31:** o Mapeamento de Fontes (tópicos, subtópicos, validação e pré-requisitos) foi removido a
+> pedido do usuário. Desempenho, questões, exercícios e Carreira passaram a trabalhar só por bloco. As menções a
+> tópicos abaixo descrevem o estado anterior.
+
 ## 1. Resumo do produto
 
 Plataforma pessoal de estudos com IA, no estilo NotebookLM. O usuário organiza os estudos em **blocos**, importa

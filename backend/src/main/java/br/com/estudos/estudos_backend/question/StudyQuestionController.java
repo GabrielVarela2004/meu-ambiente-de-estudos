@@ -61,9 +61,9 @@ public class StudyQuestionController {
 	@PostMapping("/generate-simulado")
 	public ResponseEntity<List<StudyQuestionResponse>> generateSimulado(@PathVariable UUID studyBlockId,
 			@Valid @RequestBody(required = false) SimuladoRequest request) {
-		SimuladoRequest resolved = request == null ? new SimuladoRequest(null, null, null, null) : request;
+		SimuladoRequest resolved = request == null ? new SimuladoRequest(null, null, null) : request;
 		List<StudyQuestion> generated = aiGeneratorService.generateSimulado(studyBlockId, resolved.quantity(),
-				resolved.difficulty(), resolved.format(), resolved.topicId());
+				resolved.difficulty(), resolved.format());
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(generated.stream().map(StudyQuestionResponse::from).toList());
 	}
@@ -136,8 +136,7 @@ public class StudyQuestionController {
 	public record SimuladoRequest(
 			@Min(1) @Max(10) Integer quantity,
 			StudyQuestionDifficulty difficulty,
-			StudyQuestionFormat format,
-			UUID topicId) {}
+			StudyQuestionFormat format) {}
 
 	public record GenerateQuestionRequest(
 			StudyQuestionDifficulty difficulty,

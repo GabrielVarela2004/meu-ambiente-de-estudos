@@ -179,8 +179,7 @@
 }
 
 /* Botão de texto (mostrar mais / expandir) */
-.btn-text-toggle,
-.expand-toggle-btn {
+.btn-text-toggle {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -193,8 +192,7 @@
   font-weight: var(--weight-semibold);
   cursor: pointer;
 }
-.btn-text-toggle:hover,
-.expand-toggle-btn:hover {
+.btn-text-toggle:hover {
   background: var(--color-accent-soft);
 }
 
@@ -767,7 +765,6 @@
 .study-block-card,
 .retention-kpi-card,
 .history-attempt-card,
-.topic-card,
 .source-card-item,
 .job-card-item,
 .battery-question-card,
@@ -793,8 +790,6 @@
 .exercises-list-stack,
 .forum-topics-list,
 .historical-attempts-list,
-.block-breakdown-list,
-.topic-list,
 .question-list,
 .material-list {
   display: flex;

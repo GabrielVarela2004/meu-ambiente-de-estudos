@@ -19,7 +19,7 @@ import br.com.estudos.estudos_backend.career.service.CareerSkillsProfileService;
 import br.com.estudos.estudos_backend.career.service.CareerSkillsProfileService.UserCareerSkillsProfile;
 import br.com.estudos.estudos_backend.exercise.PracticalExercise;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseService;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
+import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 
 @RestController
 @RequestMapping("/api/career/skills")
@@ -39,17 +39,16 @@ public class CareerSkillsController {
 	}
 
 	/**
-	 * Gera um exercício prático (desafio de validação) para o tópico que representa a competência.
+	 * Gera um exercício prático (desafio de validação) no bloco que representa a competência.
 	 * O resultado das tentativas alimenta o nível da competência no perfil.
 	 */
 	@PostMapping("/assess")
 	public ResponseEntity<AssessmentResponse> assess(@Valid @RequestBody AssessmentRequest request) {
-		KnowledgeTopic topic = service.findTopicForSkill(request.skillName())
+		StudyBlock block = service.findBlockForSkill(request.skillName())
 				.orElseThrow(() -> new NotFoundException("Competência não encontrada"));
-		UUID blockId = topic.getStudyBlock().getId();
-		PracticalExercise exercise = exerciseService.generateFromMaterials(blockId, null, topic.getId(), null, null);
+		PracticalExercise exercise = exerciseService.generateFromMaterials(block.getId(), null, null, null);
 		return ResponseEntity.status(HttpStatus.CREATED).body(new AssessmentResponse(
-				exercise.getId(), blockId, topic.getStudyBlock().getTitle(), exercise.getTitle()));
+				exercise.getId(), block.getId(), block.getTitle(), exercise.getTitle()));
 	}
 
 	public record AssessmentRequest(@NotBlank @Size(max = 300) String skillName) {}

@@ -29,18 +29,6 @@ public record GlobalPerformanceDashboardResponse(
 			long incorrectAttempts,
 			Integer accuracyPercent,
 			Integer errorPercent,
-			List<TopicPerformanceSummary> topics) {}
-
-	public record TopicPerformanceSummary(
-			UUID topicId,
-			String topicTitle,
-			long totalAttempts,
-			long uniqueQuestions,
-			long evaluatedAttempts,
-			long correctAttempts,
-			long incorrectAttempts,
-			Integer accuracyPercent,
-			Integer errorPercent,
 			/** Respostas PARCIAIS (contam como avaliadas, não como acerto). */
 			long partialAttempts,
 			/** Nota média (0–100) das tentativas corrigidas; pendentes ficam fora. */
@@ -58,8 +46,6 @@ public record GlobalPerformanceDashboardResponse(
 			OffsetDateTime answeredAt,
 			UUID studyBlockId,
 			String studyBlockTitle,
-			UUID topicId,
-			String topicTitle,
 			UUID questionId,
 			String difficulty,
 			String questionFormat,

@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicService;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockStatus;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockService;
@@ -26,7 +25,6 @@ public class StudyMaterialService {
 	private final StudyMaterialRepository repository;
 	private final StudyBlockService studyBlockService;
 	private final MaterialFileStorage fileStorage;
-	private final KnowledgeTopicService knowledgeTopicService;
 	private final WebPageExtractor webPageExtractor;
 	private final MaterialSummarizer summarizer;
 
@@ -35,13 +33,11 @@ public class StudyMaterialService {
 			StudyMaterialRepository repository,
 			StudyBlockService studyBlockService,
 			MaterialFileStorage fileStorage,
-			KnowledgeTopicService knowledgeTopicService,
 			WebPageExtractor webPageExtractor,
 			MaterialSummarizer summarizer) {
 		this.repository = repository;
 		this.studyBlockService = studyBlockService;
 		this.fileStorage = fileStorage;
-		this.knowledgeTopicService = knowledgeTopicService;
 		this.webPageExtractor = webPageExtractor;
 		this.summarizer = summarizer;
 	}
@@ -63,7 +59,6 @@ public class StudyMaterialService {
 				StudyMaterialProcessingStatus.COMPLETED,
 				null));
 		studyBlockService.touch(block);
-		syncTopicsIfAvailable(studyBlockId);
 		return saved;
 	}
 
@@ -96,7 +91,6 @@ public class StudyMaterialService {
 				StudyMaterialProcessingStatus.COMPLETED,
 				null));
 		studyBlockService.touch(block);
-		syncTopicsIfAvailable(studyBlockId);
 		return saved;
 	}
 
@@ -120,7 +114,6 @@ public class StudyMaterialService {
 		StudyBlock block = getActiveBlock(studyBlockId);
 		StudyMaterial saved = repository.save(new StudyMaterial(block, title, content));
 		studyBlockService.touch(block);
-		syncTopicsIfAvailable(studyBlockId);
 		return saved;
 	}
 
@@ -176,7 +169,6 @@ public class StudyMaterialService {
 		material.update(title, content);
 		StudyMaterial saved = repository.save(material);
 		studyBlockService.touch(material.getStudyBlock());
-		syncTopicsIfAvailable(studyBlockId);
 		return saved;
 	}
 
@@ -200,13 +192,6 @@ public class StudyMaterialService {
 		material.archive();
 		repository.save(material);
 		studyBlockService.touch(material.getStudyBlock());
-		syncTopicsIfAvailable(studyBlockId);
-	}
-
-	private void syncTopicsIfAvailable(UUID studyBlockId) {
-		if (knowledgeTopicService != null) {
-			knowledgeTopicService.extractFromSources(studyBlockId, false);
-		}
 	}
 
 	private StudyBlock getActiveBlock(UUID id) {

@@ -16,18 +16,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.estudos.estudos_backend.LegacyTopicTables;
 import br.com.estudos.estudos_backend.chat.ChatConversationRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttemptRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseRepository;
 import br.com.estudos.estudos_backend.goal.StudyGoalRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicQuestionRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
 import br.com.estudos.estudos_backend.question.StudyQuestionAttemptRepository;
 import br.com.estudos.estudos_backend.question.StudyQuestionRepository;
@@ -71,15 +71,12 @@ class Etapa5GlobalPerformanceIntegrationTest {
 	private StudyGoalRepository goalRepository;
 
 	@Autowired
-	private KnowledgeTopicQuestionRepository topicQuestionRepository;
-
-	@Autowired
-	private KnowledgeTopicRepository topicRepository;
-
-	@Autowired
 	private ChatConversationRepository chatConversationRepository;
 
 	private final ObjectMapper mapper = new ObjectMapper();
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
 	void cleanDatabase() {
@@ -91,10 +88,9 @@ class Etapa5GlobalPerformanceIntegrationTest {
 		chatConversationRepository.deleteAllInBatch();
 		exerciseAttemptRepository.deleteAllInBatch();
 		exerciseRepository.deleteAllInBatch();
-		topicQuestionRepository.deleteAllInBatch();
+		LegacyTopicTables.clear(jdbcTemplate);
 		questionAttemptRepository.deleteAllInBatch();
 		questionRepository.deleteAllInBatch();
-		topicRepository.deleteAllInBatch();
 		goalRepository.deleteAllInBatch();
 		sessionRepository.deleteAllInBatch();
 		materialRepository.deleteAllInBatch();
@@ -103,20 +99,13 @@ class Etapa5GlobalPerformanceIntegrationTest {
 
 	@Test
 	void calculatesGlobalPerformanceKPIsBreakdownsAndTimelineCorrectly() throws Exception {
-		// 1. Cria bloco e tópico
+		// 1. Cria o bloco
 		String blockJson = mockMvc.perform(post("/api/study-blocks")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"title\":\"Java Core\"}"))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		String blockId = mapper.readTree(blockJson).get("id").asText();
-
-		String topicJson = mockMvc.perform(post("/api/study-blocks/{blockId}/topics", blockId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"title\":\"Coleções\"}"))
-				.andExpect(status().isCreated())
-				.andReturn().getResponse().getContentAsString();
-		String topicId = mapper.readTree(topicJson).get("id").asText();
 
 		// 2. Cria 2 questões (1 de múltipla escolha e 1 discursiva)
 		String q1Json = mockMvc.perform(post("/api/study-blocks/{blockId}/questions", blockId)
@@ -139,11 +128,6 @@ class Etapa5GlobalPerformanceIntegrationTest {
 		String q1Id = q1Node.get("id").asText();
 		String q1CorrectOptId = q1Node.get("options").get(0).get("id").asText();
 		String q1WrongOptId = q1Node.get("options").get(1).get("id").asText();
-
-		// Vincula q1 ao tópico Coleções
-		mockMvc.perform(post("/api/study-blocks/{blockId}/topics/{topicId}/questions/{questionId}",
-						blockId, topicId, q1Id))
-				.andExpect(status().isNoContent());
 
 		String q2Json = mockMvc.perform(post("/api/study-blocks/{blockId}/questions", blockId)
 						.contentType(MediaType.APPLICATION_JSON)
@@ -197,10 +181,10 @@ class Etapa5GlobalPerformanceIntegrationTest {
 				.andExpect(jsonPath("$.blocks[0].blockTitle").value("Java Core"))
 				.andExpect(jsonPath("$.blocks[0].totalAttempts").value(3))
 				.andExpect(jsonPath("$.blocks[0].uniqueQuestions").value(2))
-				.andExpect(jsonPath("$.blocks[0].topics", hasSize(1)))
-				.andExpect(jsonPath("$.blocks[0].topics[0].topicTitle").value("Coleções"))
-				.andExpect(jsonPath("$.blocks[0].topics[0].totalAttempts").value(2))
-				.andExpect(jsonPath("$.blocks[0].topics[0].accuracyPercent").value(50))
+				.andExpect(jsonPath("$.blocks[0].accuracyPercent").value(67))
+				.andExpect(jsonPath("$.blocks[0].averageScorePercent").isNumber())
+				.andExpect(jsonPath("$.blocks[0].topics").doesNotExist())
+				.andExpect(jsonPath("$.recentAttempts[0].topicTitle").doesNotExist())
 				.andExpect(jsonPath("$.timeline", hasSize(greaterThanOrEqualTo(1))))
 				.andExpect(jsonPath("$.recentAttempts", hasSize(3)))
 				.andReturn().getResponse().getContentAsString();
@@ -217,11 +201,11 @@ class Etapa5GlobalPerformanceIntegrationTest {
 				.andExpect(jsonPath("$.overall.uniqueQuestionsAnswered").value(1))
 				.andExpect(jsonPath("$.overall.accuracyPercent").value(50));
 
-		// Filtro por tópico Coleções (apenas q1 -> 2 tentativas)
-		mockMvc.perform(get("/api/performance/global?topicId={topicId}", topicId))
+		// Filtro por bloco (as 3 tentativas são do único bloco)
+		mockMvc.perform(get("/api/performance/global?studyBlockId={blockId}", blockId))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.overall.totalAttempts").value(2))
-				.andExpect(jsonPath("$.overall.uniqueQuestionsAnswered").value(1));
+				.andExpect(jsonPath("$.overall.totalAttempts").value(3))
+				.andExpect(jsonPath("$.blocks", hasSize(1)));
 	}
 
 	@Test

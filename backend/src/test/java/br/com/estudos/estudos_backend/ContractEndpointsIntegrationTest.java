@@ -29,8 +29,6 @@ import br.com.estudos.estudos_backend.career.adapter.out.persistence.CareerJobRe
 import br.com.estudos.estudos_backend.career.domain.CareerJob;
 import br.com.estudos.estudos_backend.career.domain.ExperienceLevel;
 import br.com.estudos.estudos_backend.career.domain.JobModality;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockRepository;
 
@@ -49,9 +47,6 @@ class ContractEndpointsIntegrationTest {
 
 	@Autowired
 	private StudyBlockRepository blockRepository;
-
-	@Autowired
-	private KnowledgeTopicRepository topicRepository;
 
 	@Autowired
 	private CareerJobRepository jobRepository;
@@ -146,12 +141,11 @@ class ContractEndpointsIntegrationTest {
 	}
 
 	@Test
-	void skillAssessmentGeneratesPracticalExerciseForTopic() throws Exception {
-		String blockId = createBlock("Bloco competências");
+	void skillAssessmentGeneratesPracticalExerciseForBlock() throws Exception {
+		String blockId = createBlock("Polimorfismo");
 		createMaterial(blockId);
-		topicRepository.save(new KnowledgeTopic(
-				blockRepository.findById(UUID.fromString(blockId)).orElseThrow(), null, "Polimorfismo", "Conceito de OO"));
 
+		// A competência é o próprio bloco (título, sem diferenciar maiúsculas).
 		mockMvc.perform(post("/api/career/skills/assess")
 				.header(CurrentUserResolver.USER_HEADER, userId)
 				.contentType(MediaType.APPLICATION_JSON)

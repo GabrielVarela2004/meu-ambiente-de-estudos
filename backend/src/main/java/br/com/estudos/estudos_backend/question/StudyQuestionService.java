@@ -1,7 +1,6 @@
 package br.com.estudos.estudos_backend.question;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -13,8 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.learning.ActivityOriginType;
 import br.com.estudos.estudos_backend.learning.AssistanceLevel;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
@@ -32,21 +29,11 @@ public class StudyQuestionService {
 	private final StudyBlockService blockService;
 	private final StudyMaterialRepository materialRepository;
 	private final StudyQuestionAttemptRepository attemptRepository;
-	private final KnowledgeTopicRepository knowledgeTopicRepository;
 	private final CurrentUserResolver currentUserResolver;
 
 	public StudyQuestionService(StudyQuestionRepository repository, StudyBlockService blockService,
 			StudyMaterialRepository materialRepository, StudyQuestionAttemptRepository attemptRepository) {
-		this(repository, blockService, materialRepository, attemptRepository, null, new CurrentUserResolver());
-	}
-
-	public StudyQuestionService(
-			StudyQuestionRepository repository,
-			StudyBlockService blockService,
-			StudyMaterialRepository materialRepository,
-			StudyQuestionAttemptRepository attemptRepository,
-			CurrentUserResolver currentUserResolver) {
-		this(repository, blockService, materialRepository, attemptRepository, null, currentUserResolver);
+		this(repository, blockService, materialRepository, attemptRepository, new CurrentUserResolver());
 	}
 
 	@Autowired
@@ -55,21 +42,18 @@ public class StudyQuestionService {
 			StudyBlockService blockService,
 			StudyMaterialRepository materialRepository,
 			StudyQuestionAttemptRepository attemptRepository,
-			KnowledgeTopicRepository knowledgeTopicRepository,
 			CurrentUserResolver currentUserResolver) {
 		this.repository = repository;
 		this.blockService = blockService;
 		this.materialRepository = materialRepository;
 		this.attemptRepository = attemptRepository;
-		this.knowledgeTopicRepository = knowledgeTopicRepository;
 		this.currentUserResolver = currentUserResolver == null ? new CurrentUserResolver() : currentUserResolver;
 	}
 
-	/** Enunciados mais recentes do bloco (só do tópico, se informado), enviados à IA para ela não repetir perguntas. */
+	/** Enunciados mais recentes do bloco, enviados à IA para ela não repetir perguntas. */
 	@Transactional(readOnly = true)
-	public List<String> recentPrompts(UUID blockId, UUID topicId, int limit) {
+	public List<String> recentPrompts(UUID blockId, int limit) {
 		return repository.findAllByStudyBlockIdAndStatusOrderByUpdatedAtDesc(blockId, StudyQuestionStatus.ACTIVE).stream()
-				.filter(question -> topicId == null || topicId.equals(question.getTopicId()))
 				.map(StudyQuestion::getPrompt)
 				.filter(prompt -> prompt != null && !prompt.isBlank())
 				.limit(limit)
@@ -79,7 +63,7 @@ public class StudyQuestionService {
 	@Transactional
 	public StudyQuestion create(UUID blockId, UUID materialId, String prompt, String explanation,
 			List<StudyQuestionController.OptionRequest> options) {
-		return create(blockId, materialId, null, null, prompt, explanation,
+		return create(blockId, materialId, null, prompt, explanation,
 				StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE, null, options);
 	}
 
@@ -87,18 +71,11 @@ public class StudyQuestionService {
 	public StudyQuestion create(UUID blockId, UUID materialId, String prompt, String explanation,
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String expectedAnswer,
 			List<StudyQuestionController.OptionRequest> options) {
-		return create(blockId, materialId, null, null, prompt, explanation, difficulty, format, expectedAnswer, options);
+		return create(blockId, materialId, null, prompt, explanation, difficulty, format, expectedAnswer, options);
 	}
 
 	@Transactional
-	public StudyQuestion create(UUID blockId, UUID materialId, UUID topicId, String prompt, String explanation,
-			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String expectedAnswer,
-			List<StudyQuestionController.OptionRequest> options) {
-		return create(blockId, materialId, topicId, null, prompt, explanation, difficulty, format, expectedAnswer, options);
-	}
-
-	@Transactional
-	public StudyQuestion create(UUID blockId, UUID materialId, UUID topicId, String sourceExcerpt,
+	public StudyQuestion create(UUID blockId, UUID materialId, String sourceExcerpt,
 			String prompt, String explanation, StudyQuestionDifficulty difficulty,
 			StudyQuestionFormat format, String expectedAnswer,
 			List<StudyQuestionController.OptionRequest> options) {
@@ -121,7 +98,7 @@ public class StudyQuestionService {
 
 		validateFormatAndInputs(resolvedFormat, normalizedExpected, options);
 
-		StudyQuestion question = new StudyQuestion(block, material, topicId, normalizedExcerpt, prompt.trim(), explanation,
+		StudyQuestion question = new StudyQuestion(block, material, null, normalizedExcerpt, prompt.trim(), explanation,
 				resolvedDifficulty, resolvedFormat, normalizedExpected);
 		if (resolvedFormat != StudyQuestionFormat.DISCURSIVE && options != null) {
 			for (int i = 0; i < options.size(); i++) {
@@ -130,19 +107,6 @@ public class StudyQuestionService {
 			}
 		}
 		return repository.save(question);
-	}
-
-	@Transactional(readOnly = true)
-	public Map<UUID, String> getTopicTitlesForBlock(UUID blockId) {
-		if (knowledgeTopicRepository == null) {
-			return Map.of();
-		}
-		List<KnowledgeTopic> topics = knowledgeTopicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(blockId);
-		Map<UUID, String> result = new LinkedHashMap<>();
-		for (KnowledgeTopic topic : topics) {
-			result.put(topic.getId(), topic.getTitle());
-		}
-		return result;
 	}
 
 	@Transactional(readOnly = true)
@@ -188,13 +152,6 @@ public class StudyQuestionService {
 		AssistanceLevel resolvedHelp = helpLevel == null ? AssistanceLevel.NONE : helpLevel;
 
 		String blockTitle = question.getStudyBlock().getTitle();
-		UUID topicId = question.getTopicId();
-		String topicTitle = null;
-		if (topicId != null && knowledgeTopicRepository != null) {
-			topicTitle = knowledgeTopicRepository.findById(topicId)
-					.map(KnowledgeTopic::getTitle)
-					.orElse(null);
-		}
 		String sourceTitle = question.getStudyMaterial() != null ? question.getStudyMaterial().getTitle() : null;
 		String sourceExcerpt = question.getSourceExcerpt();
 		String difficultyName = question.getDifficulty().name();
@@ -229,7 +186,7 @@ public class StudyQuestionService {
 				ownerId,
 				blockId,
 				id,
-				topicId,
+				null,
 				studySessionId,
 				sourceMaterialId,
 				optionId,
@@ -249,7 +206,7 @@ public class StudyQuestionService {
 				expectedOptionText,
 				question.getExplanation(),
 				blockTitle,
-				topicTitle,
+				null,
 				difficultyName,
 				formatName,
 				sourceTitle,
@@ -464,18 +421,16 @@ public class StudyQuestionService {
 		String ownerId = currentUserResolver.currentUserId();
 		int attemptNumber = (int) attemptRepository.countByOwnerIdAndQuestionId(ownerId, questionId) + 1;
 		StudyMaterial material = question.getStudyMaterial();
-		String topicTitle = question.getTopicId() == null || knowledgeTopicRepository == null ? null
-				: knowledgeTopicRepository.findById(question.getTopicId()).map(KnowledgeTopic::getTitle).orElse(null);
 		String modelAnswer = question.getModelAnswer() != null && !question.getModelAnswer().isBlank()
 				? question.getModelAnswer() : question.getExpectedAnswer();
 
-		StudyQuestionAttempt attempt = new StudyQuestionAttempt(ownerId, blockId, questionId, question.getTopicId(),
+		StudyQuestionAttempt attempt = new StudyQuestionAttempt(ownerId, blockId, questionId, null,
 				studySessionId, material == null ? null : material.getId(), null, cleanAnswer, false,
 				originType == null ? ActivityOriginType.BLOCK : originType, QuestionEvaluationStatus.PENDING_EVALUATION,
 				0, timeSpentSeconds, attemptNumber, helpLevel == null ? AssistanceLevel.NONE : helpLevel, 0,
 				PENDING_MESSAGE);
 		attempt.populateSnapshots(question.getPrompt(), cleanAnswer, modelAnswer, question.getExplanation(),
-				question.getStudyBlock().getTitle(), topicTitle, question.getDifficulty().name(),
+				question.getStudyBlock().getTitle(), null, question.getDifficulty().name(),
 				question.getFormat().name(), material == null ? null : material.getTitle(), question.getSourceExcerpt());
 		if (result != null) {
 			applyResult(attempt, result, rigor);

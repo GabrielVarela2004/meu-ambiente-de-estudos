@@ -54,3 +54,18 @@ vídeo, vários vídeos de uma vez, título e chat na importação), e o modal f
 
 **Recomendação:** A — a página Adicionar Conteúdo cobre todos os casos; se o atalho fizer falta, o botão da área
 do bloco pode abrir essa página já com o bloco selecionado (como faz hoje).
+
+## D4 — Apagar do banco as tabelas e colunas de tópicos (Fase 2 da remoção do Mapeamento de Fontes)
+
+**Contexto:** em 2026-10-31 o Mapeamento de Fontes saiu do código (pacote `knowledge`, telas e endpoints). Para não
+perder dados, a Fase 1 deixou no banco, sem uso: `knowledge_topics`, `knowledge_topic_questions`,
+`topic_review_decisions` e as colunas `topic_id` / `topic_title_snapshot` de questões, tentativas e exercícios.
+O enum `AiOperation.TOPIC_EXTRACTION` ficou como legado porque rotas, cache e consumo de IA gravados o referenciam.
+
+| Opção | Esforço | Prós | Contras |
+|---|---|---|---|
+| A. Migração nova que apaga tabelas e colunas (após `pg_dump`) | baixo | Banco sem resto de funcionalidade removida; tira o helper `LegacyTopicTables` dos testes | Irreversível sem o backup; títulos de tópico antigos somem do histórico |
+| B. Manter como está | nenhum | Dá para voltar atrás; nada some | Tabelas e colunas mortas; testes precisam limpá-las |
+
+**Recomendação:** B por alguns dias de uso; depois A, com backup antes (`docker exec programa-estudos-ia-postgres
+pg_dump -U estudos estudos > backup.sql`), apagando também as linhas `TOPIC_EXTRACTION` de rotas e cache e o valor do enum.

@@ -6,7 +6,6 @@ import java.util.concurrent.Executor;
 import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
 import br.com.estudos.estudos_backend.common.exception.NotFoundException;
 import br.com.estudos.estudos_backend.config.YoutubeProcessingConfiguration;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicService;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockService;
@@ -35,13 +34,12 @@ public class YoutubeImportService {
 	private final YoutubeOEmbedClient oEmbedClient;
 	private final YoutubeVideoAnalyzer videoAnalyzer;
 	private final YoutubeTranscriptExtractor transcriptExtractor;
-	private final KnowledgeTopicService knowledgeTopicService;
 	private final CurrentUserResolver currentUserResolver;
 	private final Executor executor;
 
 	public YoutubeImportService(StudyMaterialRepository repository, StudyBlockService blockService,
 			YoutubeOEmbedClient oEmbedClient, YoutubeVideoAnalyzer videoAnalyzer,
-			YoutubeTranscriptExtractor transcriptExtractor, KnowledgeTopicService knowledgeTopicService,
+			YoutubeTranscriptExtractor transcriptExtractor,
 			CurrentUserResolver currentUserResolver,
 			@Qualifier(YoutubeProcessingConfiguration.EXECUTOR) Executor executor) {
 		this.repository = repository;
@@ -49,7 +47,6 @@ public class YoutubeImportService {
 		this.oEmbedClient = oEmbedClient;
 		this.videoAnalyzer = videoAnalyzer;
 		this.transcriptExtractor = transcriptExtractor;
-		this.knowledgeTopicService = knowledgeTopicService;
 		this.currentUserResolver = currentUserResolver;
 		this.executor = executor;
 	}
@@ -185,11 +182,6 @@ public class YoutubeImportService {
 		fresh.completeVideoProcessing(title, outcome.content(), outcome.language(), outcome.method(),
 				outcome.durationSeconds());
 		repository.save(fresh);
-		try {
-			knowledgeTopicService.extractFromSources(fresh.getStudyBlock().getId(), false);
-		} catch (RuntimeException e) {
-			log.warn("Vídeo {} importado, mas a atualização dos tópicos falhou: {}", materialId, describe(e));
-		}
 	}
 
 	private YoutubeOEmbedClient.VideoInfo metadataOrNull(String videoId) {

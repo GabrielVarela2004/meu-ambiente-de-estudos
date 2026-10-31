@@ -102,7 +102,7 @@ public class CareerJobController {
 	public ResponseEntity<CareerDto.JobStudyBlockResponse> createStudyBlock(@PathVariable UUID id) {
 		CareerJobInsightService.JobStudyBlock result = insightService.createStudyBlock(id);
 		CareerDto.JobStudyBlockResponse body = new CareerDto.JobStudyBlockResponse(
-				result.studyBlockId(), result.title(), result.topics(), result.created());
+				result.studyBlockId(), result.title(), result.skills(), result.created());
 		return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(body);
 	}
 

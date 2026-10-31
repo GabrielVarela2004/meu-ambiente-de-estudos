@@ -6,7 +6,6 @@ import { IconButton } from './components/ui/Button'
 import { useMediaQuery } from './hooks/useMediaQuery'
 import { GlobalPerformancePanel } from './features/learning/GlobalPerformancePanel'
 import { GlobalReviewsBatteryPanel } from './features/reviews/GlobalReviewsBatteryPanel'
-import { TopicsPanel } from './features/knowledge/TopicsPanel'
 import { TutorChatPanel } from './features/chat/TutorChatPanel'
 import { StudyBlocksPage, type StudyBlock } from './pages/StudyBlocksPage'
 import { AddContentPage } from './pages/AddContentPage'
@@ -59,7 +58,6 @@ const pageTitles: Record<PageId, string> = {
   'practical-global': 'Exercícios Práticos',
   'theoretical-block': 'Exercícios Teóricos',
   'theoretical-global': 'Exercícios Teóricos',
-  'source-mapping': 'Mapeamento de Fontes',
   'goals-sessions': 'Metas e Sessões',
   'career-job-feed': 'Feed de Vagas',
   'career-profile': 'Perfil Profissional',
@@ -316,10 +314,6 @@ function App() {
               setActiveWorkspaceBlock(null)
               setCurrentPage('theoretical-block')
             }}
-            onNavigateToTopics={() => {
-              setActiveWorkspaceBlock(null)
-              setCurrentPage('source-mapping')
-            }}
           />
         ) : (
           <>
@@ -424,23 +418,6 @@ function App() {
                 selectedBlockId={selectedBlockId}
                 onSelectBlock={(id) => setSelectedBlockId(id)}
               />
-            )}
-
-            {currentPage === 'source-mapping' && (
-              <div className="page-wrapper">
-                {selectedBlockId ? (
-                  <TopicsPanel
-                    blockId={selectedBlockId}
-                    questions={[]}
-                    evidenceVersion={0}
-                  />
-                ) : (
-                  <div className="card empty-state-box">
-                    <h3>Selecione um Bloco de Estudo</h3>
-                    <p>Escolha um dos blocos na barra lateral para visualizar o mapa conceitual de tópicos e dependências.</p>
-                  </div>
-                )}
-              </div>
             )}
 
             {currentPage === 'goals-sessions' && (

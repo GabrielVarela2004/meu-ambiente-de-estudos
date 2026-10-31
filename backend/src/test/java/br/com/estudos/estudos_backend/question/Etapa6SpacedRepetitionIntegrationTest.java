@@ -16,18 +16,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.estudos.estudos_backend.LegacyTopicTables;
 import br.com.estudos.estudos_backend.chat.ChatConversationRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttemptRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseRepository;
 import br.com.estudos.estudos_backend.goal.StudyGoalRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicQuestionRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockRepository;
 import br.com.estudos.estudos_backend.studysession.StudySessionRepository;
@@ -65,25 +65,21 @@ class Etapa6SpacedRepetitionIntegrationTest {
 	private StudyGoalRepository goalRepository;
 
 	@Autowired
-	private KnowledgeTopicQuestionRepository topicQuestionRepository;
-
-	@Autowired
-	private KnowledgeTopicRepository topicRepository;
-
-	@Autowired
 	private ChatConversationRepository chatConversationRepository;
 
 	private final ObjectMapper mapper = new ObjectMapper();
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
 	void cleanDatabase() {
 		chatConversationRepository.deleteAllInBatch();
 		exerciseAttemptRepository.deleteAllInBatch();
 		exerciseRepository.deleteAllInBatch();
-		topicQuestionRepository.deleteAllInBatch();
+		LegacyTopicTables.clear(jdbcTemplate);
 		questionAttemptRepository.deleteAllInBatch();
 		questionRepository.deleteAllInBatch();
-		topicRepository.deleteAllInBatch();
 		goalRepository.deleteAllInBatch();
 		sessionRepository.deleteAllInBatch();
 		materialRepository.deleteAllInBatch();

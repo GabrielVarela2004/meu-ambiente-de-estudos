@@ -14,18 +14,6 @@ type OverallPerformanceSummary = {
   errorPercent: number | null
 }
 
-type TopicPerformanceSummary = {
-  topicId: string
-  topicTitle: string
-  totalAttempts: number
-  uniqueQuestions: number
-  evaluatedAttempts: number
-  correctAttempts: number
-  incorrectAttempts: number
-  accuracyPercent: number | null
-  errorPercent: number | null
-}
-
 type BlockPerformanceSummary = {
   studyBlockId: string
   blockTitle: string
@@ -36,7 +24,10 @@ type BlockPerformanceSummary = {
   incorrectAttempts: number
   accuracyPercent: number | null
   errorPercent: number | null
-  topics: TopicPerformanceSummary[]
+  /** Respostas parciais (avaliadas, mas não contam como acerto). */
+  partialAttempts: number
+  /** Nota média (0–100) das tentativas corrigidas. */
+  averageScorePercent: number | null
 }
 
 type TimelinePoint = {
@@ -52,8 +43,6 @@ type HistoricalAttemptDetail = {
   answeredAt: string
   studyBlockId: string
   studyBlockTitle: string
-  topicId: string | null
-  topicTitle: string | null
   questionId: string | null
   difficulty: string
   questionFormat: string
@@ -76,11 +65,6 @@ type GlobalPerformanceData = {
 }
 
 type StudyBlockOption = {
-  id: string
-  title: string
-}
-
-type TopicOption = {
   id: string
   title: string
 }
@@ -109,15 +93,10 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
   // Filtros dinâmicos
   const [days, setDays] = useState<number | ''>(30)
   const [selectedBlockId, setSelectedBlockId] = useState<string>('')
-  const [selectedTopicId, setSelectedTopicId] = useState<string>('')
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('')
 
   // Opções para os selects
   const [blocks, setBlocks] = useState<StudyBlockOption[]>([])
-  const [topics, setTopics] = useState<TopicOption[]>([])
-
-  // Estado para expandir/recolher tópicos dos blocos
-  const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({})
 
   // Carrega blocos para o filtro
   useEffect(() => {
@@ -132,24 +111,6 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
     void loadBlocks()
   }, [])
 
-  // Carrega tópicos quando seleciona um bloco
-  useEffect(() => {
-    async function loadTopics() {
-      if (!selectedBlockId) {
-        setTopics([])
-        setSelectedTopicId('')
-        return
-      }
-      try {
-        const result = await request<TopicOption[]>(`/api/study-blocks/${selectedBlockId}/topics`)
-        setTopics(result)
-      } catch {
-        setTopics([])
-      }
-    }
-    void loadTopics()
-  }, [selectedBlockId])
-
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -160,9 +121,6 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
       }
       if (selectedBlockId) {
         params.append('studyBlockId', selectedBlockId)
-      }
-      if (selectedTopicId) {
-        params.append('topicId', selectedTopicId)
       }
       if (selectedDifficulty) {
         params.append('difficulty', selectedDifficulty)
@@ -176,16 +134,9 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
     } finally {
       setLoading(false)
     }
-  }, [days, selectedBlockId, selectedTopicId, selectedDifficulty])
+  }, [days, selectedBlockId, selectedDifficulty])
 
   useDeferredEffect(() => loadData(), [loadData])
-
-  const toggleBlockExpanded = (blockId: string) => {
-    setExpandedBlocks((prev) => ({
-      ...prev,
-      [blockId]: !prev[blockId],
-    }))
-  }
 
   const overall = data?.overall
 
@@ -230,23 +181,6 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
               {blocks.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label htmlFor="filter-topic">Tópico</label>
-            <select
-              id="filter-topic"
-              value={selectedTopicId}
-              onChange={(e) => setSelectedTopicId(e.target.value)}
-              disabled={!selectedBlockId}
-            >
-              <option value="">{selectedBlockId ? 'Todos os tópicos' : 'Selecione um bloco antes'}</option>
-              {topics.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
                 </option>
               ))}
             </select>
@@ -351,103 +285,65 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
             </section>
           )}
 
-          {/* Detalhamento por Assunto / Bloco e Tópico */}
+          {/* Detalhamento por Bloco */}
           <section className="card breakdown-section">
             <div className="section-heading">
               <div>
-                <h3>Detalhamento por Bloco e Tópico</h3>
-                <p>Abra os blocos para inspecionar o desempenho específico em cada tópico.</p>
+                <h3>Detalhamento por Bloco</h3>
+                <p>Desempenho de cada bloco de estudo no período e nos filtros selecionados.</p>
               </div>
             </div>
 
             {data.blocks.length === 0 ? (
               <p className="empty-notice">Nenhum dado encontrado para os filtros selecionados.</p>
             ) : (
-              <div className="block-breakdown-list">
-                {data.blocks.map((block) => {
-                  const isExpanded = !!expandedBlocks[block.studyBlockId]
-                  return (
-                    <div key={block.studyBlockId} className="block-breakdown-item card">
-                      <div className="block-breakdown-header" onClick={() => toggleBlockExpanded(block.studyBlockId)}>
-                        <div className="block-title-area">
-                          <button
-                            type="button"
-                            className="expand-toggle-btn"
-                            aria-label={isExpanded ? 'Recolher tópicos' : 'Expandir tópicos'}
-                          >
-                            {isExpanded ? '▼' : '►'}
-                          </button>
-                          <div>
-                            <h4>{block.blockTitle}</h4>
-                            <span className="badge">
-                              {block.totalAttempts} tentativa(s) · {block.uniqueQuestions} questão(ões) única(s)
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="block-stats-area">
+              <div className="breakdown-table-wrapper">
+                <table className="breakdown-table">
+                  <thead>
+                    <tr>
+                      <th>Bloco</th>
+                      <th>Tentativas</th>
+                      <th>Questões Únicas</th>
+                      <th>Acertos</th>
+                      <th>Parciais</th>
+                      <th>Erros</th>
+                      <th>Nota Média</th>
+                      <th>Precisão</th>
+                      {onSelectBlock && <th aria-label="Ações" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.blocks.map((block) => (
+                      <tr key={block.studyBlockId}>
+                        <td>
+                          <strong>{block.blockTitle}</strong>
+                        </td>
+                        <td>{block.totalAttempts}</td>
+                        <td>{block.uniqueQuestions}</td>
+                        <td className="text-success">{block.correctAttempts}</td>
+                        <td>{block.partialAttempts}</td>
+                        <td className="text-danger">{block.incorrectAttempts}</td>
+                        <td>{block.averageScorePercent !== null ? `${block.averageScorePercent}%` : '—'}</td>
+                        <td>
                           <span className="badge accuracy">
-                            Precisão: {block.accuracyPercent !== null ? `${block.accuracyPercent}%` : '—'}
+                            {block.accuracyPercent !== null ? `${block.accuracyPercent}%` : '—'}
                           </span>
-                          <span className="badge danger">
-                            Erros: {block.errorPercent !== null ? `${block.errorPercent}%` : '—'}
-                          </span>
-                          {onSelectBlock && (
+                        </td>
+                        {onSelectBlock && (
+                          <td>
                             <button
                               type="button"
-                              className="btn-secondary btn-sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onSelectBlock(block.studyBlockId)
-                              }}
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => onSelectBlock(block.studyBlockId)}
                             >
                               Abrir Bloco
                             </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="topics-breakdown-container">
-                          {block.topics.length === 0 ? (
-                            <p className="empty-subnotice">Nenhum tópico com tentativas registradas neste bloco.</p>
-                          ) : (
-                            <table className="breakdown-table">
-                              <thead>
-                                <tr>
-                                  <th>Tópico</th>
-                                  <th>Tentativas</th>
-                                  <th>Questões Únicas</th>
-                                  <th>Acertos</th>
-                                  <th>Erros</th>
-                                  <th>Precisão</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {block.topics.map((t) => (
-                                  <tr key={t.topicId}>
-                                    <td>
-                                      <strong>{t.topicTitle}</strong>
-                                    </td>
-                                    <td>{t.totalAttempts}</td>
-                                    <td>{t.uniqueQuestions}</td>
-                                    <td className="text-success">{t.correctAttempts}</td>
-                                    <td className="text-danger">{t.incorrectAttempts}</td>
-                                    <td>
-                                      <span className="badge accuracy">
-                                        {t.accuracyPercent !== null ? `${t.accuracyPercent}%` : '—'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>
@@ -478,7 +374,6 @@ export function GlobalPerformancePanel({ onSelectBlock }: GlobalPerformancePanel
                           {attempt.correct ? 'Acertou' : 'Errou'}
                         </span>
                         <span className="badge">{attempt.studyBlockTitle}</span>
-                        {attempt.topicTitle && <span className="badge topic">{attempt.topicTitle}</span>}
                         <span className="badge">
                           {difficultyLabels[attempt.difficulty] ?? attempt.difficulty}
                         </span>

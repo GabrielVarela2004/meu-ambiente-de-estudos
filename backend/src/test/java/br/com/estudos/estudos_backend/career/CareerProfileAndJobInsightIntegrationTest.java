@@ -1,5 +1,6 @@
 package br.com.estudos.estudos_backend.career;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -132,13 +133,14 @@ class CareerProfileAndJobInsightIntegrationTest {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.created").value(true))
 				.andExpect(jsonPath("$.title").value("Vaga: Dev Backend Júnior — Empresa G"))
-				.andExpect(jsonPath("$.topics", hasItem("Kubernetes")))
+				.andExpect(jsonPath("$.skills", hasItem("Kubernetes")))
 				.andReturn().getResponse().getContentAsString());
 		String blockId = created.get("studyBlockId").asText();
 
-		mockMvc.perform(get("/api/study-blocks/" + blockId + "/topics").header(CurrentUserResolver.USER_HEADER, user))
+		// As competências da vaga vão no objetivo do bloco (não há mais tópicos).
+		mockMvc.perform(get("/api/study-blocks/" + blockId).header(CurrentUserResolver.USER_HEADER, user))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[*].title", hasItem("Kubernetes")));
+				.andExpect(jsonPath("$.learningObjective", containsString("Kubernetes")));
 
 		mockMvc.perform(get("/api/career/jobs/" + job.getId()).header(CurrentUserResolver.USER_HEADER, user))
 				.andExpect(jsonPath("$.studyBlockId").value(blockId));

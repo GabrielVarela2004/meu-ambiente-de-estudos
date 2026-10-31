@@ -13,18 +13,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.estudos.estudos_backend.LegacyTopicTables;
 import br.com.estudos.estudos_backend.chat.ChatConversationRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttemptRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseRepository;
 import br.com.estudos.estudos_backend.goal.StudyGoalRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicQuestionRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
 import br.com.estudos.estudos_backend.question.StudyQuestionAttemptRepository;
 import br.com.estudos.estudos_backend.question.StudyQuestionRepository;
@@ -70,25 +70,21 @@ class CentralLearningHistoryIntegrationTest {
 	private StudyGoalRepository goalRepository;
 
 	@Autowired
-	private KnowledgeTopicQuestionRepository topicQuestionRepository;
-
-	@Autowired
-	private KnowledgeTopicRepository topicRepository;
-
-	@Autowired
 	private ChatConversationRepository chatConversationRepository;
 
 	private final ObjectMapper mapper = new ObjectMapper();
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
 	void cleanDatabase() {
 		chatConversationRepository.deleteAllInBatch();
 		exerciseAttemptRepository.deleteAllInBatch();
 		exerciseRepository.deleteAllInBatch();
-		topicQuestionRepository.deleteAllInBatch();
+		LegacyTopicTables.clear(jdbcTemplate);
 		questionAttemptRepository.deleteAllInBatch();
 		questionRepository.deleteAllInBatch();
-		topicRepository.deleteAllInBatch();
 		goalRepository.deleteAllInBatch();
 		sessionRepository.deleteAllInBatch();
 		materialRepository.deleteAllInBatch();
@@ -173,14 +169,6 @@ class CentralLearningHistoryIntegrationTest {
 				.andReturn().getResponse().getContentAsString();
 		String blockId = mapper.readTree(blockJson).get("id").asText();
 
-		// Cria um tópico e vincula a uma questão
-		String topicJson = mockMvc.perform(post("/api/study-blocks/{blockId}/topics", blockId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"title\":\"Injeção de Dependência\"}"))
-				.andExpect(status().isCreated())
-				.andReturn().getResponse().getContentAsString();
-		String topicId = mapper.readTree(topicJson).get("id").asText();
-
 		String questionJson = mockMvc.perform(post("/api/study-blocks/{blockId}/questions", blockId)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
@@ -194,10 +182,6 @@ class CentralLearningHistoryIntegrationTest {
 		String questionId = questionNode.get("id").asText();
 		String correctOptionId = questionNode.get("options").get(0).get("id").asText();
 		String wrongOptionId = questionNode.get("options").get(1).get("id").asText();
-
-		mockMvc.perform(post("/api/study-blocks/{blockId}/topics/{topicId}/questions/{questionId}",
-						blockId, topicId, questionId))
-				.andExpect(status().isNoContent());
 
 		// 1ª tentativa (incorreta) e 2ª tentativa (correta)
 		mockMvc.perform(post("/api/study-blocks/{blockId}/questions/{questionId}/answers", blockId, questionId)
@@ -253,17 +237,17 @@ class CentralLearningHistoryIntegrationTest {
 	void excludesUngradableAttemptsFromTheoreticalAccuracyDenominator() {
 		LearningCriteriaProperties props = LearningCriteriaProperties.defaults();
 		LearningHistoryService service = new LearningHistoryService(
-				null, null, null, null, null, new CurrentUserResolver(), props);
+				null, null, null, new CurrentUserResolver(), props);
 
 		LearningAttemptRecord ungradable = new LearningAttemptRecord(
 				java.util.UUID.randomUUID(), "default-user", java.time.OffsetDateTime.now(),
-				java.util.UUID.randomUUID(), null, null, LearningModality.THEORETICAL,
+				java.util.UUID.randomUUID(), null, LearningModality.THEORETICAL,
 				java.util.UUID.randomUUID(), null, ActivityOriginType.BLOCK,
 				false, false, 0, null, 1, AssistanceLevel.NONE, 0, false, 0, 0, false, "UNGRADABLE");
 
 		LearningAttemptRecord correct = new LearningAttemptRecord(
 				java.util.UUID.randomUUID(), "default-user", java.time.OffsetDateTime.now(),
-				java.util.UUID.randomUUID(), null, null, LearningModality.THEORETICAL,
+				java.util.UUID.randomUUID(), null, LearningModality.THEORETICAL,
 				java.util.UUID.randomUUID(), null, ActivityOriginType.BLOCK,
 				true, true, 100, null, 1, AssistanceLevel.NONE, 0, false, 0, 0, true, "CORRECT");
 

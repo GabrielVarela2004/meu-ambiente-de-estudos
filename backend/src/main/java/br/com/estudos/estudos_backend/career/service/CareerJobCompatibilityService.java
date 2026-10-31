@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 
@@ -52,17 +53,17 @@ public class CareerJobCompatibilityService {
 
 		Set<String> demonstratedNames = new HashSet<>();
 		for (CompetencyItem c : profile.demonstrated()) {
-			demonstratedNames.add(c.skillName().toLowerCase(Locale.ROOT));
+			demonstratedNames.add(c.matchText().toLowerCase(Locale.ROOT));
 		}
 
 		Set<String> inDevNames = new HashSet<>();
 		for (CompetencyItem c : profile.inDevelopment()) {
-			inDevNames.add(c.skillName().toLowerCase(Locale.ROOT));
+			inDevNames.add(c.matchText().toLowerCase(Locale.ROOT));
 		}
 
 		Set<String> studiedNames = new HashSet<>();
 		for (CompetencyItem c : profile.studied()) {
-			studiedNames.add(c.skillName().toLowerCase(Locale.ROOT));
+			studiedNames.add(c.matchText().toLowerCase(Locale.ROOT));
 		}
 
 		List<String> matched = new ArrayList<>();
@@ -106,11 +107,19 @@ public class CareerJobCompatibilityService {
 
 	private boolean matchesAny(String needle, Set<String> haystack) {
 		for (String h : haystack) {
-			if (h.contains(needle) || needle.contains(h)) {
+			if (containsWholeWord(h, needle) || containsWholeWord(needle, h)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/** O texto do bloco inclui a descrição: só conta o termo como palavra inteira ("git" não casa com "digital"). */
+	private boolean containsWholeWord(String text, String term) {
+		if (term.isBlank()) {
+			return false;
+		}
+		return Pattern.compile("(?<![\\p{L}\\p{N}])" + Pattern.quote(term) + "(?![\\p{L}\\p{N}])").matcher(text).find();
 	}
 
 	private boolean containsWord(String source, String word) {

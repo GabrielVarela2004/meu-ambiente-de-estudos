@@ -43,8 +43,7 @@ public class LearningHistoryController {
 	public GlobalPerformanceDashboardResponse getGlobalPerformance(
 			@RequestParam(required = false) Integer days,
 			@RequestParam(required = false) UUID studyBlockId,
-			@RequestParam(required = false) UUID topicId,
 			@RequestParam(required = false) StudyQuestionDifficulty difficulty) {
-		return learningHistoryService.getGlobalPerformance(days, studyBlockId, topicId, difficulty);
+		return learningHistoryService.getGlobalPerformance(days, studyBlockId, difficulty);
 	}
 }

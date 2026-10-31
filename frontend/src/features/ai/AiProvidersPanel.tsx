@@ -60,7 +60,8 @@ const operationLabel: Record<AiOperation, string> = {
   QUESTION_GENERATION: 'Questões',
   EXERCISE_GENERATION: 'Exercícios',
   EXERCISE_TUTOR: 'Tutoria nos exercícios',
-  TOPIC_EXTRACTION: 'Tópicos',
+  // Legado: só aparece no consumo já registrado antes da remoção do Mapeamento de Fontes.
+  TOPIC_EXTRACTION: 'Tópicos (desativado)',
   MATERIAL_SUMMARY: 'Resumos',
 }
 
@@ -387,7 +388,7 @@ export function AiProvidersPanel() {
               <h3 className="ai-subheading">Cache de respostas</h3>
               <p className="form-hint mb-3">
                 {cache.enabled
-                  ? `Resumos, tópicos, correções e análises repetidos vêm do cache por ${numberFormat.format(cache.ttlHours)} h, sem nova chamada. Geração de questões e chat nunca usam cache.`
+                  ? `Resumos, correções e análises repetidos vêm do cache por ${numberFormat.format(cache.ttlHours)} h, sem nova chamada. Geração de questões e chat nunca usam cache.`
                   : 'Cache desligado (AI_CACHE_ENABLED=false).'}
               </p>
               <div className="ai-cache-row">

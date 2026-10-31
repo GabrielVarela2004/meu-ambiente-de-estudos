@@ -25,8 +25,8 @@ type DifficultyStat = {
   accuracyPercent: number | null
 }
 
-type TopicStat = {
-  topic: string
+type BlockStat = {
+  block: string
   attempts: number
   accuracyPercent: number
 }
@@ -42,8 +42,8 @@ type Insights = {
   period: Period
   buckets: Bucket[]
   byDifficulty: DifficultyStat[]
-  weakestTopics: TopicStat[]
-  strongestTopics: TopicStat[]
+  weakestBlocks: BlockStat[]
+  strongestBlocks: BlockStat[]
   consistency: Consistency
   trend: number | null
   totalAttempts: number
@@ -216,14 +216,14 @@ export function LearningInsightsPanel() {
             </div>
 
             <div className="insights-box">
-              <h4>Tópicos mais fracos</h4>
-              {insights.weakestTopics.length === 0 ? (
-                <p className="empty-subnotice">Sem tópicos com tentativas suficientes.</p>
+              <h4>Blocos mais fracos</h4>
+              {insights.weakestBlocks.length === 0 ? (
+                <p className="empty-subnotice">Sem blocos com tentativas suficientes.</p>
               ) : (
                 <ul className="insights-list">
-                  {insights.weakestTopics.map((t) => (
-                    <li key={t.topic}>
-                      <span>{t.topic}</span>
+                  {insights.weakestBlocks.map((t) => (
+                    <li key={t.block}>
+                      <span>{t.block}</span>
                       <span className="badge danger">{t.accuracyPercent}%</span>
                       <span className="insights-muted">{t.attempts} tent.</span>
                     </li>
@@ -233,14 +233,14 @@ export function LearningInsightsPanel() {
             </div>
 
             <div className="insights-box">
-              <h4>Tópicos mais fortes</h4>
-              {insights.strongestTopics.length === 0 ? (
-                <p className="empty-subnotice">Nenhum tópico acima de 70% ainda.</p>
+              <h4>Blocos mais fortes</h4>
+              {insights.strongestBlocks.length === 0 ? (
+                <p className="empty-subnotice">Nenhum bloco acima de 70% ainda.</p>
               ) : (
                 <ul className="insights-list">
-                  {insights.strongestTopics.map((t) => (
-                    <li key={t.topic}>
-                      <span>{t.topic}</span>
+                  {insights.strongestBlocks.map((t) => (
+                    <li key={t.block}>
+                      <span>{t.block}</span>
                       <span className="badge accuracy">{t.accuracyPercent}%</span>
                       <span className="insights-muted">{t.attempts} tent.</span>
                     </li>

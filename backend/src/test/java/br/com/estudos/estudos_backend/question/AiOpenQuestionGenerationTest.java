@@ -46,10 +46,10 @@ class AiOpenQuestionGenerationTest {
 		when(blockService.get(blockId)).thenReturn(block);
 		when(materialRepository.findAllByStudyBlockIdAndStatusOrderByUpdatedAtDesc(blockId, StudyMaterialStatus.ACTIVE))
 				.thenReturn(List.of(new StudyMaterial(block, "Set vs List", MATERIAL)));
-		when(questionService.create(eq(blockId), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+		when(questionService.create(eq(blockId), any(), any(), any(), any(), any(), any(), any(), any()))
 				.thenAnswer(inv -> {
-					StudyQuestion question = new StudyQuestion(block, null, inv.getArgument(4), inv.getArgument(5),
-							inv.getArgument(6), inv.getArgument(7), inv.getArgument(8));
+					StudyQuestion question = new StudyQuestion(block, null, inv.getArgument(3), inv.getArgument(4),
+							inv.getArgument(5), inv.getArgument(6), inv.getArgument(7));
 					ReflectionTestUtils.setField(question, "id", UUID.randomUUID());
 					return question;
 				});
@@ -91,7 +91,7 @@ class AiOpenQuestionGenerationTest {
 	void objectiveFormatRequestStillCreatesOpenQuestionWithModelAnswerAndRubric() {
 		generatorReplying(openQuestion("usa hashCode e equals para comparar os objetos antes de inserir",
 				"[\"hashCode e equals\",\"comparação antes de inserir\"]"))
-				.generateSimulado(blockId, 1, StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE, null);
+				.generateSimulado(blockId, 1, StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE);
 
 		assertTrue(capturedPrompt.contains("Formato exigido: DISCURSIVE"));
 		// Limite de saída explícito: um padrão baixo no .env não pode cortar o JSON das questões.
@@ -99,7 +99,7 @@ class AiOpenQuestionGenerationTest {
 		assertTrue(AiQuestionGeneratorService.outputTokenBudget(3) >= 4_500);
 		assertTrue(AiQuestionGeneratorService.outputTokenBudget(10) <= 16_000);
 		assertTrue(capturedPrompt.contains("Cada pergunta exige explicação"));
-		verify(questionService).create(eq(blockId), any(), any(),
+		verify(questionService).create(eq(blockId), any(),
 				eq("usa hashCode e equals para comparar os objetos antes de inserir"),
 				eq("Explique por que o HashSet não aceita elementos duplicados."), any(),
 				eq(StudyQuestionDifficulty.INTERMEDIATE), eq(StudyQuestionFormat.DISCURSIVE), anyString(), eq(List.of()));
@@ -117,17 +117,17 @@ class AiOpenQuestionGenerationTest {
 	void questionWhoseExcerptIsNotInTheMaterialIsDiscarded() {
 		ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> generatorReplying(
 				openQuestion("o TreeSet mantém os elementos ordenados por uma árvore rubro-negra", "[\"árvore\"]"))
-				.generateSimulado(blockId, 1, StudyQuestionDifficulty.EASY, StudyQuestionFormat.DISCURSIVE, null));
+				.generateSimulado(blockId, 1, StudyQuestionDifficulty.EASY, StudyQuestionFormat.DISCURSIVE));
 
 		assertEquals(502, ex.getStatusCode().value());
-		verify(questionService, never()).create(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+		verify(questionService, never()).create(any(), any(), any(), any(), any(), any(), any(), any(), any());
 	}
 
 	@Test
 	void questionWithoutEssentialConceptsIsDiscarded() {
 		assertThrows(ResponseStatusException.class, () -> generatorReplying(
 				openQuestion("usa hashCode e equals para comparar os objetos antes de inserir", "[]"))
-				.generateSimulado(blockId, 1, StudyQuestionDifficulty.EASY, StudyQuestionFormat.DISCURSIVE, null));
+				.generateSimulado(blockId, 1, StudyQuestionDifficulty.EASY, StudyQuestionFormat.DISCURSIVE));
 	}
 
 	@Test

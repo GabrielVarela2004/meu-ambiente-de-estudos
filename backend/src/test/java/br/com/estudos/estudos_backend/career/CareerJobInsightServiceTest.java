@@ -30,7 +30,6 @@ import br.com.estudos.estudos_backend.career.service.CareerProfileService;
 import br.com.estudos.estudos_backend.career.service.CareerSkillsProfileService;
 import br.com.estudos.estudos_backend.career.service.CareerSkillsProfileService.UserCareerSkillsProfile;
 import br.com.estudos.estudos_backend.chat.AiTutorProvider;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicService;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockRepository;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockService;
@@ -52,7 +51,7 @@ class CareerJobInsightServiceTest {
 		when(profiles.getProfile()).thenReturn(new CareerProfile("u"));
 		ai = mock(AiTutorProvider.class);
 		service = new CareerJobInsightService(jobRepository, new CareerJobCompatibilityService(), skills, profiles,
-				mock(StudyBlockService.class), mock(StudyBlockRepository.class), mock(KnowledgeTopicService.class),
+				mock(StudyBlockService.class), mock(StudyBlockRepository.class),
 				mock(CurrentUserResolver.class), ai);
 
 		job = new CareerJob(null, "Fonte", "ext-1", "https://empresa.com/1", "Dev Java", "Empresa", "Remoto",

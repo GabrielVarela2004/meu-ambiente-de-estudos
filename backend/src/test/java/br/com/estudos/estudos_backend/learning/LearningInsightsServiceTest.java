@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import br.com.estudos.estudos_backend.learning.LearningInsightsService.Consistency;
 import br.com.estudos.estudos_backend.learning.LearningInsightsService.DifficultyStat;
-import br.com.estudos.estudos_backend.learning.LearningInsightsService.TopicStat;
+import br.com.estudos.estudos_backend.learning.LearningInsightsService.BlockStat;
 
 /** Regras de recomendação da análise de desempenho (Etapa I). */
 class LearningInsightsServiceTest {
@@ -26,14 +26,14 @@ class LearningInsightsServiceTest {
 	}
 
 	@Test
-	void flagsInactivityDropAndWeakTopics() {
+	void flagsInactivityDropAndWeakBlocks() {
 		List<String> tips = LearningInsightsService.recommendations(new Consistency(0, 5, 0, null),
-				NEUTRAL_DIFFICULTY, List.of(new TopicStat("Herança", 6, 33), new TopicStat("Listas", 4, 90)), -15, 20, 1);
+				NEUTRAL_DIFFICULTY, List.of(new BlockStat("Herança", 6, 33), new BlockStat("Listas", 4, 90)), -15, 20, 1);
 
 		assertTrue(tips.stream().anyMatch(t -> t.contains("não estudou nos últimos 7 dias")));
 		assertTrue(tips.stream().anyMatch(t -> t.contains("caiu 15 pontos")));
 		assertTrue(tips.stream().anyMatch(t -> t.contains("\"Herança\" (33%")));
-		assertTrue(tips.stream().noneMatch(t -> t.contains("Listas")), "tópicos fortes não viram recomendação de revisão");
+		assertTrue(tips.stream().noneMatch(t -> t.contains("Listas")), "blocos fortes não viram recomendação de revisão");
 		assertTrue(tips.stream().anyMatch(t -> t.contains("Menos de 20%")));
 	}
 
@@ -51,7 +51,7 @@ class LearningInsightsServiceTest {
 	@Test
 	void praisesSteadyProgress() {
 		List<String> tips = LearningInsightsService.recommendations(new Consistency(5, 15, 5, null),
-				NEUTRAL_DIFFICULTY, List.of(new TopicStat("Listas", 5, 80)), 2, 12, 5);
+				NEUTRAL_DIFFICULTY, List.of(new BlockStat("Listas", 5, 80)), 2, 12, 5);
 		assertEquals(List.of("Bom ritmo! Mantenha a constância e use a revisão espaçada para não esquecer o que já domina."), tips);
 	}
 }

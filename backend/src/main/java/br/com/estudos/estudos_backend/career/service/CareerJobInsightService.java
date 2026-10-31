@@ -22,7 +22,6 @@ import br.com.estudos.estudos_backend.career.domain.CareerProfile;
 import br.com.estudos.estudos_backend.career.domain.JobApplicationStatus;
 import br.com.estudos.estudos_backend.career.service.CareerJobCompatibilityService.JobMatchEvaluation;
 import br.com.estudos.estudos_backend.chat.AiTutorProvider;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicService;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockRepository;
@@ -38,7 +37,7 @@ public class CareerJobInsightService {
 
 	private static final Logger log = LoggerFactory.getLogger(CareerJobInsightService.class);
 	private static final int MAX_DESCRIPTION_CHARS = 6_000;
-	private static final int MAX_BLOCK_TOPICS = 8;
+	private static final int MAX_BLOCK_SKILLS = 8;
 	private static final int MAX_BLOCK_TITLE = 160;
 
 	private static final String ANALYSIS_INSTRUCTION = """
@@ -54,7 +53,7 @@ public class CareerJobInsightService {
 
 	public record JobAnalysis(String text, String source, int compatibilityPercent, OffsetDateTime generatedAt) {}
 
-	public record JobStudyBlock(UUID studyBlockId, String title, List<String> topics, boolean created) {}
+	public record JobStudyBlock(UUID studyBlockId, String title, List<String> skills, boolean created) {}
 
 	private final CareerJobRepository jobRepository;
 	private final CareerJobCompatibilityService compatibilityService;
@@ -62,21 +61,19 @@ public class CareerJobInsightService {
 	private final CareerProfileService profileService;
 	private final StudyBlockService studyBlockService;
 	private final StudyBlockRepository studyBlockRepository;
-	private final KnowledgeTopicService topicService;
 	private final CurrentUserResolver currentUserResolver;
 	private final AiTutorProvider aiTutorProvider;
 
 	public CareerJobInsightService(CareerJobRepository jobRepository, CareerJobCompatibilityService compatibilityService,
 			CareerSkillsProfileService skillsProfileService, CareerProfileService profileService,
 			StudyBlockService studyBlockService, StudyBlockRepository studyBlockRepository,
-			KnowledgeTopicService topicService, CurrentUserResolver currentUserResolver, AiTutorProvider aiTutorProvider) {
+			CurrentUserResolver currentUserResolver, AiTutorProvider aiTutorProvider) {
 		this.jobRepository = jobRepository;
 		this.compatibilityService = compatibilityService;
 		this.skillsProfileService = skillsProfileService;
 		this.profileService = profileService;
 		this.studyBlockService = studyBlockService;
 		this.studyBlockRepository = studyBlockRepository;
-		this.topicService = topicService;
 		this.currentUserResolver = currentUserResolver;
 		this.aiTutorProvider = aiTutorProvider;
 	}
@@ -115,7 +112,7 @@ public class CareerJobInsightService {
 	}
 
 	/**
-	 * Cria um bloco de estudo com um tópico por competência ausente ou parcial da vaga. Se a vaga já tem um
+	 * Cria um bloco de estudo cujo objetivo lista as competências ausentes ou parciais da vaga. Se a vaga já tem um
 	 * bloco ativo, devolve esse bloco sem criar outro.
 	 */
 	@Transactional
@@ -135,24 +132,21 @@ public class CareerJobInsightService {
 		Set<String> skills = new LinkedHashSet<>();
 		skills.addAll(eval.missingRequirements());
 		skills.addAll(eval.partialRequirements());
-		List<String> topics = skills.stream().limit(MAX_BLOCK_TOPICS).toList();
+		List<String> skillList = skills.stream().limit(MAX_BLOCK_SKILLS).toList();
 
 		String title = truncate("Vaga: " + job.getTitle()
 				+ (job.getCompany() != null && !job.getCompany().isBlank() ? " — " + job.getCompany() : ""), MAX_BLOCK_TITLE);
 		String description = truncate("Bloco criado a partir da vaga " + job.getTitle()
 				+ (job.getUrl() != null ? " (" + job.getUrl() + ")" : "") + ". Compatibilidade atual: "
 				+ eval.matchPercent() + "%.", 2000);
-		String objective = topics.isEmpty()
+		String objective = skillList.isEmpty()
 				? "Reforçar as competências pedidas pela vaga e preparar a candidatura."
-				: truncate("Desenvolver as competências pedidas pela vaga: " + String.join(", ", topics) + ".", 2000);
+				: truncate("Desenvolver as competências pedidas pela vaga: " + String.join(", ", skillList) + ".", 2000);
 
 		StudyBlock block = studyBlockService.create(title, description, objective);
-		for (String topic : topics) {
-			topicService.create(block.getId(), topic, "Competência pedida pela vaga " + job.getTitle() + ".", null);
-		}
 		job.setStudyBlockId(block.getId());
 		jobRepository.save(job);
-		return new JobStudyBlock(block.getId(), block.getTitle(), topics, true);
+		return new JobStudyBlock(block.getId(), block.getTitle(), skillList, true);
 	}
 
 	private CareerJob findJob(UUID jobId) {

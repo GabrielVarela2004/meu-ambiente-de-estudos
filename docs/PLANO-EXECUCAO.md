@@ -205,6 +205,24 @@ usando o bloco inteiro.
 - [x] Tela: painel "Sugestões para validar" no topo da aba Mapeamento de Fontes (relevância colorida, trecho com
   minuto clicável se vídeo, progresso, atalhos A/E/C); o modal do simulado avisa quando há sugestões pendentes.
 
+## Remoção de tópicos e do Mapeamento de Fontes (pedido do usuário em 2026-10-31, fora da sequência de etapas)
+
+Decisões do usuário: desempenho só por bloco; perfil de habilidades da Carreira baseado nos blocos. Fase 1 não
+apaga dados (tabelas `knowledge_*`/`topic_*` e colunas `topic_id` ficam sem uso; histórico continua contando pelo
+`block_id`). Fase 2 (migração que apaga as tabelas, após backup) só com nova confirmação.
+
+- [x] 1. Frontend: sai a página `source-mapping` (Sidebar/App), `TopicsPanel`, `TopicReviewPanel`, `api/topicReview.ts`.
+- [x] 2. Desempenho: dashboard e histórico agregados só por bloco ("Detalhamento por Bloco", com parciais e nota
+  média por bloco); filtros de tópico saem; insights mostram blocos mais fracos/fortes.
+- [x] 3. Questões e exercícios gerados a partir das fontes ativas do bloco, sem tópico (`topic_id` nulo).
+- [x] 4. Importação de fontes (arquivo/YouTube) deixa de extrair tópicos.
+- [x] 5. Carreira: perfil de habilidades a partir de título e descrição dos blocos (termo da vaga casa só como
+  palavra inteira); vaga → bloco grava as competências no objetivo do bloco.
+- [x] 6. Pacote `knowledge/`, endpoints e testes removidos; testes de integração limpam as tabelas legadas
+  (`LegacyTopicTables`).
+- [x] 7. CLAUDE.md e documentação atualizados.
+- [!] Fase 2 (apagar tabelas e colunas de tópicos): aguarda decisão — D4 em `docs/DECISOES-PENDENTES.md`.
+
 ## Observações
 
 - O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta.

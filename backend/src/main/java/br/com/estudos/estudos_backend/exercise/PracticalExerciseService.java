@@ -18,9 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.chat.AiTutorProvider;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicStatus;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialProcessingStatus;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
@@ -71,7 +68,6 @@ public class PracticalExerciseService {
 	private final PracticalExerciseAttemptRepository attemptRepository;
 	private final StudyBlockRepository blockRepository;
 	private final StudyMaterialRepository materialRepository;
-	private final KnowledgeTopicRepository knowledgeTopicRepository;
 	private final CurrentUserResolver currentUserResolver;
 	private final AiTutorProvider aiTutorProvider;
 	private final PracticalExerciseTutorService tutorService;
@@ -83,7 +79,7 @@ public class PracticalExerciseService {
 			PracticalExerciseRepository exerciseRepository,
 			PracticalExerciseAttemptRepository attemptRepository,
 			StudyBlockRepository blockRepository) {
-		this(exerciseRepository, attemptRepository, blockRepository, null, null, new CurrentUserResolver(), null, null, null);
+		this(exerciseRepository, attemptRepository, blockRepository, null, new CurrentUserResolver(), null, null, null);
 	}
 
 	public PracticalExerciseService(
@@ -91,7 +87,7 @@ public class PracticalExerciseService {
 			PracticalExerciseAttemptRepository attemptRepository,
 			StudyBlockRepository blockRepository,
 			CurrentUserResolver currentUserResolver) {
-		this(exerciseRepository, attemptRepository, blockRepository, null, null, currentUserResolver, null, null, null);
+		this(exerciseRepository, attemptRepository, blockRepository, null, currentUserResolver, null, null, null);
 	}
 
 	@Autowired
@@ -100,7 +96,6 @@ public class PracticalExerciseService {
 			PracticalExerciseAttemptRepository attemptRepository,
 			StudyBlockRepository blockRepository,
 			StudyMaterialRepository materialRepository,
-			KnowledgeTopicRepository knowledgeTopicRepository,
 			CurrentUserResolver currentUserResolver,
 			AiTutorProvider aiTutorProvider,
 			PracticalExerciseTutorService tutorService,
@@ -109,7 +104,6 @@ public class PracticalExerciseService {
 		this.attemptRepository = attemptRepository;
 		this.blockRepository = blockRepository;
 		this.materialRepository = materialRepository;
-		this.knowledgeTopicRepository = knowledgeTopicRepository;
 		this.currentUserResolver = currentUserResolver == null ? new CurrentUserResolver() : currentUserResolver;
 		this.aiTutorProvider = aiTutorProvider;
 		this.tutorService = tutorService;
@@ -118,7 +112,7 @@ public class PracticalExerciseService {
 
 	@Transactional
 	public PracticalExercise create(UUID blockId, String title, String prompt, String guidance) {
-		return create(blockId, null, null, null, title, prompt, guidance,
+		return create(blockId, null, null, title, prompt, guidance,
 				StudyQuestionDifficulty.INTERMEDIATE, PracticalExerciseType.PROBLEM_SOLVING, null, null, null, null);
 	}
 
@@ -126,7 +120,6 @@ public class PracticalExerciseService {
 	public PracticalExercise create(
 			UUID blockId,
 			UUID materialId,
-			UUID topicId,
 			String sourceExcerpt,
 			String title,
 			String prompt,
@@ -149,13 +142,6 @@ public class PracticalExerciseService {
 					.orElseThrow(() -> new InvalidInputException("Material de estudo inválido."));
 		}
 
-		if (topicId != null && knowledgeTopicRepository != null) {
-			knowledgeTopicRepository.findById(topicId)
-					.filter(t -> t.getStudyBlock().getId().equals(blockId))
-					.filter(t -> t.getStatus() == KnowledgeTopicStatus.ACTIVE)
-					.orElseThrow(() -> new InvalidInputException("Tópico inválido."));
-		}
-
 		String resolvedExcerpt = sourceExcerpt;
 		if ((resolvedExcerpt == null || resolvedExcerpt.isBlank()) && material != null) {
 			resolvedExcerpt = extractDefaultExcerpt(material);
@@ -164,7 +150,7 @@ public class PracticalExerciseService {
 		return exerciseRepository.save(new PracticalExercise(
 				block,
 				material,
-				topicId,
+				null,
 				resolvedExcerpt,
 				title,
 				prompt,
@@ -180,7 +166,6 @@ public class PracticalExerciseService {
 	public PracticalExercise generateFromMaterials(
 			UUID blockId,
 			UUID materialId,
-			UUID topicId,
 			StudyQuestionDifficulty difficulty,
 			PracticalExerciseType exerciseType) {
 		activeBlock(blockId);
@@ -203,15 +188,7 @@ public class PracticalExerciseService {
 					"Adicione uma fonte concluída ao bloco e deixe-a ativa no chat antes de gerar exercícios práticos.");
 		}
 
-		KnowledgeTopic topic = null;
-		if (topicId != null && knowledgeTopicRepository != null) {
-			topic = knowledgeTopicRepository.findById(topicId)
-					.filter(t -> t.getStudyBlock().getId().equals(blockId))
-					.filter(t -> t.getStatus() == KnowledgeTopicStatus.ACTIVE)
-					.orElseThrow(() -> new InvalidInputException("Tópico inválido."));
-		}
-
-		// Sem material escolhido: usa a fonte do tópico, se houver, ou combina os materiais mais recentes do bloco.
+		// Sem material escolhido: combina os materiais mais recentes do bloco.
 		List<StudyMaterial> contextMaterials;
 		if (materialId != null) {
 			contextMaterials = List.of(materials.stream()
@@ -220,24 +197,17 @@ public class PracticalExerciseService {
 					.orElseThrow(() -> new InvalidInputException(
 							"O material selecionado não pertence a este bloco, está inativo ou está desativado no chat.")));
 		} else {
-			UUID topicSourceId = topic == null ? null : topic.getSourceMaterialId();
-			contextMaterials = materials.stream()
-					.filter(m -> m.getId().equals(topicSourceId))
-					.findFirst()
-					.map(List::of)
-					.orElseGet(() -> materials.subList(0, Math.min(MAX_CONTEXT_MATERIALS, materials.size())));
+			contextMaterials = materials.subList(0, Math.min(MAX_CONTEXT_MATERIALS, materials.size()));
 		}
 		StudyMaterial targetMaterial = contextMaterials.get(0);
 
 		StudyQuestionDifficulty resolvedDifficulty = difficulty == null ? StudyQuestionDifficulty.INTERMEDIATE : difficulty;
 		PracticalExerciseType resolvedType = exerciseType == null ? leastUsedType(blockId) : exerciseType;
-		String defaultExcerpt = topic != null && topic.getSupportingExcerpt() != null && !topic.getSupportingExcerpt().isBlank()
-				? topic.getSupportingExcerpt()
-				: extractDefaultExcerpt(targetMaterial);
+		String defaultExcerpt = extractDefaultExcerpt(targetMaterial);
 
 		if (aiTutorProvider != null
 				&& AiOperationContext.call(AiOperation.EXERCISE_GENERATION, aiTutorProvider::isConfigured)) {
-			String userPrompt = buildPracticalPrompt(contextMaterials, topic, resolvedDifficulty, resolvedType);
+			String userPrompt = buildPracticalPrompt(contextMaterials, resolvedDifficulty, resolvedType);
 			for (int attempt = 1; attempt <= GENERATION_ATTEMPTS; attempt++) {
 				try {
 					AiTutorProvider.AiTutorReply reply = AiOperationContext.call(AiOperation.EXERCISE_GENERATION,
@@ -251,7 +221,7 @@ public class PracticalExerciseService {
 					if (prompt.isBlank()) {
 						continue;
 					}
-					PracticalExercise created = create(blockId, targetMaterial.getId(), topicId,
+					PracticalExercise created = create(blockId, targetMaterial.getId(),
 							node.path("sourceExcerpt").asText(defaultExcerpt).trim(),
 							node.path("title").asText(targetMaterial.getTitle() + " - Exercício Prático").trim(),
 							prompt,
@@ -283,13 +253,12 @@ public class PracticalExerciseService {
 			}
 		}
 
-		return generateDeterministicExercise(blockId, targetMaterial, topicId, defaultExcerpt, resolvedDifficulty, resolvedType);
+		return generateDeterministicExercise(blockId, targetMaterial, defaultExcerpt, resolvedDifficulty, resolvedType);
 	}
 
 	private PracticalExercise generateDeterministicExercise(
 			UUID blockId,
 			StudyMaterial material,
-			UUID topicId,
 			String defaultExcerpt,
 			StudyQuestionDifficulty difficulty,
 			PracticalExerciseType exerciseType) {
@@ -304,7 +273,7 @@ public class PracticalExerciseService {
 		String starterCode = "// Implemente sua solução aqui com base no material de estudo\npublic class SolucaoPratica {\n    public static void main(String[] args) {\n        // Seu código aqui\n    }\n}";
 		String hints = "[\"Revise os conceitos fundamentais do material\", \"Divida o problema em pequenas etapas lógicas\"]";
 
-		PracticalExercise created = create(blockId, material.getId(), topicId, defaultExcerpt, title, prompt, guidance,
+		PracticalExercise created = create(blockId, material.getId(), defaultExcerpt, title, prompt, guidance,
 				difficulty, exerciseType, starterCode, null, hints, null);
 		created.defineSteps(PracticalExerciseSteps.toJson(List.of(
 				"Releia o trecho de referência e liste os conceitos que o cenário exige.",
@@ -314,17 +283,10 @@ public class PracticalExerciseService {
 		return exerciseRepository.save(created);
 	}
 
-	private String buildPracticalPrompt(List<StudyMaterial> materials, KnowledgeTopic topic,
+	private String buildPracticalPrompt(List<StudyMaterial> materials,
 			StudyQuestionDifficulty difficulty, PracticalExerciseType type) {
 		StringBuilder sb = new StringBuilder("Gere 1 exercício prático de nível ").append(difficulty.name())
 				.append(" do tipo ").append(type.name()).append(" baseado estritamente no seguinte conteúdo de estudo.\n\n");
-		if (topic != null) {
-			sb.append("[TÓPICO FOCO]: ").append(topic.getTitle()).append('\n');
-			if (topic.getDescription() != null && !topic.getDescription().isBlank()) {
-				sb.append("[DESCRIÇÃO DO TÓPICO]: ").append(topic.getDescription()).append('\n');
-			}
-			sb.append("O exercício deve praticar especificamente este tópico.\n\n");
-		}
 		int budget = materials.size() == 1 ? SINGLE_SOURCE_EXCERPT_CHARS : MULTI_SOURCE_EXCERPT_CHARS;
 		for (StudyMaterial material : materials) {
 			sb.append("[TÍTULO DO MATERIAL]: ").append(material.getTitle()).append('\n')
@@ -484,7 +446,7 @@ public class PracticalExerciseService {
 				ownerId,
 				blockId,
 				exercise,
-				exercise.getTopicId(),
+				null,
 				null,
 				exercise.getStudyMaterial() == null ? null : exercise.getStudyMaterial().getId(),
 				answer,

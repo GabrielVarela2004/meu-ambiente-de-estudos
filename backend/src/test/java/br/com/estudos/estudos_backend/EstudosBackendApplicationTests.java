@@ -24,6 +24,7 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -40,8 +41,6 @@ import br.com.estudos.estudos_backend.studysession.StudySessionRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttemptRepository;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseRepository;
 import br.com.estudos.estudos_backend.goal.StudyGoalRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicQuestionRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.chat.ChatConversationEntry;
 import br.com.estudos.estudos_backend.chat.ChatConversationRepository;
 
@@ -86,23 +85,19 @@ class EstudosBackendApplicationTests {
 	private StudyGoalRepository goalRepository;
 
 	@Autowired
-	private KnowledgeTopicQuestionRepository topicQuestionRepository;
-
-	@Autowired
-	private KnowledgeTopicRepository topicRepository;
-
-	@Autowired
 	private ChatConversationRepository chatConversationRepository;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
 	void cleanDatabase() {
 		chatConversationRepository.deleteAllInBatch();
 		exerciseAttemptRepository.deleteAllInBatch();
 		exerciseRepository.deleteAllInBatch();
-		topicQuestionRepository.deleteAllInBatch();
+		LegacyTopicTables.clear(jdbcTemplate);
 		attemptRepository.deleteAllInBatch();
 		questionRepository.deleteAllInBatch();
-		topicRepository.deleteAllInBatch();
 		goalRepository.deleteAllInBatch();
 		sessionRepository.deleteAllInBatch();
 		materialRepository.deleteAllInBatch();
@@ -425,115 +420,6 @@ class EstudosBackendApplicationTests {
 		mockMvc.perform(get("/api/reviews/due"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(0)));
-	}
-
-	@Test
-	void managesTopicsAndEstimatesLearningStateFromRealAnswers() throws Exception {
-		com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-		String blockId = mapper.readTree(mockMvc.perform(post("/api/study-blocks")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"title\":\"Estrutura de dados\"}"))
-				.andExpect(status().isCreated())
-				.andReturn().getResponse().getContentAsString()).get("id").asText();
-
-		String topicId = mapper.readTree(mockMvc.perform(post("/api/study-blocks/{blockId}/topics", blockId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"title\":\"Listas\"}"))
-				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.learningState").value("INSUFFICIENT_DATA"))
-				.andReturn().getResponse().getContentAsString()).get("id").asText();
-
-		String subtopicId = mapper.readTree(mockMvc.perform(post("/api/study-blocks/{blockId}/topics", blockId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"title\":\"Listas encadeadas\",\"parentTopicId\":\"" + topicId + "\"}"))
-				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.parentTopicId").value(topicId))
-				.andReturn().getResponse().getContentAsString()).get("id").asText();
-
-		// A hierarquia desta etapa tem somente dois níveis.
-		mockMvc.perform(post("/api/study-blocks/{blockId}/topics", blockId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"title\":\"Nível 3\",\"parentTopicId\":\"" + subtopicId + "\"}"))
-				.andExpect(status().isBadRequest());
-
-		// Define topicId como pré-requisito de subtopicId e verifica alerta de pré-requisito não consolidado
-		mockMvc.perform(put("/api/study-blocks/{blockId}/topics/{topicId}/prerequisite", blockId, subtopicId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"prerequisiteTopicId\":\"" + topicId + "\"}"))
-				.andExpect(status().isNoContent());
-
-		// Impede dependência circular (topicId ter subtopicId como pré-requisito)
-		mockMvc.perform(put("/api/study-blocks/{blockId}/topics/{topicId}/prerequisite", blockId, topicId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"prerequisiteTopicId\":\"" + subtopicId + "\"}"))
-				.andExpect(status().isBadRequest());
-
-		mockMvc.perform(post("/api/study-blocks/{blockId}/questions", blockId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{"prompt":"Cada nó aponta para?","options":[
-								{"text":"O próximo nó","correct":true},{"text":"A raiz","correct":false}]}
-								"""))
-				.andExpect(status().isCreated());
-		UUID questionId = questionRepository.findAll().get(0).getId();
-		String correctOptionId = questionOptionRepository.findAllByQuestionIdOrderByOrderAsc(questionId)
-				.get(0).getId().toString();
-
-		mockMvc.perform(post("/api/study-blocks/{blockId}/topics/{topicId}/questions/{questionId}",
-						blockId, subtopicId, questionId))
-				.andExpect(status().isNoContent());
-		// Vincular de novo não duplica o vínculo.
-		mockMvc.perform(post("/api/study-blocks/{blockId}/topics/{topicId}/questions/{questionId}",
-						blockId, subtopicId, questionId))
-				.andExpect(status().isNoContent());
-
-		String subtopicPath = "$[?(@.id=='" + subtopicId + "')]";
-		mockMvc.perform(get("/api/study-blocks/{blockId}/topics", blockId))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$", hasSize(2)))
-				.andExpect(jsonPath(subtopicPath + ".learningState").value(hasItem("NOT_STUDIED")))
-				.andExpect(jsonPath(subtopicPath + ".prerequisiteTopicId").value(hasItem(topicId)))
-				.andExpect(jsonPath(subtopicPath + ".prerequisiteWarning").value(hasItem(containsString("ainda não está consolidado"))))
-				.andExpect(jsonPath(subtopicPath + ".questionIds[*]", hasSize(1)));
-
-		// Uma única resposta correta não pode virar "domínio".
-		mockMvc.perform(post("/api/study-blocks/{blockId}/questions/{questionId}/answers", blockId, questionId)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"optionId\":\"" + correctOptionId + "\"}"))
-				.andExpect(status().isOk());
-		mockMvc.perform(get("/api/study-blocks/{blockId}/topics", blockId))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath(subtopicPath + ".learningState").value(hasItem("INSUFFICIENT_DATA")))
-				.andExpect(jsonPath(subtopicPath + ".attempts").value(hasItem(1)));
-
-		// Questões de outro bloco não podem ser vinculadas.
-		String otherBlockId = mapper.readTree(mockMvc.perform(post("/api/study-blocks")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"title\":\"Outro bloco\"}"))
-				.andExpect(status().isCreated())
-				.andReturn().getResponse().getContentAsString()).get("id").asText();
-		mockMvc.perform(post("/api/study-blocks/{blockId}/topics/{topicId}/questions/{questionId}",
-						otherBlockId, subtopicId, questionId))
-				.andExpect(status().isNotFound());
-
-		// Tópico com subtópico ativo não pode ser arquivado antes do subtópico.
-		mockMvc.perform(delete("/api/study-blocks/{blockId}/topics/{topicId}", blockId, topicId))
-				.andExpect(status().isConflict());
-
-		mockMvc.perform(delete("/api/study-blocks/{blockId}/topics/{topicId}/questions/{questionId}",
-						blockId, subtopicId, questionId))
-				.andExpect(status().isNoContent());
-		mockMvc.perform(delete("/api/study-blocks/{blockId}/topics/{topicId}", blockId, subtopicId))
-				.andExpect(status().isNoContent());
-		mockMvc.perform(delete("/api/study-blocks/{blockId}/topics/{topicId}", blockId, topicId))
-				.andExpect(status().isNoContent());
-
-		mockMvc.perform(get("/api/study-blocks/{blockId}/topics", blockId))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$", hasSize(0)));
-		mockMvc.perform(get("/api/study-blocks/{blockId}/topics?includeArchived=true", blockId))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$", hasSize(2)));
 	}
 
 	@Test

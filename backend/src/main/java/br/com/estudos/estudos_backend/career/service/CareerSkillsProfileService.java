@@ -14,30 +14,26 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttempt;
 import br.com.estudos.estudos_backend.exercise.PracticalExerciseAttemptRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
 import br.com.estudos.estudos_backend.question.StudyQuestionAttempt;
 import br.com.estudos.estudos_backend.question.StudyQuestionAttemptRepository;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockRepository;
 
+/** Perfil de habilidades: cada bloco de estudo é uma competência, avaliada pelas tentativas feitas nele. */
 @Service
 public class CareerSkillsProfileService {
 
-	private final KnowledgeTopicRepository topicRepository;
 	private final StudyBlockRepository blockRepository;
 	private final StudyQuestionAttemptRepository questionAttemptRepository;
 	private final PracticalExerciseAttemptRepository exerciseAttemptRepository;
 	private final CurrentUserResolver currentUserResolver;
 
 	public CareerSkillsProfileService(
-			KnowledgeTopicRepository topicRepository,
 			StudyBlockRepository blockRepository,
 			StudyQuestionAttemptRepository questionAttemptRepository,
 			PracticalExerciseAttemptRepository exerciseAttemptRepository,
 			CurrentUserResolver currentUserResolver) {
-		this.topicRepository = topicRepository;
 		this.blockRepository = blockRepository;
 		this.questionAttemptRepository = questionAttemptRepository;
 		this.exerciseAttemptRepository = exerciseAttemptRepository;
@@ -51,7 +47,9 @@ public class CareerSkillsProfileService {
 			int exerciseCount,
 			int practicalCount,
 			int accuracyPercent,
-			String sourceBlockTitle
+			String sourceBlockTitle,
+			/** Título e descrição do bloco, usados na comparação com os requisitos das vagas. */
+			String matchText
 	) {}
 
 	public record UserCareerSkillsProfile(
@@ -62,26 +60,16 @@ public class CareerSkillsProfileService {
 			int demonstratedSkillsCount
 	) {}
 
-	/**
-	 * Localiza o tópico que representa a competência (mesma ordem usada no perfil:
-	 * blocos mais recentes primeiro, tópicos por data de criação).
-	 */
+	/** Localiza o bloco que representa a competência (blocos mais recentes primeiro). */
 	@Transactional(readOnly = true)
-	public Optional<KnowledgeTopic> findTopicForSkill(String skillName) {
+	public Optional<StudyBlock> findBlockForSkill(String skillName) {
 		if (skillName == null || skillName.isBlank()) {
 			return Optional.empty();
 		}
 		String wanted = skillName.trim().toLowerCase();
-		String ownerId = currentUserResolver.currentUserId();
-		for (StudyBlock block : blockRepository.findAllByOwnerIdOrderByUpdatedAtDesc(ownerId)) {
-			for (KnowledgeTopic topic : topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(block.getId())) {
-				// Sugestões ainda não validadas não contam como habilidade.
-				if (!topic.isPendingReview() && topic.getTitle().trim().toLowerCase().equals(wanted)) {
-					return Optional.of(topic);
-				}
-			}
-		}
-		return Optional.empty();
+		return blockRepository.findAllByOwnerIdOrderByUpdatedAtDesc(currentUserResolver.currentUserId()).stream()
+				.filter(block -> block.getTitle().trim().toLowerCase().equals(wanted))
+				.findFirst();
 	}
 
 	@Transactional(readOnly = true)
@@ -89,20 +77,17 @@ public class CareerSkillsProfileService {
 		String ownerId = currentUserResolver.currentUserId();
 		List<StudyBlock> userBlocks = blockRepository.findAllByOwnerIdOrderByUpdatedAtDesc(ownerId);
 
-		List<StudyQuestionAttempt> qAttempts = questionAttemptRepository.findAllByOwnerIdOrderByAnsweredAtDesc(ownerId);
-		List<PracticalExerciseAttempt> pAttempts = exerciseAttemptRepository.findAllByOwnerIdOrderByCreatedAtDesc(ownerId);
-
-		Map<UUID, List<StudyQuestionAttempt>> qByTopic = new HashMap<>();
-		for (StudyQuestionAttempt qa : qAttempts) {
-			if (qa.getTopicId() != null) {
-				qByTopic.computeIfAbsent(qa.getTopicId(), k -> new ArrayList<>()).add(qa);
+		Map<UUID, List<StudyQuestionAttempt>> qByBlock = new HashMap<>();
+		for (StudyQuestionAttempt qa : questionAttemptRepository.findAllByOwnerIdOrderByAnsweredAtDesc(ownerId)) {
+			if (qa.getStudyBlockId() != null) {
+				qByBlock.computeIfAbsent(qa.getStudyBlockId(), k -> new ArrayList<>()).add(qa);
 			}
 		}
 
-		Map<UUID, List<PracticalExerciseAttempt>> pByTopic = new HashMap<>();
-		for (PracticalExerciseAttempt pa : pAttempts) {
-			if (pa.getTopicId() != null) {
-				pByTopic.computeIfAbsent(pa.getTopicId(), k -> new ArrayList<>()).add(pa);
+		Map<UUID, List<PracticalExerciseAttempt>> pByBlock = new HashMap<>();
+		for (PracticalExerciseAttempt pa : exerciseAttemptRepository.findAllByOwnerIdOrderByCreatedAtDesc(ownerId)) {
+			if (pa.getStudyBlockId() != null) {
+				pByBlock.computeIfAbsent(pa.getStudyBlockId(), k -> new ArrayList<>()).add(pa);
 			}
 		}
 
@@ -112,74 +97,31 @@ public class CareerSkillsProfileService {
 		Set<String> seenSkills = new HashSet<>();
 
 		for (StudyBlock block : userBlocks) {
-			List<KnowledgeTopic> topics = topicRepository.findAllByStudyBlockIdOrderByCreatedAtAsc(block.getId());
-
-			for (KnowledgeTopic topic : topics) {
-				if (topic.isPendingReview()) {
-					continue;
-				}
-				String name = topic.getTitle().trim();
-				if (seenSkills.contains(name.toLowerCase())) {
-					continue;
-				}
-				seenSkills.add(name.toLowerCase());
-
-				List<StudyQuestionAttempt> topicQAs = qByTopic.getOrDefault(topic.getId(), List.of());
-				List<PracticalExerciseAttempt> topicPAs = pByTopic.getOrDefault(topic.getId(), List.of());
-
-				long correctQAs = topicQAs.stream().filter(StudyQuestionAttempt::isCorrect).count();
-				long passedPAs = topicPAs.stream().filter(pa -> pa.getScorePercent() >= 70 || pa.getSelfRating() >= 4).count();
-
-				int totalAttempts = topicQAs.size() + topicPAs.size();
-				long totalSuccess = correctQAs + passedPAs;
-				int accuracy = totalAttempts > 0 ? (int) Math.round((totalSuccess * 100.0) / totalAttempts) : 0;
-
-				if (totalAttempts >= 2 && accuracy >= 70) {
-					demonstrated.add(new CompetencyItem(
-							name,
-							block.getTitle(),
-							"DEMONSTRATED",
-							topicQAs.size(),
-							topicPAs.size(),
-							accuracy,
-							block.getTitle()
-					));
-				} else if (totalAttempts > 0) {
-					inDevelopment.add(new CompetencyItem(
-							name,
-							block.getTitle(),
-							"IN_DEVELOPMENT",
-							topicQAs.size(),
-							topicPAs.size(),
-							accuracy,
-							block.getTitle()
-					));
-				} else {
-					studied.add(new CompetencyItem(
-							name,
-							block.getTitle(),
-							"STUDIED",
-							0,
-							0,
-							0,
-							block.getTitle()
-					));
-				}
+			String name = block.getTitle().trim();
+			if (!seenSkills.add(name.toLowerCase())) {
+				continue;
 			}
-		}
+			String matchText = block.getDescription() == null || block.getDescription().isBlank()
+					? name
+					: name + " " + block.getDescription();
 
-		// Se o usuário ainda não tiver tópicos individuais gerados, inclui os cadernos de estudo como habilidades estudadas
-		if (demonstrated.isEmpty() && inDevelopment.isEmpty() && studied.isEmpty()) {
-			for (StudyBlock b : userBlocks) {
-				studied.add(new CompetencyItem(
-						b.getTitle(),
-						"Caderno de Estudos",
-						"STUDIED",
-						0,
-						0,
-						0,
-						b.getTitle()
-				));
+			List<StudyQuestionAttempt> blockQAs = qByBlock.getOrDefault(block.getId(), List.of());
+			List<PracticalExerciseAttempt> blockPAs = pByBlock.getOrDefault(block.getId(), List.of());
+
+			long correctQAs = blockQAs.stream().filter(StudyQuestionAttempt::isCorrect).count();
+			long passedPAs = blockPAs.stream().filter(pa -> pa.getScorePercent() >= 70 || pa.getSelfRating() >= 4).count();
+
+			int totalAttempts = blockQAs.size() + blockPAs.size();
+			int accuracy = totalAttempts > 0 ? (int) Math.round(((correctQAs + passedPAs) * 100.0) / totalAttempts) : 0;
+
+			if (totalAttempts >= 2 && accuracy >= 70) {
+				demonstrated.add(new CompetencyItem(name, "Bloco de estudo", "DEMONSTRATED",
+						blockQAs.size(), blockPAs.size(), accuracy, name, matchText));
+			} else if (totalAttempts > 0) {
+				inDevelopment.add(new CompetencyItem(name, "Bloco de estudo", "IN_DEVELOPMENT",
+						blockQAs.size(), blockPAs.size(), accuracy, name, matchText));
+			} else {
+				studied.add(new CompetencyItem(name, "Bloco de estudo", "STUDIED", 0, 0, 0, name, matchText));
 			}
 		}
 

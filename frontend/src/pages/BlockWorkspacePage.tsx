@@ -9,7 +9,6 @@ import {
   ChevronLeftIcon,
   CodeIcon,
   FileTextIcon,
-  NetworkIcon,
   PlusCircleIcon,
 } from '../components/icons'
 import type { StudyMaterialItem } from '../types/material'
@@ -24,7 +23,6 @@ type Props = {
   onNavigateToAddContent: (blockId: string) => void
   onNavigateToPractical: () => void
   onNavigateToTheoretical: () => void
-  onNavigateToTopics: () => void
 }
 
 const sourceTypeLabels: Record<string, string> = {
@@ -43,7 +41,7 @@ const analysisMethodLabels: Record<string, { label: string; className: string; h
   ANALISE_IA: {
     label: 'Análise do vídeo por IA',
     className: 'is-ai',
-    hint: 'O Gemini assistiu ao vídeo e gerou resumo, tópicos e anotações com marcação de tempo.',
+    hint: 'O Gemini assistiu ao vídeo e gerou resumo, assuntos principais e anotações com marcação de tempo.',
   },
   TRANSCRICAO: {
     label: 'Transcrição (plano B)',
@@ -61,7 +59,6 @@ export function BlockWorkspacePage({
   onNavigateToAddContent,
   onNavigateToPractical,
   onNavigateToTheoretical,
-  onNavigateToTopics,
 }: Props) {
   const [materials, setMaterials] = useState<StudyMaterialItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -164,10 +161,6 @@ export function BlockWorkspacePage({
           <button type="button" className="btn btn-secondary btn-sm" onClick={onNavigateToTheoretical}>
             <FileTextIcon className="w-4 h-4 text-emerald-400" />
             <span>Questões Teóricas</span>
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onNavigateToTopics}>
-            <NetworkIcon className="w-4 h-4 text-emerald-400" />
-            <span>Mapa de Tópicos</span>
           </button>
           <button
             type="button"

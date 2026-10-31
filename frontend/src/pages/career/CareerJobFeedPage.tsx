@@ -47,7 +47,7 @@ type JobAnalysis = {
 type JobStudyBlock = {
   studyBlockId: string
   title: string
-  topics: string[]
+  skills: string[]
   created: boolean
 }
 
@@ -153,7 +153,7 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
       replaceJob({ ...selectedJob, studyBlockId: block.studyBlockId })
       setBlockMessage(
         block.created
-          ? `Bloco "${block.title}" criado com ${block.topics.length} tópico(s).`
+          ? `Bloco "${block.title}" criado com ${block.skills.length} competência(s) no objetivo.`
           : `Esta vaga já tem o bloco "${block.title}".`,
       )
     } catch {
@@ -203,7 +203,7 @@ export function CareerJobFeedPage({ onNavigateToPreferences }: Props) {
         <div>
           <h1 className="page-main-title">Radar de Vagas</h1>
           <p className="page-main-subtitle">
-            Vagas reais (Remotive e Arbeitnow) comparadas com os tópicos dos seus blocos de estudo.
+            Vagas reais (Remotive e Arbeitnow) comparadas com os seus blocos de estudo.
           </p>
         </div>
         <div className="page-actions-group">

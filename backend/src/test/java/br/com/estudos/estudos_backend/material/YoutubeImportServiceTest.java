@@ -35,7 +35,6 @@ import br.com.estudos.estudos_backend.ai.GeminiModelProvider;
 import br.com.estudos.estudos_backend.ai.GeminiProperties;
 import br.com.estudos.estudos_backend.ai.GeminiYoutubeVideoAnalyzer;
 import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicService;
 import br.com.estudos.estudos_backend.security.CurrentUserResolver;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockService;
@@ -64,7 +63,6 @@ class YoutubeImportServiceTest {
 	private final StudyBlockService blockService = mock(StudyBlockService.class);
 	private final YoutubeOEmbedClient oEmbed = mock(YoutubeOEmbedClient.class);
 	private final YoutubeTranscriptExtractor transcripts = mock(YoutubeTranscriptExtractor.class);
-	private final KnowledgeTopicService topics = mock(KnowledgeTopicService.class);
 	private final AiSettingsService aiSettings = mock(AiSettingsService.class);
 	private final AiUsageService aiUsage = mock(AiUsageService.class);
 	private final HttpClient geminiHttp = mock(HttpClient.class);
@@ -95,7 +93,7 @@ class YoutubeImportServiceTest {
 	}
 
 	private YoutubeImportService serviceWith(YoutubeVideoAnalyzer analyzer) {
-		return new YoutubeImportService(repository, blockService, oEmbed, analyzer, transcripts, topics,
+		return new YoutubeImportService(repository, blockService, oEmbed, analyzer, transcripts,
 				new CurrentUserResolver(), Runnable::run);
 	}
 

@@ -88,7 +88,7 @@ export function ExerciseTutorChat({ exercisePath, steps, currentCode, refreshKey
 
   const revealSolution = async () => {
     const confirmed = window.confirm(
-      'Ver a solução completa limita a nota da próxima tentativa a 30% e ela não conta para o domínio do tópico. Continuar?'
+      'Ver a solução completa limita a nota da próxima tentativa a 30% e ela não conta como acerto no desempenho do bloco. Continuar?'
     )
     if (!confirmed) return
     setError(null)

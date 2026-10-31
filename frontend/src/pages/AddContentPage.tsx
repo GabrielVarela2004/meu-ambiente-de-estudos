@@ -617,7 +617,7 @@ export function AddContentPage({
           )}
 
           <p className="youtube-notice">
-            O vídeo é analisado uma única vez pelo Gemini (resumo, tópicos e anotações com o minuto de cada trecho,
+            O vídeo é analisado uma única vez pelo Gemini (resumo, assuntos principais e anotações com o minuto de cada trecho,
             incluindo o código mostrado na tela). O plano gratuito do Gemini permite cerca de 8 horas de vídeo por dia
             e só vídeos <strong>públicos</strong> podem ser analisados; nos demais casos, ou sem Gemini configurado, a
             transcrição (legendas) é usada.

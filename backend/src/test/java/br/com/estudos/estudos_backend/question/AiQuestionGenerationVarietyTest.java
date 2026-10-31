@@ -2,13 +2,11 @@ package br.com.estudos.estudos_backend.question;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,25 +21,19 @@ import org.springframework.web.server.ResponseStatusException;
 
 import br.com.estudos.estudos_backend.chat.AiTutorProvider;
 import br.com.estudos.estudos_backend.chat.SourceContextSelector;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopic;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicRepository;
-import br.com.estudos.estudos_backend.knowledge.KnowledgeTopicStatus;
 import br.com.estudos.estudos_backend.material.StudyMaterial;
 import br.com.estudos.estudos_backend.material.StudyMaterialRepository;
 import br.com.estudos.estudos_backend.material.StudyMaterialStatus;
 import br.com.estudos.estudos_backend.studyblock.StudyBlock;
 import br.com.estudos.estudos_backend.studyblock.StudyBlockService;
 
-/** Geração variada (perguntas existentes no prompt) e vínculo de toda questão gerada a um tópico. */
+/** Geração variada: as perguntas já existentes do bloco vão no prompt para a IA não repeti-las. */
 class AiQuestionGenerationVarietyTest {
 
 	private final UUID blockId = UUID.randomUUID();
 	private final StudyBlockService blockService = mock(StudyBlockService.class);
 	private final StudyMaterialRepository materialRepository = mock(StudyMaterialRepository.class);
 	private final StudyQuestionService questionService = mock(StudyQuestionService.class);
-	private final KnowledgeTopicRepository topicRepository = mock(KnowledgeTopicRepository.class);
-	private KnowledgeTopic polymorphism;
-	private KnowledgeTopic encapsulation;
 	private String capturedPrompt;
 
 	@BeforeEach
@@ -54,26 +46,16 @@ class AiQuestionGenerationVarietyTest {
 		when(materialRepository.findAllByStudyBlockIdAndStatusOrderByUpdatedAtDesc(blockId, StudyMaterialStatus.ACTIVE))
 				.thenReturn(List.of(material));
 
-		polymorphism = topic(block, "Polimorfismo", "Objetos de subclasses tratados como da superclasse");
-		encapsulation = topic(block, "Encapsulamento", "Proteção do estado interno do objeto");
-		when(topicRepository.findAllByStudyBlockIdAndStatusOrderByCreatedAtAsc(blockId, KnowledgeTopicStatus.ACTIVE))
-				.thenReturn(List.of(polymorphism, encapsulation));
-		when(questionService.recentPrompts(eq(blockId), isNull(), anyInt()))
+		when(questionService.recentPrompts(eq(blockId), anyInt()))
 				.thenReturn(List.of("Explique o que é herança em Java."));
-		when(questionService.create(eq(blockId), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+		when(questionService.create(eq(blockId), any(), any(), any(), any(), any(), any(), any(), any()))
 				.thenAnswer(inv -> {
-					StudyQuestion question = new StudyQuestion(block, null, inv.getArgument(4), null,
-							inv.getArgument(6), inv.getArgument(7), inv.getArgument(8));
+					StudyQuestion question = new StudyQuestion(block, null, inv.getArgument(3), null,
+							inv.getArgument(5), inv.getArgument(6), inv.getArgument(7));
 					ReflectionTestUtils.setField(question, "id", UUID.randomUUID());
 					return question;
 				});
 		when(questionService.attachRubric(eq(blockId), any(), any(), any(), any())).thenAnswer(inv -> mock(StudyQuestion.class));
-	}
-
-	private static KnowledgeTopic topic(StudyBlock block, String title, String description) {
-		KnowledgeTopic topic = new KnowledgeTopic(block, null, title, description);
-		ReflectionTestUtils.setField(topic, "id", UUID.randomUUID());
-		return topic;
 	}
 
 	private AiQuestionGeneratorService generatorReplying(String json) {
@@ -87,60 +69,41 @@ class AiQuestionGenerationVarietyTest {
 			}
 		};
 		return new AiQuestionGeneratorService(provider, blockService, materialRepository, questionService,
-				topicRepository, new SourceContextSelector());
+				new SourceContextSelector());
 	}
 
 	@Test
-	void promptCarriesExistingQuestionsAndBlockTopics() {
+	void promptCarriesExistingQuestionsAndCoversTheWholeBlock() {
 		generatorReplying("""
-				{"topic":"Encapsulamento","prompt":"Explique como o encapsulamento protege o estado do objeto.",
+				{"prompt":"Explique como o encapsulamento protege o estado do objeto.",
 				 "modelAnswer":"Protegendo o estado interno e expondo apenas métodos públicos.",
 				 "rubric":{"essentialConcepts":["estado interno protegido"]},
 				 "sourceExcerpt":"Encapsulamento protege o estado interno expondo apenas métodos públicos"}
-				""").generateSimulado(blockId, 1, StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE, null);
+				""").generateSimulado(blockId, 1, StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE);
 
 		assertTrue(capturedPrompt.contains("[PERGUNTAS JÁ EXISTENTES"));
 		assertTrue(capturedPrompt.contains("Explique o que é herança em Java."));
-		assertTrue(capturedPrompt.contains("- Polimorfismo"));
-		assertTrue(capturedPrompt.contains("- Encapsulamento"));
-		assertTrue(capturedPrompt.contains("\"topic\""));
-	}
-
-	@Test
-	void generatedQuestionIsLinkedToTheTopicNamedByTheAi() {
-		generatorReplying("""
-				{"topic":"encapsulamento","prompt":"Explique como o encapsulamento protege o estado do objeto.",
-				 "modelAnswer":"Protegendo o estado interno e expondo apenas métodos públicos.",
-				 "rubric":{"essentialConcepts":["estado interno protegido"]},
-				 "sourceExcerpt":"Encapsulamento protege o estado interno expondo apenas métodos públicos"}
-				""").generateSimulado(blockId, 1, StudyQuestionDifficulty.INTERMEDIATE, StudyQuestionFormat.MULTIPLE_CHOICE, null);
-
-		verify(questionService).create(eq(blockId), any(), eq(encapsulation.getId()), any(), any(), any(),
+		assertTrue(capturedPrompt.contains("Abranja os conceitos mais relevantes disponíveis nas fontes do bloco."));
+		assertFalse(capturedPrompt.contains("\"topic\""), "a questão não é mais vinculada a tópicos");
+		verify(questionService).create(eq(blockId), any(), any(), any(), any(),
 				eq(StudyQuestionDifficulty.INTERMEDIATE), eq(StudyQuestionFormat.DISCURSIVE), any(), any());
-	}
-
-	@Test
-	void unknownTopicFromAiFallsBackToMostSimilarTopic() {
-		assertEquals(polymorphism.getId(), AiQuestionGeneratorService.resolveTopicId("Herança e subtipos",
-				"Como o polimorfismo permite tratar subclasses como a superclasse?", List.of(polymorphism, encapsulation)));
-		assertNull(AiQuestionGeneratorService.resolveTopicId("", "texto sem relação", List.of()));
 	}
 
 	@Test
 	void invalidJsonFromTheAiIsBadGateway() {
 		ResponseStatusException ex = assertThrows(ResponseStatusException.class,
 				() -> generatorReplying("isto não é JSON").generateSimulado(blockId, 1, StudyQuestionDifficulty.EASY,
-						StudyQuestionFormat.MULTIPLE_CHOICE, null));
+						StudyQuestionFormat.MULTIPLE_CHOICE));
 		assertEquals(502, ex.getStatusCode().value());
 	}
 
 	@Test
 	void sourceContentGoesDelimitedAsUntrustedData() {
 		generatorReplying("""
-				{"topic":"Polimorfismo","prompt":"Explique o polimorfismo com um exemplo.","modelAnswer":"Tratar subclasses como a superclasse.",
+				{"prompt":"Explique o polimorfismo com um exemplo.","modelAnswer":"Tratar subclasses como a superclasse.",
 				 "rubric":{"essentialConcepts":["subclasse tratada como superclasse"]},
 				 "sourceExcerpt":"Polimorfismo permite tratar objetos de subclasses como da superclasse"}
-				""").generateSimulado(blockId, 1, StudyQuestionDifficulty.EASY, StudyQuestionFormat.MULTIPLE_CHOICE, null);
+				""").generateSimulado(blockId, 1, StudyQuestionDifficulty.EASY, StudyQuestionFormat.MULTIPLE_CHOICE);
 
 		assertTrue(capturedPrompt.contains("Polimorfismo permite tratar objetos de subclasses"));
 		assertTrue(capturedPrompt.contains("NÃO CONFIÁVEIS") || capturedPrompt.contains("não confiáveis"),

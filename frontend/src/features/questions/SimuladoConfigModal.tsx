@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { request } from '../../api/http'
-import { getTopicReview } from '../../api/topicReview'
-import type { KnowledgeTopic } from '../knowledge/TopicsPanel'
 
 export type QuestionDifficulty = 'EASY' | 'INTERMEDIATE' | 'HARD'
 export type QuestionFormat = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'DISCURSIVE'
@@ -27,64 +25,10 @@ export function SimuladoConfigModal({
   const [quantity, setQuantity] = useState(3)
   const [difficulty, setDifficulty] = useState<QuestionDifficulty>('INTERMEDIATE')
   // Área teórica: só questões abertas (o backend também força o formato).
-  const [selectedTopicId, setSelectedTopicId] = useState('')
-  const [topics, setTopics] = useState<KnowledgeTopic[]>([])
-  const [loadingTopics, setLoadingTopics] = useState(false)
-  const [extractingTopics, setExtractingTopics] = useState(false)
-  const [pendingSuggestions, setPendingSuggestions] = useState<number | null>(null)
   const [generating, setGenerating] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!isOpen) return
-    let active = true
-    const fetchTopics = async () => {
-      setLoadingTopics(true)
-      setErrorMessage(null)
-      try {
-        const loaded = await request<KnowledgeTopic[]>(`/api/study-blocks/${blockId}/topics`)
-        if (active) {
-          setTopics(loaded)
-        }
-      } catch {
-        if (active) {
-          setTopics([])
-        }
-      } finally {
-        if (active) {
-          setLoadingTopics(false)
-        }
-      }
-    }
-    void fetchTopics()
-    return () => {
-      active = false
-    }
-  }, [blockId, isOpen])
-
   if (!isOpen) return null
-
-  const handleExtractTopics = async () => {
-    setExtractingTopics(true)
-    setErrorMessage(null)
-    try {
-      const extracted = await request<KnowledgeTopic[]>(`/api/study-blocks/${blockId}/topics/extract`, {
-        method: 'POST',
-      })
-      setTopics(extracted)
-      // Os tópicos encontrados viram sugestões: só entram aqui depois de validados no Mapeamento de Fontes.
-      const review = await getTopicReview(blockId)
-      setPendingSuggestions(review.summary.total)
-    } catch (err) {
-      setErrorMessage(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Não foi possível mapear os tópicos. Verifique se há fontes concluídas no bloco.',
-      )
-    } finally {
-      setExtractingTopics(false)
-    }
-  }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -106,7 +50,6 @@ export function SimuladoConfigModal({
           quantity,
           difficulty,
           format: 'DISCURSIVE' satisfies QuestionFormat,
-          topicId: selectedTopicId || null,
         }),
       })
       await onSimuladoGenerated(generated.length)
@@ -121,9 +64,6 @@ export function SimuladoConfigModal({
       setGenerating(false)
     }
   }
-
-  const rootTopics = topics.filter((t) => t.parentTopicId === null)
-  const subtopicsOf = (parentId: string) => topics.filter((t) => t.parentTopicId === parentId)
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="simulado-modal-title">
@@ -182,55 +122,7 @@ export function SimuladoConfigModal({
             com rigor, comparando com a resposta-modelo e os conceitos essenciais do material.
           </p>
 
-          <label>
-            Assunto ou tópico (opcional)
-            <select
-              value={selectedTopicId}
-              onChange={(e) => setSelectedTopicId(e.target.value)}
-              disabled={generating || loadingTopics}
-            >
-              <option value="">Todos os assuntos disponíveis no bloco (Abrangência geral)</option>
-              {rootTopics.map((root) => (
-                <optgroup
-                  key={root.id}
-                  label={`${root.title}${root.origin === 'AI_EXTRACTED' ? ' (Mapeado das fontes)' : ''}`}
-                >
-                  <option value={root.id}>{root.title} (Assunto principal)</option>
-                  {subtopicsOf(root.id).map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      ↳ {sub.title}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
-
-          {!loadingTopics && topics.length === 0 && (
-            <div className="process-status process-processing">
-              <div>
-                <strong>Nenhum tópico mapeado ainda para este bloco.</strong>
-                <p>
-                  {pendingSuggestions !== null && pendingSuggestions > 0
-                    ? `${pendingSuggestions} tópico(s) sugerido(s) aguardam sua validação na aba Mapeamento de Fontes. `
-                      + 'Até lá, as questões cobrem todo o conteúdo do bloco.'
-                    : activeSourceCount > 0
-                      ? 'Você pode gerar questões sobre todo o conteúdo do bloco agora ou extrair automaticamente os assuntos e tópicos das fontes.'
-                      : 'Adicione fontes (arquivos, notas ou vídeos do YouTube) ao bloco para mapear tópicos e gerar simulados.'}
-                </p>
-              </div>
-              {activeSourceCount > 0 && pendingSuggestions === null && (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => void handleExtractTopics()}
-                  disabled={extractingTopics || generating}
-                >
-                  {extractingTopics ? 'Mapeando...' : 'Mapear assuntos das fontes agora'}
-                </button>
-              )}
-            </div>
-          )}
+          <p className="form-hint">As questões cobrem todo o conteúdo das fontes ativas do bloco.</p>
 
           {errorMessage && (
             <div className="process-status process-error" role="alert">

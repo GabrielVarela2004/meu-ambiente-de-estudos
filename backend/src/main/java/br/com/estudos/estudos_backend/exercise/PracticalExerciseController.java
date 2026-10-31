@@ -43,7 +43,6 @@ public class PracticalExerciseController {
 		PracticalExercise created = service.create(
 				blockId,
 				request.materialId(),
-				request.topicId(),
 				request.sourceExcerpt(),
 				request.title(),
 				request.prompt(),
@@ -62,10 +61,9 @@ public class PracticalExerciseController {
 			@PathVariable UUID blockId,
 			@RequestBody(required = false) GenerateExerciseRequest request) {
 		UUID materialId = request == null ? null : request.materialId();
-		UUID topicId = request == null ? null : request.topicId();
 		StudyQuestionDifficulty difficulty = request == null ? null : request.difficulty();
 		PracticalExerciseType exerciseType = request == null ? null : request.exerciseType();
-		PracticalExercise generated = service.generateFromMaterials(blockId, materialId, topicId, difficulty, exerciseType);
+		PracticalExercise generated = service.generateFromMaterials(blockId, materialId, difficulty, exerciseType);
 		return ResponseEntity.status(HttpStatus.CREATED).body(ExerciseResponse.from(generated));
 	}
 
@@ -153,7 +151,6 @@ public class PracticalExerciseController {
 			@NotBlank @Size(max = 10000) String prompt,
 			@Size(max = 5000) String guidance,
 			UUID materialId,
-			UUID topicId,
 			String sourceExcerpt,
 			StudyQuestionDifficulty difficulty,
 			PracticalExerciseType exerciseType,
@@ -164,7 +161,6 @@ public class PracticalExerciseController {
 
 	public record GenerateExerciseRequest(
 			UUID materialId,
-			UUID topicId,
 			StudyQuestionDifficulty difficulty,
 			PracticalExerciseType exerciseType) {}
 
@@ -179,7 +175,6 @@ public class PracticalExerciseController {
 			UUID studyBlockId,
 			UUID studyMaterialId,
 			String studyMaterialTitle,
-			UUID topicId,
 			String sourceExcerpt,
 			String title,
 			String prompt,
@@ -203,7 +198,6 @@ public class PracticalExerciseController {
 					e.getStudyBlock().getId(),
 					e.getStudyMaterial() == null ? null : e.getStudyMaterial().getId(),
 					e.getStudyMaterial() == null ? null : e.getStudyMaterial().getTitle(),
-					e.getTopicId(),
 					e.getSourceExcerpt(),
 					e.getTitle(),
 					e.getPrompt(),

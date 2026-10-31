@@ -77,13 +77,4 @@ class ChatScopedSourcesIntegrationTest {
 				.andExpect(jsonPath("$.message").value(
 						"Adicione uma fonte concluída ao bloco e deixe-a ativa no chat antes de gerar exercícios práticos."));
 	}
-
-	@Test
-	void topicExtractionIgnoresSourcesDisabledInChat() throws Exception {
-		mockMvc.perform(post("/api/study-blocks/" + blockId + "/topics/extract")
-				.header(CurrentUserResolver.USER_HEADER, userId))
-				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.message")
-						.value("Ative no chat ao menos uma fonte do bloco antes de extrair assuntos e tópicos."));
-	}
 }

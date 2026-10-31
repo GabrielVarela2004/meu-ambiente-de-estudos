@@ -40,12 +40,16 @@ npm run test:run    # Vitest uma vez (npm test = modo observação); testes em s
 ## Arquitetura
 
 **Backend** (`backend/`, Java 21, Spring Boot 4, JPA, Flyway): pacotes por domínio em
-`br.com.estudos.estudos_backend` — `studyblock`, `material`, `chat`, `question`, `exercise`, `knowledge`,
+`br.com.estudos.estudos_backend` — `studyblock`, `material`, `chat`, `question`, `exercise`,
 `learning`, `goal`, `studysession`, `career`, `ai`, `security`, `config`. A maioria dos pacotes é plana
 (entidade + repository + service + controller); `career` segue portas e adaptadores (`adapter/in/web`,
-`adapter/out/persistence`, `domain`, `service`). Migrações em `src/main/resources/db/migration` (`V1`…`V25`);
+`adapter/out/persistence`, `domain`, `service`). Migrações em `src/main/resources/db/migration` (`V1`…`V32`);
 mudança de schema sempre em migração nova.
 
+- **Sem tópicos:** o Mapeamento de Fontes (pacote `knowledge`) foi removido em 2026-10-31. Desempenho, questões,
+  exercícios e o perfil de habilidades da Carreira trabalham só por bloco. As tabelas `knowledge_*`,
+  `topic_review_decisions` e as colunas `topic_id` ficam no banco sem uso (ver D4 em `docs/DECISOES-PENDENTES.md`);
+  `AiOperation.TOPIC_EXTRACTION` fica como legado para ler rotas, cache e consumo já gravados.
 - **Usuário:** sem login. `security/CurrentUserResolver` lê o cabeçalho `X-Study-User-Id` (o frontend não envia;
   cai em `default-user`). Todo dado é filtrado pelo usuário resolvido ali — use-o em services novos.
 - **IA:** todo uso passa pela porta `chat/AiTutorProvider`. O bean principal é `ai/AiProviderRouter`, que escolhe o

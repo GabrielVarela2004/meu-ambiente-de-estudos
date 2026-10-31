@@ -82,7 +82,6 @@ class SharedMaterialLibraryIntegrationTest {
 		StudyQuestion question = questionService.create(
 				blockA.getId(),
 				canonicalMaterial.getId(),
-				null,
 				"Uma lista em Java é uma coleção ordenada...",
 				"Qual das características define uma lista?",
 				"Listas mantêm ordem de inserção",
@@ -100,7 +99,6 @@ class SharedMaterialLibraryIntegrationTest {
 		PracticalExercise exercise = exerciseService.create(
 				blockA.getId(),
 				canonicalMaterial.getId(),
-				null,
 				"Uma lista em Java é uma coleção ordenada...",
 				"Implementação de Lista Customizada",
 				"Implemente uma lista encadeada simples em Java.",
@@ -142,7 +140,6 @@ class SharedMaterialLibraryIntegrationTest {
 				blockB.getId(),
 				materialA.getId(),
 				null,
-				null,
 				"Exercício no Bloco B com material do Bloco A",
 				"Enunciado teste",
 				"Dica teste",
@@ -165,7 +162,6 @@ class SharedMaterialLibraryIntegrationTest {
 		PracticalExercise generated = exerciseService.generateFromMaterials(
 				blockA.getId(),
 				material.getId(),
-				null,
 				StudyQuestionDifficulty.INTERMEDIATE,
 				PracticalExerciseType.PROBLEM_SOLVING);
 
@@ -187,7 +183,6 @@ class SharedMaterialLibraryIntegrationTest {
 		PracticalExercise exercise = exerciseService.create(
 				blockA.getId(),
 				material.getId(),
-				null,
 				null,
 				"Exercício Histórico",
 				"Enunciado do exercício",
@@ -211,7 +206,6 @@ class SharedMaterialLibraryIntegrationTest {
 		assertThrows(ResponseStatusException.class, () -> exerciseService.create(
 				blockA.getId(),
 				material.getId(),
-				null,
 				null,
 				"Novo Exercício Inválido",
 				"Enunciado",
