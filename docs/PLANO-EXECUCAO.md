@@ -254,6 +254,19 @@ material. Tentativas antigas continuam legíveis (rótulos dos critérios anteri
 - [x] 7. Testes: unitários do avaliador e de integração com os novos critérios/pesos; teste de tela atualizado.
 - [x] 8. `mvnw test` (237 testes OK), `lint` OK, `build` OK, `test:run` (46 testes OK).
 
+Monitoramento contínuo da avaliação (continuação, mesmo pedido):
+
+- [x] 9. `EvaluationMonitoringService` + `GET /api/settings/evaluation/monitoring`: distribuição
+      CORRETA/PARCIAL/INCORRETA das tentativas discursivas corrigidas do usuário, pendentes, nota média, média por
+      critério (critérios antigos e novos somados separadamente) e quebra por bloco. Tentativas continuam imutáveis.
+- [x] 10. `POST /api/settings/evaluation/monitoring/consistency-check?limit=5` (máx. 20): reavalia as tentativas
+      discursivas recentes com o provedor atual SEM gravar nada e devolve a taxa de concordância com a classificação
+      original e as divergências — o "golden set" de regressão para trocas de modelo/provedor. Sem IA: erro claro.
+- [x] 11. Frontend: painel de monitoramento nas Configurações (abaixo do rigor) + funções tipadas de API com testes
+      de contrato.
+- [x] 12. Testes de integração do monitoramento (estatísticas, divergência e IA indisponível, com corretor
+      simulado) e a bateria completa (`mvnw test` 240 OK, `lint` OK, `build` OK, `test:run` 47 OK).
+
 ## Observações
 
 - O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta.

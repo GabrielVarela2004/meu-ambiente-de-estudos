@@ -6,10 +6,12 @@ import { addGoalProgress, archiveGoal, changeSessionState, createGoal, listGoals
 import { importMaterialFile, importYoutubeVideo, previewYoutube, reprocessMaterial, toggleMaterialChat } from './materials'
 import {
   answerQuestion,
+  getEvaluationMonitoring,
   getEvaluationSettings,
   listPendingAttempts,
   reevaluateAttempt,
   rescheduleQuestionReview,
+  runConsistencyCheck,
   updateEvaluationSettings,
 } from './questions'
 
@@ -95,6 +97,19 @@ describe('api/questions (StudyQuestionController, GlobalReviewController, Evalua
     expect(calls[0]).toMatchObject({ url: '/api/settings/evaluation', method: 'GET' })
     expect(calls[1]).toMatchObject({ url: '/api/settings/evaluation', method: 'PUT' })
     expect(json(calls[1].body)).toEqual({ rigorLevel: 'MODERADO' })
+  })
+
+  it('getEvaluationMonitoring e runConsistencyCheck → /api/settings/evaluation/monitoring', async () => {
+    const { calls } = mockFetch(() =>
+      jsonResponse({ graded: 0, pending: 0, correct: 0, partial: 0, incorrect: 0, averageScore: 0, averageCriteria: {}, blocks: [] }),
+    )
+    await getEvaluationMonitoring()
+    await runConsistencyCheck(10)
+    expect(calls[0]).toMatchObject({ url: '/api/settings/evaluation/monitoring', method: 'GET' })
+    expect(calls[1]).toMatchObject({
+      url: '/api/settings/evaluation/monitoring/consistency-check?limit=10',
+      method: 'POST',
+    })
   })
 })
 

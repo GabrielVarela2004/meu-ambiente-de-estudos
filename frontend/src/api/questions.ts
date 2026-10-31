@@ -99,3 +99,44 @@ export function updateEvaluationSettings(rigorLevel: EvaluationRigor): Promise<{
     body: JSON.stringify({ rigorLevel }),
   })
 }
+
+/** Configurações › Monitoramento da correção: estatísticas das tentativas discursivas corrigidas. */
+export type EvaluationMonitoringStats = {
+  graded: number
+  pending: number
+  correct: number
+  partial: number
+  incorrect: number
+  averageScore: number
+  averageCriteria: Record<string, number>
+  blocks: { blockTitle: string; attempts: number; correct: number; averageScore: number }[]
+}
+
+/** Uma tentativa reavaliada na verificação de consistência (nada é gravado). */
+export type ConsistencyItem = {
+  prompt: string
+  storedClassification: AnswerClassification
+  storedScore: number
+  newClassification: AnswerClassification
+  newScore: number
+  sameClassification: boolean
+}
+
+export type ConsistencyReport = {
+  checked: number
+  agreements: number
+  agreementPercent: number
+  items: ConsistencyItem[]
+}
+
+export function getEvaluationMonitoring(): Promise<EvaluationMonitoringStats> {
+  return request<EvaluationMonitoringStats>('/api/settings/evaluation/monitoring')
+}
+
+/** Reavalia as tentativas recentes com o provedor atual (custa chamadas de IA). */
+export function runConsistencyCheck(limit = 5): Promise<ConsistencyReport> {
+  return request<ConsistencyReport>(
+    `/api/settings/evaluation/monitoring/consistency-check?limit=${limit}`,
+    { method: 'POST' },
+  )
+}

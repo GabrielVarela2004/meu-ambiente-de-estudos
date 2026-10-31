@@ -1,5 +1,6 @@
 import { SettingsIcon } from '../components/icons'
 import { AiProvidersPanel } from '../features/ai/AiProvidersPanel'
+import { EvaluationMonitoringPanel } from '../features/questions/EvaluationMonitoringPanel'
 import { EvaluationRigorPanel } from '../features/questions/EvaluationRigorPanel'
 import '../styles/pages/settings-forum.css'
 
@@ -57,8 +58,9 @@ export function SettingsPage({ onNavigateToGoals }: Props) {
       {/* 2. Provedores de IA: rota por operação, modelo, limite diário e consumo */}
       <AiProvidersPanel />
 
-      {/* Correção das questões abertas: nível de rigor */}
+      {/* Correção das questões abertas: nível de rigor e monitoramento */}
       <EvaluationRigorPanel />
+      <EvaluationMonitoringPanel />
 
       {/* 3. Uso individual (sem login) */}
       <div className="card mb-6">
