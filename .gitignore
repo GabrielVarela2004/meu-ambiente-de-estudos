@@ -20,3 +20,8 @@ uploads/
 
 # Relatórios de queda da JVM
 hs_err_pid*.log
+
+# Chaves e configuração local do GLM (Z.ai): ficam em ~/.claude-glm, nunca no repositório
+.claude-glm/
+*.dpapi
+*zai-key*
