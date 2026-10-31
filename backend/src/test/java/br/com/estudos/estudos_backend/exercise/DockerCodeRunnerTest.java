@@ -68,6 +68,91 @@ class DockerCodeRunnerTest {
 		assertThat(failing.checks()).noneMatch(CodeEvaluationReport.CheckResult::passed);
 	}
 
+	@Test
+	void parsesTheExecutionReportWithStructuredCompileErrors() {
+		CodeExecutionResult result = runner.parseExecution("lixo\n" + DockerCodeRunner.MARKER + "\n"
+				+ "{\"status\":\"COMPILATION_ERROR\",\"compileDiagnostics\":[{\"file\":\"loja/Pedido.java\",\"line\":3,"
+				+ "\"column\":12,\"message\":\"incompatible types\"}],\"compileErrors\":[\"loja/Pedido.java:3 incompatible types\"]}");
+
+		assertThat(result.status()).isEqualTo(CodeExecutionResult.Status.COMPILATION_ERROR);
+		assertThat(result.compileDiagnostics()).singleElement().satisfies(d -> {
+			assertThat(d.file()).isEqualTo("loja/Pedido.java");
+			assertThat(d.line()).isEqualTo(3);
+			assertThat(d.column()).isEqualTo(12);
+		});
+
+		CodeExecutionResult ok = runner.parseExecution(DockerCodeRunner.MARKER + "\n"
+				+ "{\"status\":\"OK\",\"mainClass\":\"Main\",\"exitCode\":0,\"timeMillis\":42,\"stdout\":\"oi\\n\",\"stderr\":\"\"}");
+		assertThat(ok.status()).isEqualTo(CodeExecutionResult.Status.OK);
+		assertThat(ok.stdout()).isEqualTo("oi\n");
+		assertThat(ok.timeMillis()).isEqualTo(42);
+		assertThat(runner.parseExecution("Killed").status()).isEqualTo(CodeExecutionResult.Status.RUNTIME_ERROR);
+	}
+
+	@Test
+	void writingTheProjectNeverLeavesTheWorkFolder(@org.junit.jupiter.api.io.TempDir java.nio.file.Path work) {
+		org.assertj.core.api.Assertions.assertThatThrownBy(() -> DockerCodeRunner.writeProject(work,
+				List.of(new ExerciseFile("../fora.java", "class X {}"))))
+				.isInstanceOf(br.com.estudos.estudos_backend.common.exception.InvalidInputException.class);
+	}
+
+	/** Projeto com classe, enum, interface e pacote, compilado junto e corrigido com testes (Docker real). */
+	@Test
+	@EnabledIf("runnerImageAvailable")
+	void compilesMultiFileProjectWithPackagesAndRunsTests() {
+		List<ExerciseFile> project = List.of(
+				new ExerciseFile("loja/Forma.java", "package loja; public interface Forma { double area(); }"),
+				new ExerciseFile("loja/Cor.java", "package loja; public enum Cor { AZUL, VERDE }"),
+				new ExerciseFile("loja/Quadrado.java", """
+						package loja;
+						public class Quadrado implements Forma {
+						  private final double lado; private final Cor cor;
+						  public Quadrado(double lado, Cor cor) { this.lado = lado; this.cor = cor; }
+						  @Override public double area() { return lado * lado; }
+						  public Cor cor() { return cor; }
+						}"""));
+		String tests = """
+				import org.junit.jupiter.api.*;
+				import static org.junit.jupiter.api.Assertions.*;
+				import loja.*;
+				class QuadradoTest { @Test @Tag("obrigatorio") void area() { assertEquals(9.0, new Quadrado(3, Cor.AZUL).area()); } }
+				""";
+
+		CodeEvaluationReport report = runner.runProject(project, tests, List.of("IMPLEMENTS|Quadrado|Forma"));
+
+		assertThat(report.status()).isEqualTo(RunStatus.OK);
+		assertThat(report.tests()).singleElement().satisfies(t -> assertThat(t.passed()).isTrue());
+		assertThat(report.checks()).allMatch(CodeEvaluationReport.CheckResult::passed);
+	}
+
+	@Test
+	@EnabledIf("runnerImageAvailable")
+	void runsMainWithStdinAndReportsCompileErrorsWithFileAndLine() {
+		List<ExerciseFile> project = List.of(
+				new ExerciseFile("Main.java", """
+						import java.util.Scanner;
+						public class Main {
+						  public static void main(String[] args) {
+						    String nome = new Scanner(System.in).nextLine();
+						    System.out.println("Olá, " + nome + " - " + util.Saudacao.TEXTO);
+						  }
+						}"""),
+				new ExerciseFile("util/Saudacao.java", "package util; public class Saudacao { public static final String TEXTO = \"bem-vindo\"; }"));
+
+		CodeExecutionResult ok = runner.execute(project, "Ana\n");
+		assertThat(ok.status()).isEqualTo(CodeExecutionResult.Status.OK);
+		assertThat(ok.stdout()).contains("Olá, Ana - bem-vindo");
+		assertThat(ok.mainClass()).isEqualTo("Main");
+
+		CodeExecutionResult broken = runner.execute(List.of(project.get(0),
+				new ExerciseFile("util/Saudacao.java", "package util;\npublic class Saudacao {\n  public static final int TEXTO = \"x\";\n}")), null);
+		assertThat(broken.status()).isEqualTo(CodeExecutionResult.Status.COMPILATION_ERROR);
+		assertThat(broken.compileDiagnostics()).anySatisfy(d -> {
+			assertThat(d.file()).isEqualTo("util/Saudacao.java");
+			assertThat(d.line()).isEqualTo(3);
+		});
+	}
+
 	static boolean runnerImageAvailable() {
 		try {
 			Process process = new ProcessBuilder("docker", "image", "inspect", IMAGE)

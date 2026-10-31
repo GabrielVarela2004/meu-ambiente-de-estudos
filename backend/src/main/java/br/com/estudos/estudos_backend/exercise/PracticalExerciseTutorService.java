@@ -29,7 +29,8 @@ import br.com.estudos.estudos_backend.studyblock.StudyBlockStatus;
 public class PracticalExerciseTutorService {
 
 	static final int HISTORY_EXCHANGES = 10;
-	static final int MAX_CODE_CHARS = 12000;
+	/** Projeto inteiro (todos os arquivos, com o nome de cada um) enviado à tutora, cortado neste tamanho. */
+	static final int MAX_CODE_CHARS = 30000;
 
 	private static final String TUTOR_INSTRUCTION = """
 			Você é uma tutora que acompanha um estudante resolvendo um exercício prático, em português do Brasil.

@@ -58,8 +58,10 @@ import com.github.javaparser.ast.stmt.WhileStmt;
 /**
  * Avaliador executado dentro do contêiner isolado (sem rede, com limites de CPU e memória).
  *
- * Entrada em /work: submission.java (código do estudante), tests.java (JUnit 5, opcional)
- * e checks.txt (uma checagem de conceito por linha: TIPO|arg1|arg2, opcional).
+ * Entrada em /work: o projeto do estudante em src/ (vários .java, com pacotes) ou, no formato antigo, um único
+ * submission.java; tests.java (JUnit 5, opcional); checks.txt (uma checagem de conceito por linha:
+ * TIPO|arg1|arg2, opcional); stdin.txt (entrada do modo run, opcional).
+ * Modos: sem segundo argumento corrige com os testes; com "run" só compila e executa o main.
  * Saída: um único JSON na saída padrão, depois da linha {@value #MARKER}.
  */
 public class Evaluator {
@@ -69,14 +71,18 @@ public class Evaluator {
 	static final int MAX_METHOD_LINES = 40;
 	static final int MAX_NESTING = 3;
 	static final int MAX_OUTPUT_CHARS = 4000;
+	/** Saída do console do modo run (stdout e stderr, cada um). */
+	static final int MAX_RUN_OUTPUT_BYTES = 64 * 1024;
+	static final long RUN_TIMEOUT_MILLIS = 10_000;
 
 	public static void main(String[] args) throws Exception {
 		Path work = Path.of(args.length > 0 ? args[0] : "/work");
+		boolean runMode = args.length > 1 && args[1].equals("run");
 		Path out = Files.createTempDirectory("eval");
 		PrintStream realOut = System.out;
 		Map<String, Object> report = new LinkedHashMap<>();
 		try {
-			report = evaluate(work, out);
+			report = runMode ? runProject(work, out) : evaluate(work, out);
 		} catch (Throwable t) {
 			report.put("status", "RUNTIME_ERROR");
 			report.put("message", String.valueOf(t));
@@ -90,35 +96,66 @@ public class Evaluator {
 		System.exit(0);
 	}
 
+	static JavaParser parser() {
+		return new JavaParser(new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21));
+	}
+
+	/** Arquivo do projeto: caminho relativo a src/ (com "/") e conteúdo. */
+	record SourceFile(String path, String content) {}
+
+	/** Lê os .java de src/ (só arquivos comuns dentro da pasta; nada de links para fora dela). */
+	static List<SourceFile> readProject(Path srcDir) throws IOException {
+		Path root = srcDir.toRealPath();
+		List<SourceFile> files = new ArrayList<>();
+		try (var paths = Files.walk(root)) {
+			for (Path p : paths.sorted().toList()) {
+				if (!Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS) || !p.toString().endsWith(".java")) {
+					continue;
+				}
+				if (!p.toRealPath().startsWith(root)) {
+					continue;
+				}
+				files.add(new SourceFile(root.relativize(p).toString().replace('\\', '/'), Files.readString(p)));
+			}
+		}
+		return files;
+	}
+
 	static Map<String, Object> evaluate(Path work, Path out) throws IOException {
 		Map<String, Object> report = new LinkedHashMap<>();
-		String submission = Files.readString(work.resolve("submission.java"));
+		Path srcDir = work.resolve("src");
+		List<SourceFile> project = Files.isDirectory(srcDir)
+				? readProject(srcDir)
+				: List.of(new SourceFile("submission.java", Files.readString(work.resolve("submission.java"))));
+		boolean legacy = !Files.isDirectory(srcDir);
 		Path testsFile = work.resolve("tests.java");
 		String tests = Files.exists(testsFile) ? Files.readString(testsFile) : "";
 		Path checksFile = work.resolve("checks.txt");
 		List<String> checks = Files.exists(checksFile) ? Files.readAllLines(checksFile) : List.of();
 
-		JavaParser parser = new JavaParser(new ParserConfiguration()
-				.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21));
-		ParseResult<CompilationUnit> parsed = parser.parse(submission);
-		if (!parsed.isSuccessful() || parsed.getResult().isEmpty()) {
-			report.put("status", "COMPILATION_ERROR");
-			List<String> problems = new ArrayList<>();
-			parsed.getProblems().forEach(p -> problems.add(p.getVerboseMessage()));
-			report.put("compileErrors", problems);
+		JavaParser parser = parser();
+		Map<String, CompilationUnit> units = parseAll(parser, project, report, legacy ? null : out);
+		if (units == null) {
 			return report;
 		}
-		CompilationUnit unit = parsed.getResult().get();
 
-		List<Map<String, Object>> checkResults = Concepts.run(unit, checks);
+		List<Map<String, Object>> checkResults = Concepts.run(List.copyOf(units.values()), checks);
 		boolean overrideChecked = checks.stream().anyMatch(c -> c.trim().startsWith("OVERRIDE_ANNOTATION"));
 		report.put("checks", checkResults);
-		report.put("quality", Quality.run(unit, !overrideChecked));
+		List<Map<String, Object>> quality = new ArrayList<>();
+		units.forEach((path, unit) -> quality.addAll(Quality.run(unit, !overrideChecked, legacy ? null : path)));
+		quality.addAll(Quality.missingOverrides(List.copyOf(units.values()), !overrideChecked));
+		report.put("quality", quality);
 
-		// Cada tipo de topo vira o próprio arquivo, no pacote padrão, como os testes esperam.
 		Path src = Files.createDirectories(out.resolve("src"));
 		Path classes = Files.createDirectories(out.resolve("classes"));
-		List<Path> sources = new ArrayList<>(split(unit, src));
+		List<Path> sources = new ArrayList<>();
+		if (legacy) {
+			// Formato antigo: cada tipo de topo vira o próprio arquivo, no pacote padrão, como os testes esperam.
+			sources.addAll(split(units.values().iterator().next(), src));
+		} else {
+			sources.addAll(copyProject(project, src));
+		}
 		List<String> testClassNames = new ArrayList<>();
 		if (!tests.isBlank()) {
 			ParseResult<CompilationUnit> parsedTests = parser.parse(tests);
@@ -132,10 +169,9 @@ public class Evaluator {
 			sources.addAll(split(parsedTests.getResult().get(), src));
 		}
 
-		List<String> compileErrors = compile(sources, classes);
-		if (!compileErrors.isEmpty()) {
-			report.put("status", "COMPILATION_ERROR");
-			report.put("compileErrors", compileErrors);
+		List<Map<String, Object>> diagnostics = compile(sources, src, classes);
+		if (!diagnostics.isEmpty()) {
+			putCompileErrors(report, diagnostics);
 			return report;
 		}
 
@@ -164,7 +200,62 @@ public class Evaluator {
 		return files;
 	}
 
-	static List<String> compile(List<Path> sources, Path classes) throws IOException {
+	/**
+	 * Analisa todos os arquivos. Com erro de sintaxe, preenche o relatório (COMPILATION_ERROR com arquivo e linha)
+	 * e devolve null. Com {@code out}, usa as mensagens do javac, mais claras que as do analisador.
+	 */
+	static Map<String, CompilationUnit> parseAll(JavaParser parser, List<SourceFile> project, Map<String, Object> report,
+			Path out) throws IOException {
+		Map<String, CompilationUnit> units = new LinkedHashMap<>();
+		List<Map<String, Object>> diagnostics = new ArrayList<>();
+		for (SourceFile file : project) {
+			ParseResult<CompilationUnit> parsed = parser.parse(file.content());
+			if (!parsed.isSuccessful() || parsed.getResult().isEmpty()) {
+				parsed.getProblems().forEach(p -> diagnostics.add(entry("file", file.path(),
+						"line", p.getLocation().flatMap(l -> l.getBegin().getRange()).map(r -> r.begin.line).orElse(0),
+						"column", p.getLocation().flatMap(l -> l.getBegin().getRange()).map(r -> r.begin.column).orElse(0),
+						"message", p.getMessage())));
+			} else {
+				units.put(file.path(), parsed.getResult().get());
+			}
+		}
+		if (!diagnostics.isEmpty()) {
+			List<Map<String, Object>> javac = List.of();
+			if (out != null) {
+				Path src = Files.createDirectories(out.resolve("syntax-src"));
+				javac = compile(copyProject(project, src), src, Files.createDirectories(out.resolve("syntax-classes")));
+			}
+			putCompileErrors(report, javac.isEmpty() ? diagnostics : javac);
+			return null;
+		}
+		return units;
+	}
+
+	/** Erros estruturados (arquivo, linha, coluna, mensagem) e, para telas antigas, o texto "arquivo:linha mensagem". */
+	static void putCompileErrors(Map<String, Object> report, List<Map<String, Object>> diagnostics) {
+		report.put("status", "COMPILATION_ERROR");
+		report.put("compileDiagnostics", diagnostics);
+		List<String> errors = new ArrayList<>();
+		diagnostics.forEach(d -> errors.add(d.get("file") + ":" + d.get("line") + " " + d.get("message")));
+		report.put("compileErrors", errors);
+	}
+
+	/** Copia o projeto para a pasta de compilação mantendo as pastas dos pacotes. */
+	static List<Path> copyProject(List<SourceFile> project, Path src) throws IOException {
+		List<Path> files = new ArrayList<>();
+		for (SourceFile file : project) {
+			Path target = src.resolve(file.path()).normalize();
+			if (!target.startsWith(src)) {
+				throw new IOException("Caminho fora do projeto: " + file.path());
+			}
+			Files.createDirectories(target.getParent());
+			Files.writeString(target, file.content());
+			files.add(target);
+		}
+		return files;
+	}
+
+	static List<Map<String, Object>> compile(List<Path> sources, Path src, Path classes) throws IOException {
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
 		try (StandardJavaFileManager files = compiler.getStandardFileManager(diagnostics, Locale.forLanguageTag("pt-BR"), StandardCharsets.UTF_8)) {
@@ -173,14 +264,109 @@ public class Evaluator {
 			compiler.getTask(null, files, diagnostics, options, null,
 					files.getJavaFileObjectsFromPaths(sources)).call();
 		}
-		List<String> errors = new ArrayList<>();
+		List<Map<String, Object>> errors = new ArrayList<>();
 		for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
 			if (d.getKind() == Diagnostic.Kind.ERROR) {
-				String file = d.getSource() == null ? "" : Path.of(d.getSource().toUri()).getFileName() + ":" + d.getLineNumber() + " ";
-				errors.add(file + d.getMessage(Locale.forLanguageTag("pt-BR")));
+				String file = d.getSource() == null ? "" : relative(src, Path.of(d.getSource().toUri()));
+				errors.add(entry("file", file, "line", (int) Math.max(0, d.getLineNumber()),
+						"column", (int) Math.max(0, d.getColumnNumber()), "message", d.getMessage(Locale.forLanguageTag("pt-BR"))));
 			}
 		}
 		return errors;
+	}
+
+	static String relative(Path src, Path file) {
+		Path abs = file.toAbsolutePath().normalize();
+		Path root = src.toAbsolutePath().normalize();
+		return (abs.startsWith(root) ? root.relativize(abs) : abs.getFileName()).toString().replace('\\', '/');
+	}
+
+	// ------------------------------------------------------------------ execução livre (Run)
+
+	/** Compila o projeto e executa o main num processo filho, com stdin opcional e tempo limite. */
+	static Map<String, Object> runProject(Path work, Path out) throws IOException, InterruptedException {
+		Map<String, Object> report = new LinkedHashMap<>();
+		List<SourceFile> project = readProject(work.resolve("src"));
+		Map<String, CompilationUnit> units = parseAll(parser(), project, report, out);
+		if (units == null) {
+			return report;
+		}
+		Optional<String> mainClass = findMainClass(units);
+		if (mainClass.isEmpty()) {
+			report.put("status", "NO_MAIN");
+			report.put("message", "Nenhuma classe com public static void main(String[] args) foi encontrada.");
+			return report;
+		}
+		Path src = Files.createDirectories(out.resolve("src"));
+		Path classes = Files.createDirectories(out.resolve("classes"));
+		List<Map<String, Object>> diagnostics = compile(copyProject(project, src), src, classes);
+		if (!diagnostics.isEmpty()) {
+			putCompileErrors(report, diagnostics);
+			return report;
+		}
+
+		Path stdout = out.resolve("stdout.txt");
+		Path stderr = out.resolve("stderr.txt");
+		Path stdin = work.resolve("stdin.txt");
+		String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+		ProcessBuilder builder = new ProcessBuilder(javaBin, "-Xmx128m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1",
+				"-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-cp", classes.toString(), mainClass.get())
+				.redirectOutput(stdout.toFile())
+				.redirectError(stderr.toFile());
+		boolean hasStdin = Files.exists(stdin);
+		builder.redirectInput(hasStdin ? ProcessBuilder.Redirect.from(stdin.toFile()) : ProcessBuilder.Redirect.PIPE);
+		long start = System.nanoTime();
+		Process process = builder.start();
+		if (!hasStdin) {
+			// Sem entrada: um Scanner recebe fim de arquivo em vez de esperar até o tempo limite.
+			process.getOutputStream().close();
+		}
+		boolean finished = process.waitFor(RUN_TIMEOUT_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS);
+		if (!finished) {
+			process.destroyForcibly().waitFor();
+		}
+		long millis = (System.nanoTime() - start) / 1_000_000;
+
+		report.put("status", !finished ? "TIMEOUT" : process.exitValue() == 0 ? "OK" : "RUNTIME_ERROR");
+		report.put("mainClass", mainClass.get());
+		report.put("exitCode", finished ? process.exitValue() : null);
+		report.put("timeMillis", millis);
+		report.put("stdout", readTruncated(stdout));
+		report.put("stderr", readTruncated(stderr));
+		if (!finished) {
+			report.put("message", "O programa passou do tempo limite de " + RUN_TIMEOUT_MILLIS / 1000 + " s e foi encerrado.");
+		}
+		return report;
+	}
+
+	/** Classe com public static void main(String[]); a chamada Main tem preferência. Nome completo, com pacote. */
+	static Optional<String> findMainClass(Map<String, CompilationUnit> units) {
+		List<String> candidates = new ArrayList<>();
+		for (CompilationUnit unit : units.values()) {
+			String pkg = unit.getPackageDeclaration().map(p -> p.getNameAsString() + ".").orElse("");
+			for (TypeDeclaration<?> type : unit.getTypes()) {
+				boolean hasMain = type.getMethodsByName("main").stream().anyMatch(m -> m.isStatic() && m.isPublic()
+						&& m.getParameters().size() == 1 && m.getParameter(0).getType().asString().replace(" ", "").matches("String(\\[\\]|\\.\\.\\.)"));
+				if (hasMain) {
+					candidates.add(pkg + type.getNameAsString());
+				}
+			}
+		}
+		return candidates.stream().filter(c -> c.equals("Main") || c.endsWith(".Main")).findFirst()
+				.or(() -> candidates.stream().findFirst());
+	}
+
+	static String readTruncated(Path file) throws IOException {
+		if (!Files.exists(file)) {
+			return "";
+		}
+		long size = Files.size(file);
+		byte[] bytes;
+		try (var in = Files.newInputStream(file)) {
+			bytes = in.readNBytes((int) Math.min(size, MAX_RUN_OUTPUT_BYTES));
+		}
+		String text = new String(bytes, StandardCharsets.UTF_8);
+		return size > MAX_RUN_OUTPUT_BYTES ? text + "\n[saída truncada em 64 KB]" : text;
 	}
 
 	static List<Map<String, Object>> runTests(Path classes, List<String> testClassNames) throws IOException {
@@ -249,9 +435,14 @@ public class Evaluator {
 	/** Checagens estruturais pedidas pelo exercício, feitas sobre o código-fonte (não dependem de execução). */
 	static final class Concepts {
 
-		static List<Map<String, Object>> run(CompilationUnit unit, List<String> lines) {
+		static Map<String, ClassOrInterfaceDeclaration> typesOf(List<CompilationUnit> units) {
 			Map<String, ClassOrInterfaceDeclaration> types = new HashMap<>();
-			unit.findAll(ClassOrInterfaceDeclaration.class).forEach(t -> types.put(t.getNameAsString(), t));
+			units.forEach(u -> u.findAll(ClassOrInterfaceDeclaration.class).forEach(t -> types.put(t.getNameAsString(), t)));
+			return types;
+		}
+
+		static List<Map<String, Object>> run(List<CompilationUnit> units, List<String> lines) {
+			Map<String, ClassOrInterfaceDeclaration> types = typesOf(units);
 			List<Map<String, Object>> results = new ArrayList<>();
 			for (String raw : lines) {
 				if (raw.isBlank()) {
@@ -281,7 +472,7 @@ public class Evaluator {
 									.anyMatch(call -> call.getNameAsString().equals(b)
 											&& call.getScope().map(s -> s.isSuperExpr()).orElse(false)))).orElse(false)));
 					case "OVERRIDE_ANNOTATION" -> {
-						List<String> missing = missingOverrides(unit, types);
+						List<String> missing = missingOverrides(types);
 						results.add(result(type, "Métodos sobrescritos usam @Override", missing.isEmpty(),
 								missing.isEmpty() ? null : "Sem @Override: " + String.join(", ", missing)));
 					}
@@ -296,9 +487,9 @@ public class Evaluator {
 								broken.isEmpty() ? null : "Incompleto em: " + String.join(", ", broken)));
 					}
 					case "NO_INSTANCEOF" -> {
-						long count = unit.findAll(InstanceOfExpr.class).stream()
+						long count = units.stream().mapToLong(u -> u.findAll(InstanceOfExpr.class).stream()
 								.filter(i -> i.findAncestor(MethodDeclaration.class).map(m -> !m.getNameAsString().equals("equals")).orElse(true))
-								.count();
+								.count()).sum();
 						results.add(result(type, "Usa polimorfismo em vez de instanceof", count == 0,
 								count == 0 ? null : count + " uso(s) de instanceof fora de equals"));
 					}
@@ -309,7 +500,7 @@ public class Evaluator {
 		}
 
 		/** Métodos com mesmo nome e número de parâmetros que um método do supertipo (declarado no código ou de Object). */
-		static List<String> missingOverrides(CompilationUnit unit, Map<String, ClassOrInterfaceDeclaration> types) {
+		static List<String> missingOverrides(Map<String, ClassOrInterfaceDeclaration> types) {
 			List<String> missing = new ArrayList<>();
 			for (ClassOrInterfaceDeclaration c : types.values()) {
 				List<ClassOrInterfaceDeclaration> supers = new ArrayList<>();
@@ -347,7 +538,8 @@ public class Evaluator {
 	/** Regras de boas práticas verificadas no código-fonte. MAJOR pesa mais que MINOR na nota. */
 	static final class Quality {
 
-		static List<Map<String, Object>> run(CompilationUnit unit, boolean checkOverride) {
+		/** Problemas de um arquivo; file é o caminho no projeto (null no formato antigo, de arquivo único). */
+		static List<Map<String, Object>> run(CompilationUnit unit, boolean checkOverride, String file) {
 			List<Map<String, Object>> issues = new ArrayList<>();
 			for (ClassOrInterfaceDeclaration c : unit.findAll(ClassOrInterfaceDeclaration.class)) {
 				if (!c.getNameAsString().matches("[A-Z][A-Za-z0-9]*")) {
@@ -407,10 +599,17 @@ public class Evaluator {
 					issues.add(issue("STRING_EQUALITY", "MAJOR", "Compare Strings com equals(), não com == ou !=.", line(b)));
 				}
 			}
+			if (file != null) {
+				issues.forEach(i -> i.put("file", file));
+			}
+			return issues;
+		}
+
+		/** @Override ausente olhando todos os arquivos juntos (a superclasse pode estar em outro arquivo). */
+		static List<Map<String, Object>> missingOverrides(List<CompilationUnit> units, boolean checkOverride) {
+			List<Map<String, Object>> issues = new ArrayList<>();
 			if (checkOverride) {
-				Map<String, ClassOrInterfaceDeclaration> types = new HashMap<>();
-				unit.findAll(ClassOrInterfaceDeclaration.class).forEach(t -> types.put(t.getNameAsString(), t));
-				for (String method : Concepts.missingOverrides(unit, types)) {
+				for (String method : Concepts.missingOverrides(Concepts.typesOf(units))) {
 					issues.add(issue("MISSING_OVERRIDE", "MINOR", method + " sobrescreve um método e deveria ter @Override.", 0));
 				}
 			}

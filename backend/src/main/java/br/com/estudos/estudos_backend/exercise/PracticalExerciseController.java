@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -83,7 +84,35 @@ public class PracticalExerciseController {
 	public ResponseEntity<AttemptResponse> submit(@PathVariable UUID blockId, @PathVariable UUID exerciseId,
 			@Valid @RequestBody AttemptRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(AttemptResponse.from(
-				service.submit(blockId, exerciseId, request.answer(), request.selfRating(), request.feedback())));
+				service.submit(blockId, exerciseId, request.answer(), request.files(), request.selfRating(), request.feedback())));
+	}
+
+	/** "Executar": compila e roda o main; não é tentativa e não usa IA. */
+	@PostMapping("/{exerciseId}/run")
+	public CodeExecutionResult run(@PathVariable UUID blockId, @PathVariable UUID exerciseId,
+			@Valid @RequestBody RunRequest request) {
+		return service.execute(blockId, exerciseId, request.files(), request.stdin());
+	}
+
+	/** Rascunho salvo automaticamente pelo editor; 204 quando ainda não existe. */
+	@GetMapping("/{exerciseId}/draft")
+	public ResponseEntity<DraftResponse> draft(@PathVariable UUID blockId, @PathVariable UUID exerciseId) {
+		return service.draft(blockId, exerciseId)
+				.map(d -> ResponseEntity.ok(DraftResponse.from(d)))
+				.orElseGet(() -> ResponseEntity.noContent().build());
+	}
+
+	@PutMapping("/{exerciseId}/draft")
+	public DraftResponse saveDraft(@PathVariable UUID blockId, @PathVariable UUID exerciseId,
+			@Valid @RequestBody DraftRequest request) {
+		return DraftResponse.from(service.saveDraft(blockId, exerciseId, request.files()));
+	}
+
+	/** "Restaurar código inicial". */
+	@DeleteMapping("/{exerciseId}/draft")
+	public ResponseEntity<Void> deleteDraft(@PathVariable UUID blockId, @PathVariable UUID exerciseId) {
+		service.deleteDraft(blockId, exerciseId);
+		return ResponseEntity.noContent().build();
 	}
 
 	@GetMapping("/{exerciseId}/attempts")
@@ -111,7 +140,7 @@ public class PracticalExerciseController {
 
 	public record TutorMessageRequest(
 			@NotBlank @Size(max = 4000) String message,
-			@Size(max = 20000) String currentCode,
+			@Size(max = 120000) String currentCode,
 			Integer stepIndex) {}
 
 	public record TutorMessageResponse(
@@ -166,9 +195,21 @@ public class PracticalExerciseController {
 
 	/** selfRating só é obrigatório quando o exercício não tem correção automática. */
 	public record AttemptRequest(
-			@NotBlank @Size(max = 20000) String answer,
+			@Size(max = 20000) String answer,
+			@Size(max = ExerciseFiles.MAX_FILES) List<ExerciseFile> files,
 			@Min(1) @Max(5) Integer selfRating,
 			@Size(max = 5000) String feedback) {}
+
+	/** Projeto inteiro e entrada opcional (stdin) do "Executar". */
+	public record RunRequest(@Size(max = ExerciseFiles.MAX_FILES) List<ExerciseFile> files, String stdin) {}
+
+	public record DraftRequest(@Size(max = ExerciseFiles.MAX_FILES) List<ExerciseFile> files) {}
+
+	public record DraftResponse(List<ExerciseFile> files, OffsetDateTime updatedAt) {
+		static DraftResponse from(PracticalExerciseDraft draft) {
+			return new DraftResponse(ExerciseFiles.fromJson(draft.getFilesJson()), draft.getUpdatedAt());
+		}
+	}
 
 	public record ExerciseResponse(
 			UUID id,
@@ -191,7 +232,9 @@ public class PracticalExerciseController {
 			Boolean autoEvaluable,
 			PracticalExerciseStatus status,
 			OffsetDateTime createdAt,
-			OffsetDateTime updatedAt) {
+			OffsetDateTime updatedAt,
+			/** Projeto inicial (vários arquivos) ou o starterCode como arquivo único. */
+			List<ExerciseFile> starterFiles) {
 		static ExerciseResponse from(PracticalExercise e) {
 			return new ExerciseResponse(
 					e.getId(),
@@ -215,7 +258,8 @@ public class PracticalExerciseController {
 					e.getAutoEvaluable(),
 					e.getStatus(),
 					e.getCreatedAt(),
-					e.getUpdatedAt());
+					e.getUpdatedAt(),
+					PracticalExerciseService.starterFiles(e));
 		}
 	}
 
@@ -225,7 +269,8 @@ public class PracticalExerciseController {
 	public record AttemptResponse(UUID id, String answer, int selfRating, String feedback, int scorePercent,
 			Integer autonomyPercent, int hintsUsedCount, boolean solutionRevealed, boolean passed,
 			ExerciseEvaluationStatus evaluationStatus, Integer correctnessPercent, Integer conceptPercent,
-			Integer qualityPercent, int testsTotal, int testsPassed, Map<String, Object> report, OffsetDateTime createdAt) {
+			Integer qualityPercent, int testsTotal, int testsPassed, Map<String, Object> report, OffsetDateTime createdAt,
+			List<ExerciseFile> files) {
 		private static final ObjectMapper MAPPER = new ObjectMapper();
 
 		static AttemptResponse from(PracticalExerciseAttempt a) {
@@ -235,7 +280,8 @@ public class PracticalExerciseController {
 			return new AttemptResponse(a.getId(), a.getAnswer(), a.getSelfRating(), a.getFeedback(), a.getScorePercent(),
 					a.getAutonomyPercent(), a.getHintsUsedCount(), a.isSolutionRevealed(), passed,
 					a.getEvaluationStatus(), a.getCorrectnessPercent(), a.getConceptPercent(), a.getQualityPercent(),
-					a.getTestsTotal(), a.getTestsPassed(), parse(a.getTestResultsJson()), a.getCreatedAt());
+					a.getTestsTotal(), a.getTestsPassed(), parse(a.getTestResultsJson()), a.getCreatedAt(),
+					ExerciseFiles.fromJson(a.getSubmittedFilesJson()));
 		}
 
 		@SuppressWarnings("unchecked")

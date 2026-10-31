@@ -267,6 +267,26 @@ Monitoramento contínuo da avaliação (continuação, mesmo pedido):
 - [x] 12. Testes de integração do monitoramento (estatísticas, divergência e IA indisponível, com corretor
       simulado) e a bateria completa (`mvnw test` 240 OK, `lint` OK, `build` OK, `test:run` 47 OK).
 
+## Exercícios práticos estilo IntelliJ (pedido do usuário em 2026-10-31, branch `feat/exercicios-estilo-intellij`)
+
+Plano: projeto Java com vários arquivos por exercício; "Executar" livre (sem tentativa e sem IA) e "Enviar para
+correção" (fluxo atual). Exercícios de Consulta SQL e Analisar código continuam com resposta em texto.
+
+- [x] 1. Backend: `ExerciseFile {path, content}` + validação (≤ 20 arquivos, ≤ 100 KB, só `.java`, sem `..`, sem
+      caminho absoluto, sem duplicados); submissão antiga em texto vira `Main.java` (ou o nome da classe pública).
+- [x] 2. Avaliador (`runner/java/Evaluator.java`): lê `/work/src/**` (mantém `submission.java` legado), compila tudo
+      junto respeitando pacotes; modo `run` compila e executa o `main` num processo filho com stdin, tempo limite e
+      saída truncada em 64 KB; erros de compilação estruturados (arquivo, linha, coluna, mensagem).
+- [x] 3. `DockerCodeRunner`: escreve os arquivos em `src/`, mesmo isolamento (sem rede, limites, só leitura).
+- [x] 4. API: `POST …/exercises/{id}/run`, `GET|PUT …/exercises/{id}/draft`, tentativa aceita `files`;
+      migração V33 (rascunhos por usuário/exercício, arquivos de cada tentativa, arquivos iniciais do exercício).
+- [x] 5. IA: tutor recebe todos os arquivos; geração pode pedir vários tipos (`starterFiles`).
+- [x] 6. Frontend: Monaco (tema estilo Darcula), árvore "Projeto" (Novo Classe/Interface/Enum/Record/Classe
+      abstrata, renomear, excluir com confirmação, validação de nome), abas com indicador de alteração, snippets
+      psvm/sout/fori/iter, Ctrl+S / Shift+F10 / Ctrl+/, console com abas Executar/Testes, stdin, erros clicáveis,
+      rascunho automático e "Restaurar código inicial".
+- [ ] 7. Testes JUnit e Vitest pedidos; bateria completa verde; merge na `master`.
+
 ## Observações
 
 - O hook Stop do projeto (`.claude/hooks/auto-commit-push.sh`) faz commit **e push** ao fim de cada resposta.

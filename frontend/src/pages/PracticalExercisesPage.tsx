@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { request } from '../api/http'
-import { submitExerciseAttempt } from '../api/exercises'
+import { submitExerciseAttempt, type ExerciseFile } from '../api/exercises'
 import { CodeIcon, FolderIcon, SparklesIcon } from '../components/icons'
 import { AttemptResultPanel, type AttemptResult } from '../features/exercises/AttemptResultPanel'
 import { ExerciseTutorChat } from '../features/exercises/ExerciseTutorChat'
+import { ExerciseIde } from '../features/exercises/ide/ExerciseIde'
+import { filesToText, initialFiles, isJavaProjectExercise } from '../features/exercises/ide/javaProject'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
 import { useDeferredEffect } from '../hooks/useDeferredEffect'
@@ -41,6 +43,8 @@ export type PracticalExercise = {
   difficulty?: 'EASY' | 'INTERMEDIATE' | 'HARD'
   exerciseType?: string
   starterCode?: string | null
+  /** Projeto inicial (vários arquivos) ou o starterCode como arquivo único. */
+  starterFiles?: ExerciseFile[]
   solutionCode?: string | null
   hintsJson?: string | null
   testCasesJson?: string | null
@@ -75,6 +79,8 @@ export function PracticalExercisesPage({
 
   // Submissão e respostas
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  // Projeto atual de cada exercício com editor (a tutora recebe todos os arquivos).
+  const [projectFiles, setProjectFiles] = useState<Record<string, ExerciseFile[]>>({})
   const [ratings, setRatings] = useState<Record<string, number>>({})
   const [feedback, setFeedback] = useState<Record<string, AttemptResult>>({})
   const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({})
@@ -181,7 +187,8 @@ export function PracticalExercisesPage({
     }
   }
 
-  const handleSubmitExercise = async (ex: PracticalExercise) => {
+  /** Com `files`, envia o projeto do editor; sem, a resposta em texto (exercícios de SQL e análise). */
+  const handleSubmitExercise = async (ex: PracticalExercise, files?: ExerciseFile[]) => {
     const userAnswer = answers[ex.id] ?? (ex.starterCode || '')
     // Com correção automática confirmada, a nota vem da execução; senão, vale a autoavaliação.
     const selfRating = ex.autoEvaluable === true ? null : ratings[ex.id] || 4
@@ -197,7 +204,7 @@ export function PracticalExercisesPage({
       const res = await submitExerciseAttempt<AttemptResult & { id: string }>(
         blockId,
         ex.id,
-        { answer: userAnswer, selfRating },
+        files ? { files, selfRating } : { answer: userAnswer, selfRating },
       )
       setFeedback((prev) => ({ ...prev, [ex.id]: res }))
       setAttemptCounts((prev) => ({ ...prev, [ex.id]: (prev[ex.id] ?? 0) + 1 }))
@@ -353,6 +360,8 @@ export function PracticalExercisesPage({
             const isSubmitting = submittingId === ex.id
             const exerciseBlockId = ex.studyBlockId || selectedBlockId
             const steps = ex.steps ?? []
+            // Código Java vira um projeto no editor; SQL e análise continuam com resposta em texto.
+            const useIde = isJavaProjectExercise(ex) && !!exerciseBlockId
 
             return (
               <div key={ex.id} className="card exercise-item-card">
@@ -422,28 +431,43 @@ export function PracticalExercisesPage({
                   </details>
                 )}
 
-                {/* Área de Resposta do Estudante */}
-                <div className="exercise-answer-section">
-                  <label htmlFor={`answer-${ex.id}`} className="text-xs text-muted block mb-1">
-                    Sua Solução / Resposta de Código:
-                  </label>
-                  <textarea
-                    id={`answer-${ex.id}`}
-                    className="form-textarea font-mono text-sm"
-                    rows={6}
-                    placeholder="Escreva ou cole seu código ou raciocínio prático de resolução..."
-                    value={answers[ex.id] ?? (ex.starterCode || '')}
-                    onChange={(e) =>
-                      setAnswers((prev) => ({ ...prev, [ex.id]: e.target.value }))
-                    }
+                {/* Área de Resposta do Estudante: projeto Java no editor ou resposta em texto */}
+                {useIde && exerciseBlockId ? (
+                  <ExerciseIde
+                    blockId={exerciseBlockId}
+                    exercise={ex}
+                    submitting={isSubmitting}
+                    onSubmit={(files) => void handleSubmitExercise(ex, files)}
+                    onFilesChange={(files) => setProjectFiles((prev) => ({ ...prev, [ex.id]: files }))}
+                    testsReport={result?.report ?? null}
                   />
-                </div>
+                ) : (
+                  <div className="exercise-answer-section">
+                    <label htmlFor={`answer-${ex.id}`} className="text-xs text-muted block mb-1">
+                      Sua Solução / Resposta de Código:
+                    </label>
+                    <textarea
+                      id={`answer-${ex.id}`}
+                      className="form-textarea font-mono text-sm"
+                      rows={6}
+                      placeholder="Escreva ou cole seu código ou raciocínio prático de resolução..."
+                      value={answers[ex.id] ?? (ex.starterCode || '')}
+                      onChange={(e) =>
+                        setAnswers((prev) => ({ ...prev, [ex.id]: e.target.value }))
+                      }
+                    />
+                  </div>
+                )}
 
                 {exerciseBlockId && (
                   <ExerciseTutorChat
                     exercisePath={`/api/study-blocks/${exerciseBlockId}/exercises/${ex.id}`}
                     steps={steps}
-                    currentCode={answers[ex.id] ?? (ex.starterCode || '')}
+                    currentCode={
+                      useIde
+                        ? filesToText(projectFiles[ex.id] ?? initialFiles(ex))
+                        : answers[ex.id] ?? (ex.starterCode || '')
+                    }
                     refreshKey={attemptCounts[ex.id] ?? 0}
                   />
                 )}
@@ -478,14 +502,16 @@ export function PracticalExercisesPage({
                   </div>
                   )}
 
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => void handleSubmitExercise(ex)}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (ex.autoEvaluable === true ? 'Executando...' : 'Registrando...') : 'Enviar Solução'}
-                  </button>
+                  {!useIde && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void handleSubmitExercise(ex)}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (ex.autoEvaluable === true ? 'Executando...' : 'Registrando...') : 'Enviar Solução'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Resultado da Avaliação */}

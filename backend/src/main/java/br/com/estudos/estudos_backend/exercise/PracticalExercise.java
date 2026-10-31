@@ -67,6 +67,10 @@ public class PracticalExercise {
 	@Column(name = "test_cases_json", columnDefinition = "TEXT")
 	private String testCasesJson;
 
+	/** Arquivos iniciais do projeto (JSON de ExerciseFile); vazio usa o starterCode como arquivo único. */
+	@Column(name = "starter_files_json", columnDefinition = "TEXT")
+	private String starterFilesJson;
+
 	@Column(name = "steps_json", columnDefinition = "TEXT")
 	private String stepsJson;
 
@@ -244,6 +248,8 @@ public class PracticalExercise {
 	/** Etapas do exercício (lista JSON de textos) usadas pela tutoria para localizar a dificuldade. */
 	public void defineSteps(String stepsJson) { this.stepsJson = stepsJson; }
 
+	public void defineStarterFiles(String starterFilesJson) { this.starterFilesJson = starterFilesJson; }
+
 	public void configureAutoEvaluation(String language, String testCode, String conceptChecks) {
 		this.language = language;
 		this.testCode = testCode;
@@ -273,6 +279,7 @@ public class PracticalExercise {
 	public String getSolutionCode() { return solutionCode; }
 	public String getHintsJson() { return hintsJson; }
 	public String getTestCasesJson() { return testCasesJson; }
+	public String getStarterFilesJson() { return starterFilesJson; }
 	public String getStepsJson() { return stepsJson; }
 	public String getLanguage() { return language; }
 	public String getTestCode() { return testCode; }

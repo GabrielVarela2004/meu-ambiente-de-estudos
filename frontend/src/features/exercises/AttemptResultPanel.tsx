@@ -21,6 +21,8 @@ export type AttemptResult = {
     status?: string
     message?: string
     compileErrors?: string[]
+    /** Erros de compilação com arquivo, linha e coluna (projetos com vários arquivos). */
+    compileDiagnostics?: { file: string; line: number; column: number; message: string }[]
     tests?: ReportTest[]
     checks?: ReportCheck[]
     quality?: ReportIssue[]

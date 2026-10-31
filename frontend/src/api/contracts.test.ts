@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { jsonResponse, mockFetch } from '../test/fetchMock'
 import { runCareerAgent, toggleCareerSource } from './career'
-import { submitExerciseAttempt } from './exercises'
+import { deleteExerciseDraft, getExerciseDraft, runExercise, saveExerciseDraft, submitExerciseAttempt } from './exercises'
 import { addGoalProgress, archiveGoal, changeSessionState, createGoal, listGoals, listSessions, planSession } from './goals'
 import { importMaterialFile, importYoutubeVideo, previewYoutube, reprocessMaterial, toggleMaterialChat } from './materials'
 import {
@@ -119,6 +119,39 @@ describe('api/exercises (PracticalExerciseController)', () => {
     await submitExerciseAttempt('b1', 'e1', { answer: 'int x = 1;', selfRating: 4 })
     expect(calls[0]).toMatchObject({ url: '/api/study-blocks/b1/exercises/e1/attempts', method: 'POST' })
     expect(json(calls[0].body)).toEqual({ answer: 'int x = 1;', selfRating: 4 })
+  })
+
+  const project = [
+    { path: 'Main.java', content: 'public class Main {}' },
+    { path: 'loja/Status.java', content: 'package loja; public enum Status { A }' },
+  ]
+
+  it('submitExerciseAttempt com files → corpo com o projeto inteiro', async () => {
+    const { calls } = mockFetch()
+    await submitExerciseAttempt('b1', 'e1', { files: project, selfRating: null })
+    expect(json(calls[0].body)).toEqual({ files: project, selfRating: null })
+  })
+
+  it('runExercise → POST …/exercises/{id}/run com files e stdin (vazio vira null)', async () => {
+    const { calls } = mockFetch()
+    await runExercise('b1', 'e1', project, 'Ana\n')
+    await runExercise('b1', 'e1', project, '')
+    expect(calls[0]).toMatchObject({ url: '/api/study-blocks/b1/exercises/e1/run', method: 'POST' })
+    expect(json(calls[0].body)).toEqual({ files: project, stdin: 'Ana\n' })
+    expect(json(calls[1].body)).toEqual({ files: project, stdin: null })
+  })
+
+  it('rascunho → GET (204 vira null), PUT com files e DELETE …/draft', async () => {
+    const { calls } = mockFetch((call) => (call.method === 'GET' ? new Response(null, { status: 204 }) : jsonResponse({ files: project })))
+    await expect(getExerciseDraft('b1', 'e1')).resolves.toBeNull()
+    await saveExerciseDraft('b1', 'e1', project)
+    await deleteExerciseDraft('b1', 'e1')
+    expect(calls.map((c) => [c.method, c.url])).toEqual([
+      ['GET', '/api/study-blocks/b1/exercises/e1/draft'],
+      ['PUT', '/api/study-blocks/b1/exercises/e1/draft'],
+      ['DELETE', '/api/study-blocks/b1/exercises/e1/draft'],
+    ])
+    expect(json(calls[1].body)).toEqual({ files: project })
   })
 })
 

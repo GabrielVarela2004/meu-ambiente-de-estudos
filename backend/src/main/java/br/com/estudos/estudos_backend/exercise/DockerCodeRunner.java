@@ -89,24 +89,94 @@ public class DockerCodeRunner implements CodeRunner {
 
 	@Override
 	public CodeEvaluationReport run(String submission, String testCode, List<String> conceptChecks) {
+		return evaluate(work -> Files.writeString(work.resolve("submission.java"), submission == null ? "" : submission),
+				testCode, conceptChecks);
+	}
+
+	@Override
+	public CodeEvaluationReport runProject(List<ExerciseFile> files, String testCode, List<String> conceptChecks) {
+		return evaluate(work -> writeProject(work, files), testCode, conceptChecks);
+	}
+
+	private CodeEvaluationReport evaluate(WorkWriter writer, String testCode, List<String> conceptChecks) {
 		if (!isAvailable()) {
 			return CodeEvaluationReport.failure(RunStatus.UNAVAILABLE, "Ambiente de execução indisponível.");
 		}
 		Path work = null;
-		String containerName = "estudos-eval-" + UUID.randomUUID();
 		try {
 			work = Files.createTempDirectory("estudos-eval");
-			Files.writeString(work.resolve("submission.java"), submission == null ? "" : submission);
+			writer.write(work);
 			Files.writeString(work.resolve("tests.java"), testCode == null ? "" : testCode);
 			Files.writeString(work.resolve("checks.txt"), String.join("\n", conceptChecks == null ? List.of() : conceptChecks));
-			makeReadableByContainer(work);
+			ContainerOutcome outcome = runContainer(work, null, "256m");
+			if (outcome.timedOut()) {
+				return CodeEvaluationReport.failure(RunStatus.TIMEOUT,
+						"O código excedeu o tempo limite de " + timeoutMillis / 1000 + " s.");
+			}
+			return parse(outcome.output());
+		} catch (IOException e) {
+			log.warn("Falha ao executar o avaliador de código: {}", e.getMessage());
+			return CodeEvaluationReport.failure(RunStatus.UNAVAILABLE, "Falha ao iniciar o ambiente de execução.");
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return CodeEvaluationReport.failure(RunStatus.TIMEOUT, "Execução interrompida.");
+		} finally {
+			deleteQuietly(work);
+		}
+	}
 
-			List<String> command = new ArrayList<>(List.of(dockerCommand, "run", "--rm", "--name", containerName,
-					"--network", "none", "--memory", "256m", "--memory-swap", "256m", "--cpus", "1",
-					"--pids-limit", "128", "--read-only", "--tmpfs", "/tmp:rw,exec,size=64m",
-					"--security-opt", "no-new-privileges", "--cap-drop", "ALL",
-					"-v", work.toAbsolutePath() + ":/work:ro", image));
-			Path output = work.resolve("output.txt");
+	@Override
+	public CodeExecutionResult execute(List<ExerciseFile> files, String stdin) {
+		if (!isAvailable()) {
+			return CodeExecutionResult.failure(CodeExecutionResult.Status.UNAVAILABLE, "Ambiente de execução indisponível.");
+		}
+		Path work = null;
+		try {
+			work = Files.createTempDirectory("estudos-run");
+			writeProject(work, files);
+			if (stdin != null && !stdin.isEmpty()) {
+				Files.writeString(work.resolve("stdin.txt"), stdin);
+			}
+			// O avaliador compila e roda o main num processo filho: precisa de mais memória que a correção.
+			ContainerOutcome outcome = runContainer(work, "run", "384m");
+			if (outcome.timedOut()) {
+				return CodeExecutionResult.failure(CodeExecutionResult.Status.TIMEOUT,
+						"A execução excedeu o tempo limite de " + timeoutMillis / 1000 + " s.");
+			}
+			return parseExecution(outcome.output());
+		} catch (IOException e) {
+			log.warn("Falha ao executar o código: {}", e.getMessage());
+			return CodeExecutionResult.failure(CodeExecutionResult.Status.UNAVAILABLE, "Falha ao iniciar o ambiente de execução.");
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return CodeExecutionResult.failure(CodeExecutionResult.Status.TIMEOUT, "Execução interrompida.");
+		} finally {
+			deleteQuietly(work);
+		}
+	}
+
+	@FunctionalInterface
+	private interface WorkWriter {
+		void write(Path work) throws IOException;
+	}
+
+	private record ContainerOutcome(boolean timedOut, String output) {}
+
+	/** Contêiner descartável: sem rede, memória/CPU/processos limitados, raiz só de leitura, /work montado só leitura. */
+	private ContainerOutcome runContainer(Path work, String mode, String memory) throws IOException, InterruptedException {
+		makeReadableByContainer(work);
+		String containerName = "estudos-eval-" + UUID.randomUUID();
+		List<String> command = new ArrayList<>(List.of(dockerCommand, "run", "--rm", "--name", containerName,
+				"--network", "none", "--memory", memory, "--memory-swap", memory, "--cpus", "1",
+				"--pids-limit", "128", "--read-only", "--tmpfs", "/tmp:rw,exec,size=64m",
+				"--security-opt", "no-new-privileges", "--cap-drop", "ALL",
+				"-v", work.toAbsolutePath() + ":/work:ro", image));
+		if (mode != null) {
+			// O ENTRYPOINT da imagem já passa /work; o modo vira o segundo argumento do avaliador.
+			command.add(mode);
+		}
+		Path output = Files.createTempFile("estudos-eval-out", ".txt");
+		try {
 			Process process = new ProcessBuilder(command)
 					.redirectErrorStream(true)
 					.redirectOutput(output.toFile())
@@ -114,20 +184,63 @@ public class DockerCodeRunner implements CodeRunner {
 			if (!process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) {
 				process.destroyForcibly();
 				kill(containerName);
-				return CodeEvaluationReport.failure(RunStatus.TIMEOUT,
-						"O código excedeu o tempo limite de " + timeoutMillis / 1000 + " s.");
+				return new ContainerOutcome(true, "");
 			}
-			return parse(Files.readString(output, StandardCharsets.UTF_8));
-		} catch (IOException e) {
-			log.warn("Falha ao executar o avaliador de código: {}", e.getMessage());
-			return CodeEvaluationReport.failure(RunStatus.UNAVAILABLE, "Falha ao iniciar o ambiente de execução.");
+			return new ContainerOutcome(false, Files.readString(output, StandardCharsets.UTF_8));
 		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
 			kill(containerName);
-			return CodeEvaluationReport.failure(RunStatus.TIMEOUT, "Execução interrompida.");
+			throw e;
 		} finally {
-			deleteQuietly(work);
+			Files.deleteIfExists(output);
 		}
+	}
+
+	/** Grava o projeto em src/ (caminhos já validados; confere de novo que nada sai da pasta). */
+	static void writeProject(Path work, List<ExerciseFile> files) throws IOException {
+		Path src = Files.createDirectories(work.resolve("src")).toAbsolutePath().normalize();
+		for (ExerciseFile file : ExerciseFiles.validate(files)) {
+			Path target = src.resolve(file.path()).normalize();
+			if (!target.startsWith(src)) {
+				throw new IOException("Caminho fora do projeto: " + file.path());
+			}
+			Files.createDirectories(target.getParent());
+			Files.writeString(target, file.content(), StandardCharsets.UTF_8);
+		}
+	}
+
+	CodeExecutionResult parseExecution(String output) {
+		int index = output.lastIndexOf(MARKER);
+		if (index < 0) {
+			String tail = output.length() > 500 ? output.substring(output.length() - 500) : output;
+			return CodeExecutionResult.failure(CodeExecutionResult.Status.RUNTIME_ERROR,
+					"A execução terminou sem relatório. " + tail.strip());
+		}
+		try {
+			JsonNode node = objectMapper.readTree(output.substring(index + MARKER.length()).strip());
+			CodeExecutionResult.Status status;
+			try {
+				status = CodeExecutionResult.Status.valueOf(node.path("status").asText("RUNTIME_ERROR"));
+			} catch (IllegalArgumentException e) {
+				status = CodeExecutionResult.Status.RUNTIME_ERROR;
+			}
+			return new CodeExecutionResult(status,
+					node.hasNonNull("message") ? node.path("message").asText() : null,
+					node.hasNonNull("mainClass") ? node.path("mainClass").asText() : null,
+					node.hasNonNull("exitCode") ? node.path("exitCode").asInt() : null,
+					node.path("timeMillis").asLong(0),
+					node.path("stdout").asText(""),
+					node.path("stderr").asText(""),
+					diagnostics(node.path("compileDiagnostics")));
+		} catch (IOException e) {
+			return CodeExecutionResult.failure(CodeExecutionResult.Status.RUNTIME_ERROR, "Relatório do avaliador inválido.");
+		}
+	}
+
+	static List<CodeExecutionResult.CompileDiagnostic> diagnostics(JsonNode array) {
+		List<CodeExecutionResult.CompileDiagnostic> list = new ArrayList<>();
+		array.forEach(d -> list.add(new CodeExecutionResult.CompileDiagnostic(d.path("file").asText(""),
+				d.path("line").asInt(0), d.path("column").asInt(0), d.path("message").asText(""))));
+		return list;
 	}
 
 	CodeEvaluationReport parse(String output) {
@@ -181,10 +294,10 @@ public class DockerCodeRunner implements CodeRunner {
 	/** O contêiner roda como usuário comum; os arquivos precisam ser legíveis por ele. */
 	private static void makeReadableByContainer(Path work) throws IOException {
 		try {
-			Files.setPosixFilePermissions(work, PosixFilePermissions.fromString("rwxr-xr-x"));
-			try (Stream<Path> files = Files.list(work)) {
-				for (Path file : files.toList()) {
-					Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r--r--"));
+			try (Stream<Path> paths = Files.walk(work)) {
+				for (Path path : paths.toList()) {
+					Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(
+							Files.isDirectory(path) ? "rwxr-xr-x" : "rw-r--r--"));
 				}
 			}
 		} catch (UnsupportedOperationException e) {

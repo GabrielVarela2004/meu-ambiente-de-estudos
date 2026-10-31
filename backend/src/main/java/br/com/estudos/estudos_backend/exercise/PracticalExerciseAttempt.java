@@ -96,6 +96,10 @@ public class PracticalExerciseAttempt {
 	@Column(name = "error_category", length = 60)
 	private String errorCategory;
 
+	/** Arquivos enviados (JSON de ExerciseFile); a coluna answer guarda o texto único equivalente. */
+	@Column(name = "submitted_files_json", columnDefinition = "TEXT")
+	private String submittedFilesJson;
+
 	@Column(name = "autonomy_percent")
 	private Integer autonomyPercent;
 
@@ -206,6 +210,8 @@ public class PracticalExerciseAttempt {
 	}
 
 	/** Autonomia (0–100) calculada a partir das ajudas recebidas no chat do exercício. */
+	public void recordSubmittedFiles(String submittedFilesJson) { this.submittedFilesJson = submittedFilesJson; }
+
 	public void recordAutonomy(int autonomyPercent) {
 		this.autonomyPercent = Math.max(0, Math.min(100, autonomyPercent));
 	}
@@ -257,6 +263,7 @@ public class PracticalExerciseAttempt {
 	public int getScorePercent() { return scorePercent; }
 	public String getExecutionStatus() { return executionStatus; }
 	public String getTestResultsJson() { return testResultsJson; }
+	public String getSubmittedFilesJson() { return submittedFilesJson; }
 	public String getErrorCategory() { return errorCategory; }
 	public Integer getAutonomyPercent() { return autonomyPercent; }
 	public Integer getCorrectnessPercent() { return correctnessPercent; }

@@ -149,3 +149,26 @@
   --warning-text: var(--color-warning);
   --warning-border: var(--color-warning-border);
 }
+
+/* Editor dos exercícios práticos (estilo IntelliJ Darcula). O tema do Monaco é montado a partir destas cores. */
+:root {
+  --ide-bg: #2b2b2b;
+  --ide-fg: #a9b7c6;
+  --ide-panel: #3c3f41;
+  --ide-panel-alt: #313335;
+  --ide-border: #515151;
+  --ide-tab-active: #4e5254;
+  --ide-line-number: #606366;
+  --ide-current-line: #323232;
+  --ide-selection: #214283;
+  --ide-keyword: #cc7832;
+  --ide-string: #6a8759;
+  --ide-number: #6897bb;
+  --ide-comment: #808080;
+  --ide-annotation: #bbb529;
+  --ide-type: #a9b7c6;
+  --ide-error: #ff6b68;
+  --ide-success: #6a8759;
+  --ide-link: #589df6;
+  --ide-modified: #6897bb;
+}

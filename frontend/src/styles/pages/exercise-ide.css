@@ -1,0 +1,284 @@
+/* ==========================================================================
+   Editor dos exercícios práticos (estilo IntelliJ Darcula) — cores em tokens.css (--ide-*)
+   ========================================================================== */
+
+.ide-shell {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--ide-border);
+  border-radius: var(--radius-md);
+  background: var(--ide-bg);
+  color: var(--ide-fg);
+  font-size: var(--text-sm);
+}
+
+.ide-shell .btn-ghost,
+.ide-shell .btn-ghost-danger {
+  color: var(--ide-fg);
+}
+
+/* ---- Barra superior ---- */
+.ide-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--ide-border);
+  background: var(--ide-panel);
+}
+.ide-toolbar-title {
+  font-weight: var(--weight-semibold);
+}
+.ide-save-state {
+  color: var(--ide-comment);
+  font-size: var(--text-xs);
+}
+.ide-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* ---- Projeto + editor ---- */
+.ide-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 420px;
+}
+
+.ide-project {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  overflow-y: auto;
+  border-right: 1px solid var(--ide-border);
+  background: var(--ide-panel-alt);
+}
+.ide-project-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ide-comment);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+}
+.ide-new-menu {
+  position: relative;
+}
+.ide-new-menu-list {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: var(--space-1);
+  border: 1px solid var(--ide-border);
+  border-radius: var(--radius-sm);
+  background: var(--ide-panel);
+}
+.ide-new-menu-list .btn {
+  justify-content: flex-start;
+}
+
+.ide-inline-form,
+.ide-rename-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.ide-rename-form {
+  flex-direction: row;
+  align-items: center;
+}
+.ide-inline-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--ide-fg);
+  font-size: var(--text-xs);
+}
+.ide-inline-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+.ide-shell .form-input,
+.ide-shell .form-textarea {
+  border-color: var(--ide-border);
+  background: var(--ide-bg);
+  color: var(--ide-fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.ide-form-error {
+  margin: 0;
+  color: var(--ide-error);
+  font-size: var(--text-xs);
+}
+
+.ide-file-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ide-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: var(--radius-sm);
+}
+.ide-file.active {
+  background: var(--ide-selection);
+}
+.ide-file-name {
+  overflow: hidden;
+  min-width: 0;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ide-main-badge {
+  margin-left: var(--space-1);
+  color: var(--ide-success);
+  font-size: var(--text-xs);
+}
+.ide-file-actions {
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+.ide-file:hover .ide-file-actions,
+.ide-file.active .ide-file-actions {
+  opacity: 1;
+}
+
+.ide-editor-area {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ide-tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ide-border);
+  background: var(--ide-panel);
+}
+.ide-tab {
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--ide-border);
+}
+.ide-tab.active {
+  background: var(--ide-tab-active);
+  box-shadow: inset 0 -2px 0 var(--ide-link);
+}
+.ide-tab-name {
+  font-family: var(--font-mono);
+}
+.ide-dirty-dot {
+  margin-left: var(--space-1);
+  color: var(--ide-modified);
+}
+.ide-editor {
+  flex: 1;
+  min-height: 380px;
+}
+.ide-editor-loading {
+  padding: var(--space-4);
+  color: var(--ide-comment);
+}
+
+/* ---- Console ---- */
+.ide-console {
+  border-top: 1px solid var(--ide-border);
+  background: var(--ide-panel-alt);
+}
+.ide-console-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--ide-border);
+}
+.ide-console-tabs .btn.active {
+  background: var(--ide-tab-active);
+}
+.ide-console-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 260px;
+  padding: var(--space-2) var(--space-3);
+  overflow-y: auto;
+}
+.ide-stdin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--ide-comment);
+  font-size: var(--text-xs);
+}
+.ide-console-output {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.ide-console-status.ok,
+.ide-test-line.ok {
+  color: var(--ide-success);
+}
+.ide-console-status.error,
+.ide-test-line.error,
+.ide-console-error {
+  color: var(--ide-error);
+}
+.ide-console-status,
+.ide-test-line,
+.ide-console-muted {
+  margin: 0;
+}
+.ide-console-muted {
+  color: var(--ide-comment);
+  font-size: var(--text-xs);
+}
+.ide-console-pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ide-diagnostics {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.ide-shell .ide-link {
+  display: inline;
+  padding: 0;
+  color: var(--ide-link);
+  font-family: var(--font-mono);
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .ide-body {
+    grid-template-columns: 1fr;
+  }
+  .ide-project {
+    max-height: 180px;
+    border-right: none;
+    border-bottom: 1px solid var(--ide-border);
+  }
+  .ide-toolbar-actions {
+    margin-left: 0;
+  }
+}
