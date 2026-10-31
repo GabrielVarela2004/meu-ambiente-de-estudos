@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AnswerResult } from '../api/questions'
 import { jsonResponse, mockFetch } from '../test/fetchMock'
 import { TheoreticalQuestionsPage } from './TheoreticalQuestionsPage'
@@ -67,6 +67,33 @@ const partialAnswer: AnswerResult = {
 afterEach(() => {
   vi.unstubAllGlobals()
 })
+
+/** Simula a Web Speech API para os testes do ditado por voz. */
+class MockSpeechRecognition {
+  static instances: MockSpeechRecognition[] = []
+
+  lang = ''
+  continuous = false
+  interimResults = false
+  onresult: ((event: { resultIndex: number; results: unknown }) => void) | null = null
+  onerror: ((event: { error: string }) => void) | null = null
+  onend: (() => void) | null = null
+  start = vi.fn()
+  stop = vi.fn()
+  abort = vi.fn()
+
+  constructor() {
+    MockSpeechRecognition.instances.push(this)
+  }
+
+  emitFinal(transcript: string) {
+    this.onresult?.({ resultIndex: 0, results: [{ isFinal: true, length: 1, 0: { transcript } }] })
+  }
+
+  emitInterim(transcript: string) {
+    this.onresult?.({ resultIndex: 0, results: [{ isFinal: false, length: 1, 0: { transcript } }] })
+  }
+}
 
 describe('TheoreticalQuestionsPage — questão aberta', () => {
   it('só mostra o que faltou, a resposta-modelo e o trecho depois de responder', async () => {
@@ -208,5 +235,72 @@ describe('TheoreticalQuestionsPage — questão aberta', () => {
     expect(screen.getByText('Resposta registrada, mas ainda não corrigida.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reavaliar agora' })).toBeInTheDocument()
     expect(screen.queryByText(MODEL_ANSWER)).not.toBeInTheDocument()
+  })
+})
+
+describe('TheoreticalQuestionsPage — ditado por voz nas questões abertas', () => {
+  beforeEach(() => {
+    MockSpeechRecognition.instances = []
+    vi.stubGlobal('SpeechRecognition', MockSpeechRecognition)
+  })
+
+  it('mostra o botão de microfone quando o navegador suporta ditado', async () => {
+    mockFetch((call) => (call.method === 'POST' ? jsonResponse(partialAnswer) : jsonResponse([question])))
+    render(<TheoreticalQuestionsPage mode="block" blocks={[block]} selectedBlockId="b1" onSelectBlock={() => {}} />)
+
+    expect(await screen.findByText(question.prompt)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ditar resposta por voz' })).toBeInTheDocument()
+    expect(screen.queryByText(/Ditado por voz disponível/)).not.toBeInTheDocument()
+  })
+
+  it('sem suporte: esconde o botão e mostra a dica discreta', async () => {
+    vi.stubGlobal('SpeechRecognition', undefined)
+    vi.stubGlobal('webkitSpeechRecognition', undefined)
+    mockFetch(() => jsonResponse([question]))
+    render(<TheoreticalQuestionsPage mode="block" blocks={[block]} selectedBlockId="b1" onSelectBlock={() => {}} />)
+
+    expect(await screen.findByText(question.prompt)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ditar resposta por voz' })).not.toBeInTheDocument()
+    expect(screen.getByText('Ditado por voz disponível no Chrome ou Edge')).toBeInTheDocument()
+  })
+
+  it('anexa o texto falado ao que já está no campo, com espaço, e mostra o provisório em cinza', async () => {
+    mockFetch(() => jsonResponse([question]))
+    render(<TheoreticalQuestionsPage mode="block" blocks={[block]} selectedBlockId="b1" onSelectBlock={() => {}} />)
+    expect(await screen.findByText(question.prompt)).toBeInTheDocument()
+
+    await userEvent.type(screen.getByRole('textbox'), 'Ele usa o hashCode.')
+    await userEvent.click(screen.getByRole('button', { name: 'Ditar resposta por voz' }))
+
+    const recognition = MockSpeechRecognition.instances[0]!
+    expect(recognition.start).toHaveBeenCalled()
+
+    await userEvent.type(screen.getByRole('textbox'), ' E o equals.') // edição manual segue livre
+    act(() => recognition.emitInterim('comparando os objetos'))
+    expect(screen.getByText('comparando os objetos')).toBeInTheDocument()
+
+    act(() => recognition.emitFinal('para comparar os objetos.'))
+    expect(screen.getByRole('textbox')).toHaveValue('Ele usa o hashCode. E o equals. para comparar os objetos.')
+  })
+
+  it('enviar com o microfone ligado para o ditado e inclui o último trecho falado', async () => {
+    const { calls } = mockFetch((call) => (call.method === 'POST' ? jsonResponse(partialAnswer) : jsonResponse([question])))
+    render(<TheoreticalQuestionsPage mode="block" blocks={[block]} selectedBlockId="b1" onSelectBlock={() => {}} />)
+    expect(await screen.findByText(question.prompt)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ditar resposta por voz' }))
+    const recognition = MockSpeechRecognition.instances[0]!
+    act(() => recognition.emitInterim('usa hashCode e equals'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Resposta' }))
+
+    const answerCall = calls.find((c) => c.method === 'POST')
+    expect(answerCall?.url).toBe('/api/study-blocks/b1/questions/q1/answers')
+    expect(JSON.parse(String(answerCall?.body))).toEqual({ discursiveAnswer: 'usa hashCode e equals' })
+    expect(recognition.stop).toHaveBeenCalled()
+    // O microfone parou junto com o envio.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Parar ditado' })).not.toBeInTheDocument(),
+    )
   })
 })

@@ -37,7 +37,12 @@ public interface AiTutorProvider {
 			boolean jsonObjectMode,
 			Integer maxOutputTokens,
 			/** Temperatura pedida (ex.: 0.1 em correções); null = padrão do modelo. Ignorada onde o modelo não aceita. */
-			Double temperature) {
+			Double temperature,
+			/**
+			 * Esquema JSON da saída esperada (formato comum {@code {"type":"array","items":{...}}}), para o provedor
+			 * responder com JSON estruturado; null = sem esquema. Ignorado onde o provedor não suporta.
+			 */
+			String responseSchema) {
 
 		public AiTutorRequest {
 			conversationHistory = conversationHistory == null ? List.of() : List.copyOf(conversationHistory);
@@ -45,12 +50,24 @@ public interface AiTutorProvider {
 
 		public AiTutorRequest(String systemInstruction, List<AiTutorMessage> conversationHistory, String userPrompt,
 				boolean jsonObjectMode, Integer maxOutputTokens) {
-			this(systemInstruction, conversationHistory, userPrompt, jsonObjectMode, maxOutputTokens, null);
+			this(systemInstruction, conversationHistory, userPrompt, jsonObjectMode, maxOutputTokens, null, null);
+		}
+
+		public AiTutorRequest(String systemInstruction, List<AiTutorMessage> conversationHistory, String userPrompt,
+				boolean jsonObjectMode, Integer maxOutputTokens, Double temperature) {
+			this(systemInstruction, conversationHistory, userPrompt, jsonObjectMode, maxOutputTokens, temperature, null);
 		}
 
 		/** Mesmo pedido com limite de saída explícito (vale acima do padrão do .env; ex.: várias questões numa chamada). */
 		public AiTutorRequest withMaxOutputTokens(int tokens) {
-			return new AiTutorRequest(systemInstruction, conversationHistory, userPrompt, jsonObjectMode, tokens, temperature);
+			return new AiTutorRequest(systemInstruction, conversationHistory, userPrompt, jsonObjectMode, tokens,
+					temperature, responseSchema);
+		}
+
+		/** Mesmo pedido com esquema JSON estruturado para a resposta. */
+		public AiTutorRequest withResponseSchema(String schema) {
+			return new AiTutorRequest(systemInstruction, conversationHistory, userPrompt, jsonObjectMode,
+					maxOutputTokens, temperature, schema);
 		}
 
 		public static AiTutorRequest ofText(String systemInstruction, String userPrompt) {

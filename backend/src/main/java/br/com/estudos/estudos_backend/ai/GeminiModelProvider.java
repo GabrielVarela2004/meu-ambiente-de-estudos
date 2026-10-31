@@ -9,9 +9,11 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,13 +52,29 @@ public class GeminiModelProvider implements AiModelProvider {
 	static final String MAX_TOKENS_JSON_MESSAGE = "A resposta do Gemini foi cortada pelo limite de tokens de saída "
 			+ "(GEMINI_MAX_OUTPUT_TOKENS). Peça menos itens de uma vez ou aumente o limite no .env.";
 
+	/** Tentativas por chamada: 429 por minuto e 503 são transitórios (backoff + jitter, máx. 3 tentativas). */
+	static final int MAX_ATTEMPTS = 3;
+	/** Teto de cada pausa de backoff e do Retry-After respeitado (segundos). */
+	private static final long BACKOFF_CAP_MS = 10_000L;
+	private static final long RETRY_AFTER_CAP_MS = 60_000L;
+	/**
+	 * RPM do nível gratuito por modelo (AI Studio, conferido em 2026-10-31). Os demais usam
+	 * {@code GEMINI_MAX_REQUESTS_PER_MINUTE}. A fila local evita estourar o limite ao gerar várias questões.
+	 */
+	private static final Map<String, Integer> FREE_TIER_RPM = Map.of(
+			"gemini-3.8-flash", 5,
+			"gemini-3.5-flash-lite", 15);
+
+	/** Tipo de cota que o Gemini reporta num 429: o tratamento é diferente para cada uma. */
+	enum GeminiQuotaLimit { DAILY, PER_MINUTE, GENERIC }
+
 	private static final int VIDEO_TIMEOUT_SECONDS = 300;
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private final GeminiProperties properties;
 	private final HttpClient httpClient;
-	private final Object rateLimitLock = new Object();
-	private final ArrayDeque<Long> requestTimestamps = new ArrayDeque<>();
+	private final GeminiRateLimiter rateLimiter;
+	private final GeminiRateLimiter.Sleeper sleeper;
 
 	@Autowired
 	public GeminiModelProvider(GeminiProperties properties) {
@@ -66,8 +84,19 @@ public class GeminiModelProvider implements AiModelProvider {
 	}
 
 	public GeminiModelProvider(GeminiProperties properties, HttpClient httpClient) {
+		this(properties, httpClient,
+				new GeminiRateLimiter(properties.getMaxRequestsPerMinute(), FREE_TIER_RPM,
+						System::currentTimeMillis, Thread::sleep),
+				Thread::sleep);
+	}
+
+	/** Testes injetam fila e pausa falsas: nada dorme de verdade e o relógio é controlado. */
+	GeminiModelProvider(GeminiProperties properties, HttpClient httpClient, GeminiRateLimiter rateLimiter,
+			GeminiRateLimiter.Sleeper sleeper) {
 		this.properties = properties;
 		this.httpClient = httpClient;
+		this.rateLimiter = rateLimiter;
+		this.sleeper = sleeper;
 	}
 
 	@Override
@@ -126,19 +155,54 @@ public class GeminiModelProvider implements AiModelProvider {
 	}
 
 	private AiModelResult send(ObjectNode body, String resolvedModel, int timeoutSeconds, boolean jsonMode) {
-		checkLocalRateLimit();
+		String model = resolvedModel;
+		boolean switchedToFallback = false;
 		try {
-			String url = properties.getBaseUrl() + URLEncoder.encode(resolvedModel, StandardCharsets.UTF_8)
-					+ ":generateContent";
-			HttpRequest httpRequest = HttpRequest.newBuilder(URI.create(url))
-					.timeout(Duration.ofSeconds(timeoutSeconds))
-					.header("x-goog-api-key", properties.getApiKey())
-					.header("Content-Type", "application/json")
-					.POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-					.build();
-			HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-			handleHttpErrors(response.statusCode(), response.body(), resolvedModel);
-			return parseResponse(response.body(), resolvedModel, jsonMode);
+			for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+				// Fila por modelo: espera uma vaga na janela de 1 minuto em vez de estourar o RPM.
+				rateLimiter.acquire(model);
+				String url = properties.getBaseUrl() + URLEncoder.encode(model, StandardCharsets.UTF_8)
+						+ ":generateContent";
+				HttpRequest httpRequest = HttpRequest.newBuilder(URI.create(url))
+						.timeout(Duration.ofSeconds(timeoutSeconds))
+						.header("x-goog-api-key", properties.getApiKey())
+						.header("Content-Type", "application/json")
+						.POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+						.build();
+				HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+				int status = response.statusCode();
+
+				if (status == 429) {
+					GeminiQuotaLimit quota = quotaType(response.body());
+					String fallback = properties.getFallbackModel();
+					// Cota diária (RPD) esgotada: repete automaticamente com o modelo leve do plano gratuito.
+					if (quota == GeminiQuotaLimit.DAILY && !switchedToFallback && fallback != null
+							&& !fallback.isBlank() && !fallback.equals(model)) {
+						log.warn("Cota diária do modelo {} atingida, usando o modelo {}.", model, fallback);
+						switchedToFallback = true;
+						model = fallback;
+						attempt--; // a troca de modelo não consome tentativa
+						continue;
+					}
+					if (quota == GeminiQuotaLimit.PER_MINUTE && attempt < MAX_ATTEMPTS) {
+						log.warn("Limite por minuto do modelo {} atingido (tentativa {} de {}); tentando novamente…",
+								model, attempt, MAX_ATTEMPTS);
+						sleepBackoff(attempt, retryAfterMillis(response));
+						continue;
+					}
+					handleHttpErrors(status, response.body(), model);
+				}
+				if (status == 503 && attempt < MAX_ATTEMPTS) {
+					log.warn("Gemini temporariamente indisponível (HTTP 503, tentativa {} de {}); tentando novamente…",
+							attempt, MAX_ATTEMPTS);
+					sleepBackoff(attempt, retryAfterMillis(response));
+					continue;
+				}
+				handleHttpErrors(status, response.body(), model);
+				return parseResponse(response.body(), model, jsonMode);
+			}
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+					"O Gemini permaneceu indisponível após " + MAX_ATTEMPTS + " tentativas. Tente de novo em instantes.");
 		} catch (ResponseStatusException e) {
 			throw e;
 		} catch (HttpTimeoutException e) {
@@ -151,6 +215,31 @@ public class GeminiModelProvider implements AiModelProvider {
 			log.warn("Falha de rede ao chamar o Gemini: {}", e.toString());
 			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Falha de rede ao conectar com o Gemini.");
 		}
+	}
+
+	/** Backoff exponencial com jitter (1–2 s, 2–4 s…), respeitando Retry-After quando o Gemini envia. */
+	private void sleepBackoff(int attempt, Long retryAfterMillis) throws InterruptedException {
+		long delay;
+		if (retryAfterMillis != null) {
+			delay = Math.min(retryAfterMillis, RETRY_AFTER_CAP_MS);
+		} else {
+			long base = 1000L << (attempt - 1);
+			double jitter = 0.5 + ThreadLocalRandom.current().nextDouble();
+			delay = (long) Math.min(base * jitter, BACKOFF_CAP_MS);
+		}
+		sleeper.sleep(Math.max(1, delay));
+	}
+
+	private static Long retryAfterMillis(HttpResponse<String> response) {
+		return response.headers().firstValue("Retry-After")
+				.flatMap(value -> {
+					try {
+						return Optional.of(Long.parseLong(value.trim()) * 1000L);
+					} catch (NumberFormatException e) {
+						return Optional.<Long>empty();
+					}
+				})
+				.orElse(null);
 	}
 
 	private ObjectNode buildBody(AiTutorRequest request, String youtubeVideoUrl, String model) {
@@ -186,8 +275,48 @@ public class GeminiModelProvider implements AiModelProvider {
 		}
 		if (request.jsonObjectMode()) {
 			generationConfig.put("responseMimeType", "application/json");
+			// Saída estruturada: o esquema garante o formato (a validação real continua no backend).
+			if (request.responseSchema() != null && !request.responseSchema().isBlank()) {
+				JsonNode schema = toGeminiSchema(request.responseSchema());
+				if (schema != null) {
+					generationConfig.set("responseSchema", schema);
+				}
+			}
 		}
 		return body;
+	}
+
+	/**
+	 * Converte o esquema comum (minúsculo) para o formato do Gemini (tipos em maiúsculas, ex.:
+	 * {@code "type":"array"} → {@code "ARRAY"}). Esquema inválido devolve null: segue só com responseMimeType.
+	 */
+	private JsonNode toGeminiSchema(String schemaJson) {
+		try {
+			return uppercaseTypes(objectMapper.readTree(schemaJson));
+		} catch (JsonProcessingException e) {
+			log.warn("Esquema JSON de resposta inválido; seguindo sem responseSchema.");
+			return null;
+		}
+	}
+
+	private JsonNode uppercaseTypes(JsonNode node) {
+		if (node.isObject()) {
+			ObjectNode copy = objectMapper.createObjectNode();
+			node.fields().forEachRemaining(entry -> {
+				if ("type".equals(entry.getKey()) && entry.getValue().isTextual()) {
+					copy.put(entry.getKey(), entry.getValue().asText().toUpperCase(Locale.ROOT));
+				} else {
+					copy.set(entry.getKey(), uppercaseTypes(entry.getValue()));
+				}
+			});
+			return copy;
+		}
+		if (node.isArray()) {
+			ArrayNode copy = objectMapper.createArrayNode();
+			node.forEach(item -> copy.add(uppercaseTypes(item)));
+			return copy;
+		}
+		return node;
 	}
 
 	private AiModelResult parseResponse(String responseBody, String resolvedModel, boolean jsonMode) {
@@ -228,21 +357,6 @@ public class GeminiModelProvider implements AiModelProvider {
 		return new AiModelResult(answer, modelVersion.isBlank() ? resolvedModel : modelVersion, inputTokens, outputTokens);
 	}
 
-	private void checkLocalRateLimit() {
-		int maxRpm = properties.getMaxRequestsPerMinute();
-		long now = System.currentTimeMillis();
-		synchronized (rateLimitLock) {
-			while (!requestTimestamps.isEmpty() && requestTimestamps.peekFirst() < now - 60_000L) {
-				requestTimestamps.pollFirst();
-			}
-			if (requestTimestamps.size() >= maxRpm) {
-				throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
-						"Limite local de " + maxRpm + " requisições por minuto ao Gemini atingido. Aguarde alguns segundos.");
-			}
-			requestTimestamps.addLast(now);
-		}
-	}
-
 	private static void addContent(ArrayNode contents, String role, String text) {
 		ObjectNode content = contents.addObject();
 		content.put("role", role);
@@ -270,13 +384,22 @@ public class GeminiModelProvider implements AiModelProvider {
 
 	/** Diferencia, pelo texto do erro 429, a cota diária (RPD) do limite por minuto (RPM/TPM). */
 	static String quotaMessage(String body) {
+		return switch (quotaType(body)) {
+			case DAILY -> QUOTA_DAILY_MESSAGE;
+			case PER_MINUTE -> QUOTA_PER_MINUTE_MESSAGE;
+			case GENERIC -> QUOTA_GENERIC_MESSAGE;
+		};
+	}
+
+	/** Classifica o 429 para decidir entre trocar de modelo (diária), retentar (por minuto) ou falhar. */
+	static GeminiQuotaLimit quotaType(String body) {
 		String text = body == null ? "" : body.toLowerCase(Locale.ROOT);
 		if (text.contains("per day") || text.contains("perday") || text.contains("daily")) {
-			return QUOTA_DAILY_MESSAGE;
+			return GeminiQuotaLimit.DAILY;
 		}
 		if (text.contains("per minute") || text.contains("perminute")) {
-			return QUOTA_PER_MINUTE_MESSAGE;
+			return GeminiQuotaLimit.PER_MINUTE;
 		}
-		return QUOTA_GENERIC_MESSAGE;
+		return GeminiQuotaLimit.GENERIC;
 	}
 }

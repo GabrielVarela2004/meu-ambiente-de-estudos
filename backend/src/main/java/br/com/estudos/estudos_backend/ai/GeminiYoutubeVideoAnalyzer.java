@@ -40,7 +40,8 @@ public class GeminiYoutubeVideoAnalyzer implements YoutubeVideoAnalyzer {
 
 	@Override
 	public VideoAnalysis analyze(String videoUrl, String knownTitle) {
-		String model = settingsService.effectiveModel(gemini);
+		// Modelo da rota da operação (V33 define 3.8-flash para vídeos); sem rota, vale o do provedor.
+		String model = settingsService.effectiveModel(gemini, AiOperation.VIDEO_ANALYSIS);
 		String prompt = "Analise o vídeo" + (knownTitle == null || knownTitle.isBlank() ? "" : " \"" + knownTitle + "\"")
 				+ " e devolva exatamente esta estrutura JSON:\n" + VideoAnalysisParser.JSON_SCHEMA + "\n"
 				+ "Regras:\n"

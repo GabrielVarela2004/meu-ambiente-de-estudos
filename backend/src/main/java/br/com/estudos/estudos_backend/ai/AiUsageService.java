@@ -58,4 +58,23 @@ public class AiUsageService {
 
 	public record UsageSummary(String providerId, AiOperation operation, long requests, long successes,
 			long inputTokens, long outputTokens, long averageLatencyMs) {}
+
+	/** Consumo de hoje por provedor e modelo (base do quadro "uso de hoje vs limite diário"). */
+	public record ModelUsageToday(String providerId, String model, long requestsToday, long successesToday) {}
+
+	@Transactional(readOnly = true)
+	public List<ModelUsageToday> todayByModel() {
+		OffsetDateTime startOfDay = java.time.LocalDate.now()
+				.atStartOfDay(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+		Map<String, List<AiUsageRecord>> grouped = repository.findAllByCreatedAtGreaterThanEqual(startOfDay).stream()
+				.collect(Collectors.groupingBy(r -> r.getProviderId() + "|" + (r.getModel() == null ? "" : r.getModel())));
+		return grouped.values().stream()
+				.map(records -> {
+					AiUsageRecord first = records.get(0);
+					long successes = records.stream().filter(AiUsageRecord::isSuccess).count();
+					return new ModelUsageToday(first.getProviderId(), first.getModel(), records.size(), successes);
+				})
+				.sorted(Comparator.comparing(ModelUsageToday::providerId).thenComparing(m -> m.model() == null ? "" : m.model()))
+				.toList();
+	}
 }

@@ -27,12 +27,14 @@ public class AiSettingsController {
 	private final AiSettingsService settingsService;
 	private final AiUsageService usageService;
 	private final AiResponseCacheService cacheService;
+	private final GeminiProperties geminiProperties;
 
 	public AiSettingsController(AiSettingsService settingsService, AiUsageService usageService,
-			AiResponseCacheService cacheService) {
+			AiResponseCacheService cacheService, GeminiProperties geminiProperties) {
 		this.settingsService = settingsService;
 		this.usageService = usageService;
 		this.cacheService = cacheService;
+		this.geminiProperties = geminiProperties;
 	}
 
 	@GetMapping("/settings")
@@ -66,6 +68,21 @@ public class AiSettingsController {
 	public List<AiUsageService.UsageSummary> usage(@RequestParam(defaultValue = "7") int days) {
 		return usageService.summary(days);
 	}
+
+	/**
+	 * Uso de hoje por modelo, com o limite diário do nível gratuito do Gemini quando conhecido
+	 * (base do aviso "3,8 Flash: 12/20 hoje" em Configurações › Provedores de IA).
+	 */
+	@GetMapping("/usage/today")
+	public List<ModelUsageTodayResponse> usageToday() {
+		return usageService.todayByModel().stream()
+				.map(entry -> new ModelUsageTodayResponse(entry.providerId(), entry.model(), entry.requestsToday(),
+						entry.successesToday(), geminiProperties.getFreeTierDailyLimits().get(entry.model())))
+				.toList();
+	}
+
+	public record ModelUsageTodayResponse(String providerId, String model, long requestsToday, long successesToday,
+			Integer dailyLimit) {}
 
 	/** Cache de respostas do usuário: entradas, chamadas evitadas e tokens economizados. */
 	@GetMapping("/cache")

@@ -1,14 +1,16 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { request } from '../api/http'
 import { answerQuestion, getStudyView, reevaluateAttempt } from '../api/questions'
 import type { AnswerResult, StudyView } from '../api/questions'
 import { CheckCircleIcon, FileTextIcon, FolderIcon, SparklesIcon } from '../components/icons'
+import { MicButton } from '../components/ui/MicButton'
 import { DiscursiveFeedbackCard } from '../features/questions/DiscursiveFeedbackCard'
 import { SimuladoConfigModal } from '../features/questions/SimuladoConfigModal'
 import { StudyViewCard } from '../features/questions/StudyViewCard'
 import type { StudyBlock } from './StudyBlocksPage'
 import '../styles/pages/exercises-questions.css'
 import { useDeferredEffect } from '../hooks/useDeferredEffect'
+import { useSpeechToText } from '../hooks/useSpeechToText'
 
 export type QuestionDifficulty = 'EASY' | 'INTERMEDIATE' | 'HARD'
 export type QuestionFormat = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'DISCURSIVE'
@@ -90,6 +92,55 @@ export function TheoreticalQuestionsPage({
   // Modal do Gerador de Simulado por IA
   const [isSimuladoModalOpen, setIsSimuladoModalOpen] = useState(false)
 
+  // Ditado por voz nas questões discursivas (um microfone ativo por vez)
+  const [micQuestionId, setMicQuestionId] = useState<string | null>(null)
+  const [micError, setMicError] = useState<{ questionId: string; message: string } | null>(null)
+  const micTargetRef = useRef<string | null>(null)
+  const pendingMicTargetRef = useRef<string | null>(null)
+
+  /** Anexa um trecho ao texto já escrito no campo (nunca substitui). */
+  const appendDiscursiveText = useCallback((questionId: string, text: string) => {
+    setDiscursiveInputs((prev) => {
+      const current = (prev[questionId] ?? '').trimEnd()
+      return { ...prev, [questionId]: current ? `${current} ${text}` : text }
+    })
+  }, [])
+
+  const speech = useSpeechToText({
+    onFinalText: (text) => {
+      const target = micTargetRef.current
+      if (target) appendDiscursiveText(target, text)
+    },
+    onEnd: () => {
+      // Terminou (stop, silêncio ou erro); se houve troca de questão, começa na nova.
+      const next = pendingMicTargetRef.current
+      pendingMicTargetRef.current = null
+      micTargetRef.current = next
+      setMicQuestionId(next)
+      if (next) speech.start()
+    },
+    onError: (message) => {
+      setMicError({ questionId: micTargetRef.current ?? '', message })
+    },
+  })
+
+  const toggleMic = (questionId: string) => {
+    setMicError(null)
+    if (speech.isListening) {
+      if (micTargetRef.current === questionId) {
+        speech.stop()
+        return
+      }
+      // Troca de questão: para a atual e começa na nova quando o reconhecimento encerrar.
+      pendingMicTargetRef.current = questionId
+      speech.stop()
+      return
+    }
+    micTargetRef.current = questionId
+    setMicQuestionId(questionId)
+    speech.start()
+  }
+
   const activeBlock = blocks.find((b) => b.id === selectedBlockId)
 
   const loadQuestions = useCallback(async () => {
@@ -132,7 +183,16 @@ export function TheoreticalQuestionsPage({
     try {
       let body: { optionId?: string; discursiveAnswer?: string } = {}
       if (q.format === 'DISCURSIVE') {
-        const text = discursiveInputs[q.id]?.trim()
+        let text = discursiveInputs[q.id]?.trim() ?? ''
+        // Enviando com o microfone ligado: para o ditado e inclui o último trecho falado.
+        if (speech.isListening && micTargetRef.current === q.id) {
+          const lastPiece = speech.interimText.trim()
+          if (lastPiece) {
+            appendDiscursiveText(q.id, lastPiece)
+            text = text ? `${text} ${lastPiece}` : lastPiece
+          }
+          toggleMic(q.id)
+        }
         if (!text) {
           alert('Por favor, digite sua resposta antes de enviar.')
           setSubmittingId(null)
@@ -395,9 +455,21 @@ export function TheoreticalQuestionsPage({
                 ) : (
                   /* Campo Discursivo */
                   <div className="discursive-input-container">
-                    <label htmlFor={`discursive-${q.id}`} className="text-xs text-muted block mb-1">
-                      Sua Resposta Discursiva:
-                    </label>
+                    <div className="discursive-label-row">
+                      <label htmlFor={`discursive-${q.id}`} className="text-xs text-muted">
+                        Sua Resposta Discursiva:
+                      </label>
+                      {speech.isSupported ? (
+                        <MicButton
+                          listening={speech.isListening && micQuestionId === q.id}
+                          hasError={micError?.questionId === q.id}
+                          disabled={!!result}
+                          onClick={() => toggleMic(q.id)}
+                        />
+                      ) : (
+                        <span className="dictation-hint">Ditado por voz disponível no Chrome ou Edge</span>
+                      )}
+                    </div>
                     <textarea
                       id={`discursive-${q.id}`}
                       className="form-textarea"
@@ -409,6 +481,16 @@ export function TheoreticalQuestionsPage({
                       }
                       disabled={!!result}
                     />
+                    {speech.isListening && micQuestionId === q.id && speech.interimText && (
+                      <div className="dictation-interim" aria-live="polite">
+                        {speech.interimText}
+                      </div>
+                    )}
+                    {micError?.questionId === q.id && !speech.isListening && (
+                      <div className="dictation-error" role="alert">
+                        {micError.message}
+                      </div>
+                    )}
                   </div>
                 )}
 

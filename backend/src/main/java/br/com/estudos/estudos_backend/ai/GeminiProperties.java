@@ -19,47 +19,63 @@ public class GeminiProperties {
 
 	/** Modelo recomendado pela documentação oficial para projetos novos (conferido em 2026-10-30). */
 	public static final String DEFAULT_MODEL = "gemini-3.8-flash";
+	/** Plano gratuito: quando o modelo principal esgota a cota diária, o leve assume automaticamente. */
+	public static final String DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash-lite";
 	public static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
 	public static final int DEFAULT_CONNECT_TIMEOUT_SECONDS = 10;
 	public static final int DEFAULT_REQUEST_TIMEOUT_SECONDS = 60;
 	public static final int DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 	/** O plano gratuito tem limite baixo de requisições por minuto; o limite local evita estourá-lo. */
 	public static final int DEFAULT_MAX_REQUESTS_PER_MINUTE = 10;
+	/** Limites por dia do nível gratuito (referência para o quadro de uso em Configurações). */
+	public static final String DEFAULT_FREE_TIER_DAILY_LIMITS = "gemini-3.8-flash:20,gemini-3.5-flash-lite:500";
 
 	private final boolean enabled;
 	private final String apiKey;
 	private final String model;
+	private final String fallbackModel;
 	private final String baseUrl;
 	private final int connectTimeoutSeconds;
 	private final int requestTimeoutSeconds;
 	private final int maxOutputTokens;
 	private final int maxRequestsPerMinute;
+	private final java.util.Map<String, Integer> freeTierDailyLimits;
 
 	public GeminiProperties(
 			@Value("${app.ai.gemini.enabled:${GEMINI_ENABLED:true}}") boolean enabled,
 			@Value("${app.ai.gemini.api-key:${GEMINI_API_KEY:}}") String apiKey,
 			@Value("${app.ai.gemini.model:${GEMINI_MODEL:" + DEFAULT_MODEL + "}}") String model,
+			@Value("${app.ai.gemini.fallback-model:${GEMINI_FALLBACK_MODEL:" + DEFAULT_FALLBACK_MODEL + "}}") String fallbackModel,
 			@Value("${app.ai.gemini.base-url:${GEMINI_BASE_URL:" + DEFAULT_BASE_URL + "}}") String baseUrl,
 			@Value("${app.ai.gemini.connect-timeout-seconds:${GEMINI_CONNECT_TIMEOUT_SECONDS:10}}") int connectTimeoutSeconds,
 			@Value("${app.ai.gemini.request-timeout-seconds:${GEMINI_REQUEST_TIMEOUT_SECONDS:60}}") int requestTimeoutSeconds,
 			@Value("${app.ai.gemini.max-output-tokens:${GEMINI_MAX_OUTPUT_TOKENS:4096}}") int maxOutputTokens,
-			@Value("${app.ai.gemini.max-requests-per-minute:${GEMINI_MAX_REQUESTS_PER_MINUTE:10}}") int maxRequestsPerMinute) {
+			@Value("${app.ai.gemini.max-requests-per-minute:${GEMINI_MAX_REQUESTS_PER_MINUTE:10}}") int maxRequestsPerMinute,
+			@Value("${app.ai.gemini.free-tier-daily-limits:${GEMINI_FREE_TIER_DAILY_LIMITS:"
+					+ DEFAULT_FREE_TIER_DAILY_LIMITS + "}}") String freeTierDailyLimits) {
 		this.enabled = enabled;
 		this.apiKey = apiKey == null ? "" : apiKey.trim();
 		this.model = model == null || model.isBlank() ? DEFAULT_MODEL : model.trim();
+		this.fallbackModel = fallbackModel == null || fallbackModel.isBlank()
+				? DEFAULT_FALLBACK_MODEL
+				: fallbackModel.trim();
 		String resolvedBaseUrl = baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl.trim();
 		this.baseUrl = resolvedBaseUrl.endsWith("/") ? resolvedBaseUrl : resolvedBaseUrl + "/";
 		this.connectTimeoutSeconds = clamp(connectTimeoutSeconds, 1, 120, DEFAULT_CONNECT_TIMEOUT_SECONDS);
 		this.requestTimeoutSeconds = clamp(requestTimeoutSeconds, 5, 600, DEFAULT_REQUEST_TIMEOUT_SECONDS);
 		this.maxOutputTokens = clamp(maxOutputTokens, 256, 65_536, DEFAULT_MAX_OUTPUT_TOKENS);
 		this.maxRequestsPerMinute = clamp(maxRequestsPerMinute, 1, 1_000, DEFAULT_MAX_REQUESTS_PER_MINUTE);
+		this.freeTierDailyLimits = parseDailyLimits(
+				freeTierDailyLimits == null || freeTierDailyLimits.isBlank() ? DEFAULT_FREE_TIER_DAILY_LIMITS
+						: freeTierDailyLimits);
 		validateEndpointUri(this.baseUrl);
 	}
 
 	/** Configuração com os valores padrão, usada em testes. */
 	public static GeminiProperties withKey(String apiKey) {
-		return new GeminiProperties(true, apiKey, DEFAULT_MODEL, DEFAULT_BASE_URL, DEFAULT_CONNECT_TIMEOUT_SECONDS,
-				DEFAULT_REQUEST_TIMEOUT_SECONDS, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_MAX_REQUESTS_PER_MINUTE);
+		return new GeminiProperties(true, apiKey, DEFAULT_MODEL, DEFAULT_FALLBACK_MODEL, DEFAULT_BASE_URL,
+				DEFAULT_CONNECT_TIMEOUT_SECONDS, DEFAULT_REQUEST_TIMEOUT_SECONDS, DEFAULT_MAX_OUTPUT_TOKENS,
+				DEFAULT_MAX_REQUESTS_PER_MINUTE, DEFAULT_FREE_TIER_DAILY_LIMITS);
 	}
 
 	@PostConstruct
@@ -94,6 +110,10 @@ public class GeminiProperties {
 		return model;
 	}
 
+	public String getFallbackModel() {
+		return fallbackModel;
+	}
+
 	public String getBaseUrl() {
 		return baseUrl;
 	}
@@ -114,6 +134,32 @@ public class GeminiProperties {
 		return maxRequestsPerMinute;
 	}
 
+	/** Limite diário do nível gratuito por modelo (ex.: {@code gemini-3.8-flash -> 20}); vazio = desconhecido. */
+	public java.util.Map<String, Integer> getFreeTierDailyLimits() {
+		return freeTierDailyLimits;
+	}
+
+	/** Formato {@code modelo:limite,modelo:limite}; pares inválidos são ignorados. */
+	private static java.util.Map<String, Integer> parseDailyLimits(String value) {
+		java.util.Map<String, Integer> limits = new java.util.LinkedHashMap<>();
+		for (String pair : value.split(",")) {
+			int colon = pair.indexOf(':');
+			if (colon <= 0) {
+				continue;
+			}
+			String name = pair.substring(0, colon).trim();
+			try {
+				int limit = Integer.parseInt(pair.substring(colon + 1).trim());
+				if (!name.isEmpty() && limit > 0) {
+					limits.put(name, limit);
+				}
+			} catch (NumberFormatException ignored) {
+				// Par inválido: ignora e segue para o próximo.
+			}
+		}
+		return java.util.Collections.unmodifiableMap(limits);
+	}
+
 	private static int clamp(int value, int min, int max, int fallback) {
 		return value < min || value > max ? fallback : value;
 	}
@@ -128,8 +174,9 @@ public class GeminiProperties {
 	@Override
 	public String toString() {
 		return "GeminiProperties[enabled=" + enabled + ", apiKeyConfigured=" + hasApiKey() + ", model=" + model
-				+ ", baseUrl=" + baseUrl + ", connectTimeoutSeconds=" + connectTimeoutSeconds
-				+ ", requestTimeoutSeconds=" + requestTimeoutSeconds + ", maxOutputTokens=" + maxOutputTokens
-				+ ", maxRequestsPerMinute=" + maxRequestsPerMinute + "]";
+				+ ", fallbackModel=" + fallbackModel + ", baseUrl=" + baseUrl + ", connectTimeoutSeconds="
+				+ connectTimeoutSeconds + ", requestTimeoutSeconds=" + requestTimeoutSeconds + ", maxOutputTokens="
+				+ maxOutputTokens + ", maxRequestsPerMinute=" + maxRequestsPerMinute + ", freeTierDailyLimits="
+				+ freeTierDailyLimits + "]";
 	}
 }

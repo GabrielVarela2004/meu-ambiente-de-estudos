@@ -13,6 +13,8 @@ import br.com.estudos.estudos_backend.common.exception.BusinessRuleException;
 import br.com.estudos.estudos_backend.common.exception.InvalidInputException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ import br.com.estudos.estudos_backend.ai.AiOperationContext;
 
 @Service
 public class AiQuestionGeneratorService {
+	private static final Logger log = LoggerFactory.getLogger(AiQuestionGeneratorService.class);
 	private static final int MAX_CONTEXT_CHARACTERS = 20_000;
 	private static final int MIN_CHARS_PER_QUESTION_WHEN_MULTIPLE = 40;
 	/** Enunciados já existentes enviados à IA para evitar repetição. */
@@ -131,8 +134,9 @@ public class AiQuestionGeneratorService {
 					resolvedQuantity, resolvedDifficulty, resolvedFormat);
 			AiTutorProvider.AiTutorReply reply = AiOperationContext.call(AiOperation.QUESTION_GENERATION,
 					() -> aiTutorProvider.generateReply(AiTutorProvider.AiTutorRequest.ofJson(SYSTEM_INSTRUCTION, userPrompt)
-							.withMaxOutputTokens(outputTokenBudget(resolvedQuantity))));
-			return parseAndSaveQuestions(
+							.withMaxOutputTokens(outputTokenBudget(resolvedQuantity))
+							.withResponseSchema(questionResponseSchema(resolvedQuantity))));
+			List<StudyQuestion> saved = parseAndSaveQuestions(
 					studyBlockId,
 					primaryMaterial,
 					resolvedQuantity,
@@ -140,6 +144,33 @@ public class AiQuestionGeneratorService {
 					resolvedFormat,
 					reply != null ? reply.answer() : null,
 					materials);
+			if (saved.isEmpty()) {
+				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "A IA não gerou perguntas fundamentadas no "
+						+ "material (cada resposta precisa estar no conteúdo das fontes). Tente gerar de novo.");
+			}
+			// Vieram menos questões válidas que o pedido: pede só as que faltam (1 retentativa).
+			if (saved.size() < resolvedQuantity) {
+				int missing = resolvedQuantity - saved.size();
+				List<String> promptsAfter = new ArrayList<>(existingPrompts);
+				saved.forEach(q -> promptsAfter.add(q.getPrompt()));
+				String complementPrompt = buildGenerationPrompt(block, materials, promptsAfter,
+						missing, resolvedDifficulty, resolvedFormat);
+				AiTutorProvider.AiTutorReply complement = AiOperationContext.call(AiOperation.QUESTION_GENERATION,
+						() -> aiTutorProvider.generateReply(AiTutorProvider.AiTutorRequest
+								.ofJson(SYSTEM_INSTRUCTION, complementPrompt)
+								.withMaxOutputTokens(outputTokenBudget(missing))
+								.withResponseSchema(questionResponseSchema(missing))));
+				// Se o complemento também vier incompleto, entrega as válidas (a tela mostra o total real).
+				saved.addAll(parseAndSaveQuestions(
+						studyBlockId,
+						primaryMaterial,
+						missing,
+						resolvedDifficulty,
+						resolvedFormat,
+						complement != null ? complement.answer() : null,
+						materials));
+			}
+			return saved;
 		}
 
 		// Quando o provedor externo não está configurado, gera questões estritamente fundamentadas
@@ -236,6 +267,10 @@ public class AiQuestionGeneratorService {
 		};
 	}
 
+	/**
+	 * Valida e grava as questões da resposta da IA. Devolve só as que passaram na validação (o motivo de cada
+	 * rejeição vai para o log, sem dados sensíveis); lista vazia = nenhuma válida.
+	 */
 	private List<StudyQuestion> parseAndSaveQuestions(UUID studyBlockId, StudyMaterial primaryMaterial,
 			int expectedQuantity,
 			StudyQuestionDifficulty difficulty, StudyQuestionFormat format, String rawReply, List<StudyMaterial> materials) {
@@ -265,7 +300,7 @@ public class AiQuestionGeneratorService {
 			for (int i = 0; i < Math.min(expectedQuantity, items.size()); i++) {
 				JsonNode node = items.get(i);
 				if (format == StudyQuestionFormat.DISCURSIVE) {
-					StudyQuestion open = saveOpenQuestion(studyBlockId, materialId, difficulty, node, materials);
+					StudyQuestion open = saveOpenQuestion(studyBlockId, materialId, difficulty, node, materials, i + 1);
 					if (open != null) {
 						savedQuestions.add(open);
 					}
@@ -273,10 +308,6 @@ public class AiQuestionGeneratorService {
 				}
 				savedQuestions.add(parseSingleQuestionNode(
 						studyBlockId, materialId, defaultExcerpt, difficulty, format, node));
-			}
-			if (savedQuestions.isEmpty()) {
-				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "A IA não gerou perguntas fundamentadas no "
-						+ "material (cada resposta precisa estar no conteúdo das fontes). Tente gerar de novo.");
 			}
 			return savedQuestions;
 		} catch (ResponseStatusException exception) {
@@ -288,18 +319,41 @@ public class AiQuestionGeneratorService {
 	}
 
 	/**
+	 * Esquema JSON da saída pedida ao provedor (com responseSchema/responseMimeType): uma questão ou um array.
+	 * Forçar a estrutura reduz JSON inválido; a validação de fundamento continua aqui no backend.
+	 */
+	static String questionResponseSchema(int quantity) {
+		String item = "{\"type\":\"object\",\"properties\":{"
+				+ "\"prompt\":{\"type\":\"string\",\"description\":\"enunciado que exige explicação, em português\"},"
+				+ "\"modelAnswer\":{\"type\":\"string\",\"description\":\"resposta-modelo completa, só com o material\"},"
+				+ "\"explanation\":{\"type\":\"string\",\"description\":\"explicação detalhada do mecanismo\"},"
+				+ "\"rubric\":{\"type\":\"object\",\"properties\":{"
+				+ "\"essentialConcepts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
+				+ "\"complementaryConcepts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
+				+ "\"materialTerms\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
+				+ "\"commonMistakes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},"
+				+ "\"required\":[\"essentialConcepts\",\"complementaryConcepts\",\"materialTerms\",\"commonMistakes\"]},"
+				+ "\"sourceExcerpt\":{\"type\":\"string\",\"description\":\"trecho literal do material\"},"
+				+ "\"sourceTimestamp\":{\"type\":\"string\",\"description\":\"MM:SS ou vazio\"}},"
+				+ "\"required\":[\"prompt\",\"modelAnswer\",\"explanation\",\"rubric\",\"sourceExcerpt\"]}";
+		return quantity <= 1 ? item : "{\"type\":\"array\",\"items\":" + item + "}";
+	}
+
+	/**
 	 * Valida e grava uma questão aberta: enunciado, resposta-modelo, rubrica com ao menos um conceito essencial e
-	 * trecho que realmente aparece no material. Questão sem fundamento no material é descartada (devolve null).
-	 * A resposta-modelo e a rubrica são gravadas antes de a questão ser exibida.
+	 * trecho que realmente aparece no material. Questão sem fundamento no material é descartada (devolve null,
+	 * com o motivo no log — sem dados sensíveis). A resposta-modelo e a rubrica são gravadas antes de exibir.
 	 */
 	private StudyQuestion saveOpenQuestion(UUID studyBlockId, UUID materialId,
-			StudyQuestionDifficulty difficulty, JsonNode node, List<StudyMaterial> materials) {
+			StudyQuestionDifficulty difficulty, JsonNode node, List<StudyMaterial> materials, int index) {
 		String prompt = node.path("prompt").asText("").strip();
 		String modelAnswer = node.path("modelAnswer").asText(node.path("expectedAnswer").asText("")).strip();
 		String excerpt = node.path("sourceExcerpt").asText("").strip();
 		QuestionRubric rubric = QuestionRubric.fromJson(node.path("rubric"));
 		if (prompt.isEmpty() || modelAnswer.isEmpty() || rubric.essentialConcepts().isEmpty()
 				|| !isGroundedInMaterials(excerpt, materials)) {
+			log.warn("Questão {} do lote descartada na validação: {}.", index, openQuestionRejectionReason(
+					prompt, modelAnswer, rubric, excerpt, materials));
 			return null;
 		}
 		String explanation = node.path("explanation").asText("").strip();
@@ -315,6 +369,24 @@ public class AiQuestionGeneratorService {
 			return null;
 		}
 		return studyQuestionService.attachRubric(studyBlockId, question.getId(), modelAnswer, rubric.toJson(), timestamp);
+	}
+
+	/** Motivo da rejeição para o log (só a causa, sem conteúdo da questão). */
+	private static String openQuestionRejectionReason(String prompt, String modelAnswer, QuestionRubric rubric,
+			String excerpt, List<StudyMaterial> materials) {
+		if (prompt.isEmpty()) {
+			return "sem enunciado";
+		}
+		if (modelAnswer.isEmpty()) {
+			return "sem resposta-modelo";
+		}
+		if (rubric.essentialConcepts().isEmpty()) {
+			return "rubrica sem conceitos essenciais";
+		}
+		if (!isGroundedInMaterials(excerpt, materials)) {
+			return "trecho citado não foi encontrado no material";
+		}
+		return "validação incompleta";
 	}
 
 	/** O trecho citado aparece no material (literal ou com ao menos 80% das palavras significativas). */
