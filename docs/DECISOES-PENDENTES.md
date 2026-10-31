@@ -69,3 +69,30 @@ O enum `AiOperation.TOPIC_EXTRACTION` ficou como legado porque rotas, cache e co
 
 **Recomendação:** B por alguns dias de uso; depois A, com backup antes (`docker exec programa-estudos-ia-postgres
 pg_dump -U estudos estudos > backup.sql`), apagando também as linhas `TOPIC_EXTRACTION` de rotas e cache e o valor do enum.
+
+## D5 — Identidade do usuário (Etapa 14)
+
+**Contexto:** não há login. `security/CurrentUserResolver` lê o cabeçalho `X-Study-User-Id`, mas o frontend
+(`api/http.ts`) não o envia, então tudo pertence a `default-user`. Os services já filtram os dados por usuário.
+Com o site acessível pela rede local (Vite com `host: true`), qualquer aparelho no mesmo Wi-Fi vê e altera os dados.
+
+| Opção | Esforço | Prós | Contras |
+|---|---|---|---|
+| A. Manter uso individual e limitar o acesso pela rede (só `localhost` ou Tailscale) | baixo | Nada muda no código; resolve o risco do Wi-Fi | Continua sem múltiplos usuários |
+| B. Login simples local (usuário e senha com Spring Security e sessão/cookie), `CurrentUserResolver` lendo o usuário autenticado | médio | Protege os dados mesmo na rede; o filtro por usuário já existe | Telas de login, senha a guardar com hash, testes de integração a ajustar |
+| C. Login com provedor externo (Google/OIDC) | alto | Sem senha própria; pronto para várias pessoas | Depende de internet e configuração do provedor; exagerado para uso individual |
+
+**Recomendação:** A agora (uso pessoal), e B se o site passar a ser aberto fora da sua máquina ou por outras pessoas.
+
+## D6 — Fórum (Etapa 14)
+
+**Contexto:** `pages/ForumPage.tsx` usa tópicos fixos no código (`initialTopics`); criar e votar só mudam o estado em
+memória. Na Etapa J da auditoria (2026-10-29) o Fórum foi **ocultado do menu**, mas o código continua no projeto.
+
+| Opção | Esforço | Prós | Contras |
+|---|---|---|---|
+| A. Manter oculto como está | nenhum | Nada muda | Código sem uso que vai ficando desatualizado |
+| B. Implementar persistência (tabelas de tópicos e respostas, API e votos) | médio/alto | Fórum real | Pouco útil numa plataforma de uso individual |
+| C. Apagar `ForumPage.tsx` e o CSS do fórum | mínimo | Menos código morto | Se um dia quiser o fórum, começa do zero |
+
+**Recomendação:** C — para uso individual um fórum não tem público; o histórico do Git guarda o código se precisar.

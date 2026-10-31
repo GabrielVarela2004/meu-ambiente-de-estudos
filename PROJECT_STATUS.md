@@ -31,7 +31,7 @@ problemas conhecidos em `docs/AUDITORIA.md`, decisões em `docs/DECISOES-PENDENT
 | 11 CI | ✅ |
 | 12 Telas de Metas e Sessões | ✅ |
 | 13 Documentação | ✅ (este arquivo, `README.md` e `ARCHITECTURE.md`) |
-| 14 Decisões de arquitetura | pendente |
+| 14 Decisões de arquitetura | registradas (D5, D6), aguardando decisão |
 
 ## Pronto e funcionando
 
@@ -53,4 +53,4 @@ problemas conhecidos em `docs/AUDITORIA.md`, decisões em `docs/DECISOES-PENDENT
 
 - Sem autenticação: o frontend não envia `X-Study-User-Id`; tudo é do `default-user` (Etapa 14).
 - Fórum só visual e fora do menu (Etapa 14).
-- Decisões aguardando o usuário: D3 (`AddSourceModal`), D4 (apagar tabelas de tópicos). D1 e D2 já decididas.
+- Decisões aguardando o usuário: D3 (`AddSourceModal`), D4 (tabelas de tópicos), D5 (identidade), D6 (Fórum). D1 e D2 já decididas.

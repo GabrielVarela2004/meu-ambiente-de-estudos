@@ -42,7 +42,8 @@ Nesses casos a etapa aqui é só conferida e completada no que faltar.
 - [x] Etapa 13 — Documentação: `README.md`, `ARCHITECTURE.md` e `PROJECT_STATUS.md` reescritos conferindo o código
   (módulos, provedores OpenAI/Anthropic/Gemini, fluxo do YouTube, correção com rubrica, Remotive/Arbeitnow,
   V1–V32, 237 + 46 testes, `start-dev`, limites e remoção do Mapeamento de Fontes).
-- [ ] Etapa 14 — Decisões de arquitetura (só registrar)
+- [!] Etapa 14 — Decisões de arquitetura registradas: D5 (identidade do usuário) e D6 (Fórum) em
+  `docs/DECISOES-PENDENTES.md`; aguardam o usuário.
 
 ## Plano da Etapa 6 — Gemini
 
